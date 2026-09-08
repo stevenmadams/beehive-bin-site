@@ -250,6 +250,8 @@ img,svg{display:block;max-width:100%}
   z-index:3;max-width:580px;pointer-events:none;
 }
 .hero .copy a{pointer-events:auto}
+/* The sub sits over the 3D lid on small screens — full ink for contrast. */
+.hero .sub{color:var(--ink);font-weight:600}
 @media (max-height:720px){
   .hero .copy{top:28px;transform:none}
 }
