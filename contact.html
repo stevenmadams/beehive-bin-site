@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contact — Beehive Bin Co.</title>
+<meta name="description" content="Questions about moving bin rentals in Weber and Davis Counties? Custom quantities, service area, or longer rentals — send Beehive Bin Co. a message.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Black&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css?v=30">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 1.5 29 9v14L16 30.5 3 23V9z' fill='%23FFC400' stroke='%2315130F' stroke-width='2'/%3E%3Cpath d='M10.5 13h11l-1.2 8.5h-8.6z' fill='%2315130F'/%3E%3Crect x='9' y='10.6' width='14' height='2.6' fill='%2315130F'/%3E%3C/svg%3E">
+<style>
+.contact-layout{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:48px;align-items:start}
+@media (max-width:960px){.contact-layout{grid-template-columns:1fr}}
+.contact-line{display:flex;gap:14px;align-items:center;font-weight:700;font-size:17px;margin-bottom:12px}
+.contact-line .ico{width:38px;height:38px;border-radius:10px;background:var(--yellow);border:2px solid var(--ink);display:grid;place-items:center;flex:none;font-family:var(--font-display);font-size:15px}
+.success-panel{border:2px solid var(--ink);border-radius:var(--radius);background:var(--yellow);padding:28px;margin-top:20px}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="bar">
+    <a class="logo" href="index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+      <span class="name">BEEHIVE BIN CO.<span class="tag">Move Better. Skip the Cardboard.</span></span>
+    </a>
+    <button class="menu-btn" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav class="site-nav" id="site-nav">
+      <a href="pricing.html">Pricing</a>
+      <a href="about.html">About</a>
+      <a href="contact.html" aria-current="page">Contact</a>
+      <a class="nav-cta" href="reserve.html">Reserve Bins</a>
+    </nav>
+  </div>
+</header>
+
+<main class="section">
+  <div class="wrap">
+    <div class="contact-layout">
+      <div>
+        <div class="eyebrow">Contact</div>
+        <h1 style="font-size:clamp(38px,5vw,64px)">Have a Question?</h1>
+        <p class="sub" style="margin:16px 0 24px">Need a custom quantity? Not sure whether we serve your area? Need your bins longer than two weeks? Send us a message.</p>
+        <p class="contact-line"><span class="ico" aria-hidden="true">☎</span> [PHONE]</p>
+        <p class="contact-line"><span class="ico" aria-hidden="true">@</span> [EMAIL]</p>
+        <div class="mini-scene" style="aspect-ratio:4/3;margin-top:28px"><canvas id="c-tote"></canvas></div>
+      </div>
+
+      <form id="contact-form" class="card" style="padding:32px" novalidate>
+        <h3 style="margin-bottom:20px">Or use the form below</h3>
+        <div class="grid cols-2">
+          <div class="field">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" autocomplete="name" required>
+          </div>
+          <div class="field">
+            <label for="contact">Phone / Email</label>
+            <input type="text" id="contact" name="contact" required>
+          </div>
+        </div>
+        <div class="grid cols-2">
+          <div class="field">
+            <label for="city">City <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <input type="text" id="city" name="city" autocomplete="address-level2">
+          </div>
+          <div class="field">
+            <label for="movedate">When do you need bins? <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <input type="date" id="movedate" name="movedate">
+          </div>
+        </div>
+        <div class="field">
+          <label for="message">Message</label>
+          <textarea id="message" name="message" required placeholder="How can we help?"></textarea>
+        </div>
+        <button class="btn btn-primary" type="submit">Send Message</button>
+        <div class="success-panel" id="success" hidden>
+          <h3>Message ready!</h3>
+          <p class="mb-0" style="font-size:14.5px">This demo form isn’t connected yet — reach us directly at <strong>[PHONE]</strong> or <strong>[EMAIL]</strong> and we’ll get right back to you.</p>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="brand">
+      <a class="logo" href="index.html">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+        <span class="name">BEEHIVE BIN CO.</span>
+      </a>
+      <p>Reusable moving-bin rentals for Weber &amp; Davis Counties. Clinton, Utah.</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="reserve.html">Reserve</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="faq.html">FAQ</a>
+      <a href="requirements.html">Rental Requirements</a>
+      <a href="contact.html">Contact</a>
+      <a href="terms.html">Rental Terms</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </div>
+  <div class="legal">
+    <span>© <span id="year">2026</span> Beehive Bin Co. All rights reserved.</span>
+    <span>Move Better. Skip the Cardboard.</span>
+  </div>
+</footer>
+
+<script src="assets/tote-model.js?v=2"></script>
+<script src="assets/tote-kit.js?v=5"></script>
+<script src="assets/site.js?v=2"></script>
+<script>
+document.getElementById('contact-form').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!e.target.reportValidity()) return;
+  /* To make this live, point it at a form endpoint (Formspree, FormSubmit,
+     Netlify Forms, or your own). */
+  const panel = document.getElementById('success');
+  panel.hidden = false;
+  panel.scrollIntoView({behavior:'smooth', block:'center'});
+});
+</script>
+<script type="module">
+const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/+esm');
+const {GLTFLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js/+esm');
+const {DRACOLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/DRACOLoader.js/+esm');
+const kit = await ToteKit(THREE, GLTFLoader, DRACOLoader);
+const {makeTote, findLid, makeRenderer, addLights, addFloor, register, baseScale, rawSize, reducedMotion} = kit;
+
+const canvas = document.getElementById('c-tote');
+const renderer = makeRenderer(canvas);
+const scene = new THREE.Scene(); addLights(scene); addFloor(scene, -0.4);
+const camera = new THREE.PerspectiveCamera(30, 1, .01, 100);
+const tote = makeTote(baseScale * .9); tote.rotation.y = -.35; scene.add(tote);
+const lid = findLid(tote);
+const lidHome = lid ? lid.position.clone() : null;
+register({renderer, camera, canvas, scene, update(now){
+  const t = now * .001;
+  tote.rotation.y = reducedMotion ? -.35 : -.35 + Math.sin(t * .3) * .25;
+  if (lid && lidHome && !reducedMotion) {
+    // The lid taps politely, like it's waving hello.
+    const q = Math.max(0, Math.sin(t * .8)) * .12;
+    lid.position.copy(lidHome);
+    lid.position.y += rawSize.y * q;
+    lid.rotation.z = -.05 * q * 8;
+  }
+  camera.position.set(1.5, .9, 2.1);
+  camera.lookAt(0, .06, 0);
+}});
+kit.start();
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rental Requirements — Beehive Bin Co.</title>
+<meta name="description" content="Every Beehive Bin Co. rental requires a valid photo ID, a card on file, and acceptance of the rental agreement. No security deposit.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Black&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css?v=30">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 1.5 29 9v14L16 30.5 3 23V9z' fill='%23FFC400' stroke='%2315130F' stroke-width='2'/%3E%3Cpath d='M10.5 13h11l-1.2 8.5h-8.6z' fill='%2315130F'/%3E%3Crect x='9' y='10.6' width='14' height='2.6' fill='%2315130F'/%3E%3C/svg%3E">
+<style>
+.req-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,400px);gap:48px;align-items:start}
+@media (max-width:960px){.req-layout{grid-template-columns:1fr}}
+.req-3d{position:sticky;top:96px}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="bar">
+    <a class="logo" href="index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+      <span class="name">BEEHIVE BIN CO.<span class="tag">Move Better. Skip the Cardboard.</span></span>
+    </a>
+    <button class="menu-btn" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav class="site-nav" id="site-nav">
+      <a href="pricing.html">Pricing</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+      <a class="nav-cta" href="reserve.html">Reserve Bins</a>
+    </nav>
+  </div>
+</header>
+
+<main class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">The fine print, minus the fine print</div>
+      <h1 style="font-size:clamp(38px,5vw,68px)">Rental Requirements</h1>
+      <p class="sub" style="margin-top:16px">To keep the process simple and protect our inventory, every rental requires:</p>
+    </div>
+
+    <div class="req-layout">
+      <div>
+        <div class="card" style="margin-bottom:18px">
+          <h3>Valid photo identification</h3>
+          <p style="color:var(--muted);margin:10px 0 0">A government-issued photo ID must be presented by the person responsible for the rental.</p>
+        </div>
+        <div class="card" style="margin-bottom:18px">
+          <h3>Valid card on file</h3>
+          <p style="color:var(--muted);margin:10px 0 0">A valid credit or debit card must remain on file for the duration of the rental.</p>
+        </div>
+        <div class="card" style="margin-bottom:34px">
+          <h3>Rental agreement</h3>
+          <p style="color:var(--muted);margin:10px 0 0">The renter must review and accept our <a href="terms.html">rental terms</a> before receiving the bins.</p>
+        </div>
+
+        <div class="eyebrow">No security deposit</div>
+        <h2 style="font-size:clamp(26px,3.2vw,40px)">We do not collect a security deposit.</h2>
+        <p class="sub" style="margin-top:14px">Your card may be charged only as authorized under the rental agreement for things such as:</p>
+        <ul class="checks">
+          <li>Missing or unreturned bins</li>
+          <li>Missing lids</li>
+          <li>Damage beyond normal wear</li>
+          <li>Late returns</li>
+          <li>Approved rental extensions</li>
+          <li>Other agreed charges</li>
+        </ul>
+        <p class="sub">Normal wear from ordinary moving use is expected.</p>
+        <p style="margin-top:26px"><a class="btn btn-primary" href="reserve.html">Reserve Your Bins</a></p>
+      </div>
+
+      <aside class="req-3d" aria-hidden="true">
+        <div class="mini-scene" style="aspect-ratio:1/1.1"><canvas id="c-tote"></canvas></div>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="brand">
+      <a class="logo" href="index.html">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+        <span class="name">BEEHIVE BIN CO.</span>
+      </a>
+      <p>Reusable moving-bin rentals for Weber &amp; Davis Counties. Clinton, Utah.</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="reserve.html">Reserve</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="faq.html">FAQ</a>
+      <a href="requirements.html">Rental Requirements</a>
+      <a href="contact.html">Contact</a>
+      <a href="terms.html">Rental Terms</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </div>
+  <div class="legal">
+    <span>© <span id="year">2026</span> Beehive Bin Co. All rights reserved.</span>
+    <span>Move Better. Skip the Cardboard.</span>
+  </div>
+</footer>
+
+<script src="assets/tote-model.js?v=2"></script>
+<script src="assets/tote-kit.js?v=5"></script>
+<script src="assets/site.js?v=2"></script>
+<script type="module">
+const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/+esm');
+const {GLTFLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js/+esm');
+const {DRACOLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/DRACOLoader.js/+esm');
+const kit = await ToteKit(THREE, GLTFLoader, DRACOLoader);
+const {makeTote, makeRenderer, addLights, addFloor, register, baseScale, reducedMotion} = kit;
+
+const canvas = document.getElementById('c-tote');
+const renderer = makeRenderer(canvas);
+const scene = new THREE.Scene(); addLights(scene); addFloor(scene, -0.4);
+const camera = new THREE.PerspectiveCamera(30, 1, .01, 100);
+const tote = makeTote(baseScale * .95); scene.add(tote);
+register({renderer, camera, canvas, scene, update(now){
+  const t = now * .001;
+  tote.rotation.y = reducedMotion ? -.4 : t * .3;
+  tote.rotation.x = reducedMotion ? .05 : Math.sin(t * .4) * .07;
+  camera.position.set(1.5, .9, 2.1);
+  camera.lookAt(0, 0, 0);
+}});
+kit.start();
+</script>
+</body>
+</html>

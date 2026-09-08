@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Beehive Bin Co. — Logo Sheet</title>
+<style>
+body{margin:0;font-family:system-ui;background:#F2F1EB;color:#15130F}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.cell{padding:34px;display:flex;flex-direction:column;gap:14px;align-items:flex-start;border-bottom:1px solid rgba(0,0,0,.1)}
+.cell.dark{background:#15130F;color:#fff}
+.cell h2{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.1em;opacity:.6}
+img{max-width:100%}
+.icon img{width:96px}
+.wordmark img{width:420px}
+.horizontal img{width:460px}
+.stacked img{width:260px;align-self:center}
+.stacked{align-items:center}
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="cell icon"><h2>Icon</h2><img src="beehive-icon.svg" alt=""></div>
+  <div class="cell icon dark"><h2>Icon on dark</h2><img src="beehive-icon.svg" alt=""></div>
+  <div class="cell wordmark"><h2>Wordmark</h2><img src="beehive-wordmark.svg" alt=""></div>
+  <div class="cell wordmark dark"><h2>Wordmark on dark (reverse)</h2><img src="beehive-wordmark-reverse.svg" alt=""></div>
+  <div class="cell horizontal"><h2>Horizontal lockup</h2><img src="beehive-horizontal.svg" alt=""></div>
+  <div class="cell horizontal dark"><h2>Horizontal on dark (reverse)</h2><img src="beehive-horizontal-reverse.svg" alt=""></div>
+  <div class="cell stacked"><h2>Stacked lockup</h2><img src="beehive-stacked.svg" alt=""></div>
+  <div class="cell stacked dark"><h2>Stacked on dark (reverse)</h2><img src="beehive-stacked-reverse.svg" alt=""></div>
+  <div class="cell icon"><h2>Hollow — black &amp; yellow</h2>
+    <div style="display:flex;gap:24px;align-items:center">
+      <img src="beehive-icon-hollow-black.svg" alt="" style="width:96px">
+      <img src="beehive-icon-hollow-yellow.svg" alt="" style="width:96px">
+    </div>
+  </div>
+  <div class="cell icon dark"><h2>Hollow — white &amp; yellow on dark</h2>
+    <div style="display:flex;gap:24px;align-items:center">
+      <img src="beehive-icon-hollow-white.svg" alt="" style="width:96px">
+      <img src="beehive-icon-hollow-yellow.svg" alt="" style="width:96px">
+    </div>
+  </div>
+</div>
+</body>
+</html>

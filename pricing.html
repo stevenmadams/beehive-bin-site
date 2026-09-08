@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pricing — Beehive Bin Co.</title>
+<meta name="description" content="Straightforward moving bin rental pricing: 20 bins from $79, 40 from $129, 60 from $179 — delivery and pickup included, no security deposit.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Black&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css?v=30">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 1.5 29 9v14L16 30.5 3 23V9z' fill='%23FFC400' stroke='%2315130F' stroke-width='2'/%3E%3Cpath d='M10.5 13h11l-1.2 8.5h-8.6z' fill='%2315130F'/%3E%3Crect x='9' y='10.6' width='14' height='2.6' fill='%2315130F'/%3E%3C/svg%3E">
+<style>
+.pkg .mini-scene{aspect-ratio:5/4;border-bottom:0;border-radius:var(--radius) var(--radius) 0 0}
+.pkg .price-card{border-radius:0 0 var(--radius) var(--radius)}
+.pkg .price-card:hover{transform:none}
+.pkg:hover{transform:translateY(-4px)}
+.pkg{transition:transform .18s ease}
+table.pricing{width:100%;border-collapse:collapse;background:var(--white);border:2px solid var(--ink);border-radius:var(--radius);overflow:hidden}
+table.pricing th,table.pricing td{padding:16px 20px;text-align:left;border-bottom:1px solid var(--line)}
+table.pricing th{background:var(--ink);color:var(--white);font:800 12.5px/1 var(--font-body);letter-spacing:.12em;text-transform:uppercase}
+table.pricing td.price{font-family:var(--font-display);font-size:22px;text-align:right}
+table.pricing tr:last-child td{border-bottom:0}
+/* Spotlight the headline weekly price; softly tint the 2-week total. */
+table.pricing th:nth-child(2){background:var(--yellow);color:var(--ink)}
+table.pricing td:nth-child(2){background:rgba(255,196,0,.16);font-family:var(--font-display);font-size:20px}
+table.pricing th:nth-child(4){color:var(--yellow)}
+table.pricing td:nth-child(4){background:rgba(21,19,15,.05)}
+.table-scroll{overflow-x:auto;max-width:880px}
+#glance{position:relative;overflow:hidden}
+#glance .wrap{position:relative;z-index:1}
+#c-lid-peek{position:absolute;right:0;top:0;width:340px;height:100%;pointer-events:none;z-index:0}
+@media (max-width:1250px){#c-lid-peek{display:none}}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="bar">
+    <a class="logo" href="index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+      <span class="name">BEEHIVE BIN CO.<span class="tag">Move Better. Skip the Cardboard.</span></span>
+    </a>
+    <button class="menu-btn" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav class="site-nav" id="site-nav">
+      <a href="pricing.html" aria-current="page">Pricing</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+      <a class="nav-cta" href="reserve.html">Reserve Bins</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="section tight">
+  <div class="wrap">
+    <div class="eyebrow">Pricing</div>
+    <h1 style="font-size:clamp(38px,5.4vw,74px)">Straightforward Pricing</h1>
+    <p class="sub" style="margin-top:16px">Weekly pricing with delivery and pickup included. No security deposit. No surprise cardboard or tape purchases.</p>
+  </div>
+</section>
+
+<section class="section tight" style="padding-top:0">
+  <div class="wrap">
+    <div class="grid cols-3">
+      <div class="pkg reveal">
+        <div class="mini-scene"><canvas id="c-20"></canvas></div>
+        <div class="price-card">
+          <span class="count">20 Bins</span>
+          <span class="amount">$79</span>
+          <span class="term">first week + tax</span>
+          <p>Great for apartments, smaller moves, decluttering, or packing a few rooms at a time.</p>
+          <a class="btn btn-primary" href="reserve.html?bins=20">Reserve 20 Bins</a>
+        </div>
+      </div>
+      <div class="pkg reveal">
+        <div class="mini-scene"><canvas id="c-40"></canvas></div>
+        <div class="price-card featured">
+          <span class="badge">Most Popular</span>
+          <span class="count">40 Bins</span>
+          <span class="amount">$129</span>
+          <span class="term">first week + tax</span>
+          <p>Our best all-around option for most moves.</p>
+          <a class="btn btn-primary" href="reserve.html?bins=40">Reserve 40 Bins</a>
+        </div>
+      </div>
+      <div class="pkg reveal">
+        <div class="mini-scene"><canvas id="c-60"></canvas></div>
+        <div class="price-card">
+          <span class="count">60 Bins</span>
+          <span class="amount">$179</span>
+          <span class="term">first week + tax</span>
+          <p>More room for larger homes, families, or anyone who doesn’t want to run out of bins halfway through packing.</p>
+          <a class="btn btn-primary" href="reserve.html?bins=60">Reserve 60 Bins</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section paper2" id="glance">
+  <canvas id="c-lid-peek" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">At a glance</div>
+      <h2>Every Package, Side by Side</h2>
+    </div>
+    <div class="table-scroll reveal">
+      <table class="pricing">
+        <thead>
+          <tr><th scope="col">Package</th><th scope="col">1 week</th><th scope="col">Each extra week</th><th scope="col" style="text-align:right">2-week total</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>20 bins</strong></td><td>$79</td><td>+$40</td><td class="price">$119</td></tr>
+          <tr><td><strong>40 bins</strong></td><td>$129</td><td>+$65</td><td class="price">$194</td></tr>
+          <tr><td><strong>60 bins</strong></td><td>$179</td><td>+$90</td><td class="price">$269</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="margin-top:14px">Prices shown before Utah sales tax.</p>
+    <p class="sub" style="margin-top:18px"><strong>Home delivery and pickup are included</strong> throughout our Weber &amp; Davis service area.</p>
+    <p class="sub">Need a larger package? <a href="contact.html">Contact us</a>.</p>
+  </div>
+</section>
+
+<section class="section dark">
+  <div class="wrap center">
+    <h2 class="reveal">20 bins. $79 for a week. Delivered.</h2>
+    <p class="sub reveal" style="margin:16px auto 28px">Moving doesn’t need another complicated expense.</p>
+    <p><a class="btn btn-primary" href="reserve.html">Reserve Your Bins</a></p>
+  </div>
+</section>
+</main>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="brand">
+      <a class="logo" href="index.html">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+        <span class="name">BEEHIVE BIN CO.</span>
+      </a>
+      <p>Reusable moving-bin rentals for Weber &amp; Davis Counties. Clinton, Utah.</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="reserve.html">Reserve</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="faq.html">FAQ</a>
+      <a href="requirements.html">Rental Requirements</a>
+      <a href="contact.html">Contact</a>
+      <a href="terms.html">Rental Terms</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </div>
+  <div class="legal">
+    <span>© <span id="year">2026</span> Beehive Bin Co. All rights reserved.</span>
+    <span>Move Better. Skip the Cardboard.</span>
+  </div>
+</footer>
+
+<script src="assets/tote-model.js?v=2"></script>
+<script src="assets/tote-kit.js?v=5"></script>
+<script src="assets/site.js?v=2"></script>
+<script type="module">
+const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/+esm');
+const {GLTFLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js/+esm');
+const {DRACOLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/DRACOLoader.js/+esm');
+const kit = await ToteKit(THREE, GLTFLoader, DRACOLoader);
+const {makeTote, makeRenderer, addLights, addFloor, register, baseScale, reducedMotion} = kit;
+
+const scale = baseScale * .42;
+const sample = makeTote(scale); sample.updateMatrixWorld(true);
+const sb = new THREE.Box3().setFromObject(sample);
+const ss = new THREE.Vector3(); sb.getSize(ss);
+const hStep = ss.x * 1.04, vStep = ss.y * .92, dStep = ss.z * 1.06;
+
+function stackScene(canvasId, count, phase) {
+  const canvas = document.getElementById(canvasId);
+  const renderer = makeRenderer(canvas);
+  const scene = new THREE.Scene(); addLights(scene); addFloor(scene, -0.5);
+  const camera = new THREE.PerspectiveCamera(30, 1, .01, 100);
+  const group = new THREE.Group(); scene.add(group);
+  const depth = Math.ceil(count / 20);
+  let i = 0;
+  for (let d = 0; d < depth; d++)
+    for (let c = 0; c < 4; c++)
+      for (let row = 0; row < 5 && i < count; row++, i++) {
+        const t = makeTote(scale);
+        t.position.set((c - 1.5) * hStep, -0.48 + row * vStep, -d * dStep);
+        t.rotation.y = -.06;
+        group.add(t);
+      }
+  const dist = 2.2 + depth * .45;
+  const bb = new THREE.Box3().setFromObject(group);
+  const c = new THREE.Vector3(); bb.getCenter(c);
+  register({renderer, camera, canvas, scene, update(now){
+    const t = now * .001;
+    group.rotation.y = reducedMotion ? -.45 : -.45 + Math.sin(t * .22 + phase) * .18;
+    camera.position.set(dist * .6, c.y + .75, dist);
+    camera.lookAt(0, c.y, c.z);
+  }});
+}
+stackScene('c-20', 20, 0);
+stackScene('c-40', 40, 2.1);
+stackScene('c-60', 60, 4.2);
+
+/* A collage of lids strewn down the right edge of the pricing table section. */
+{
+  const canvas2 = document.getElementById('c-lid-peek');
+  if (canvas2) {
+    const renderer2 = makeRenderer(canvas2);
+    const scene2 = new THREE.Scene(); addLights(scene2);
+    const camera2 = new THREE.PerspectiveCamera(30, 1, .01, 100);
+    const rand = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
+    // Shuffled depth slots: each lid gets a distinct, well-separated depth so
+    // near/big and far/small mix across the pile instead of forming a gradient.
+    const DEPTH = [7, 2, 10, 0, 5, 8, 3, 11, 1, 9, 4, 6];
+    let i = 0;
+    for (let row = 0; row < 6; row++) {
+      for (let col = 0; col < 2; col++, i++) {
+        const lid = kit.findLid(makeTote(baseScale * 1.1));
+        lid.position.set(0, 0, 0);
+        lid.rotation.set(Math.PI / 2, 0, 0);
+        const w = new THREE.Group();
+        w.add(lid);
+        const x = -.45 + col * .9 + (row % 2 ? .3 : -.1) + (rand(i) - .5) * .18;
+        const y = 1.6 - row * .64 + (rand(i + 50) - .5) * .14;
+        w.position.set(x, y, DEPTH[i] * .18);
+        w.scale.setScalar(1.45 + rand(i + 100) * .4);
+        w.rotation.z = (rand(i + 200) - .5) * .8;
+        scene2.add(w);
+      }
+    }
+    camera2.position.set(0, 0, 6);
+    camera2.lookAt(0, 0, 0);
+    register({renderer: renderer2, camera: camera2, canvas: canvas2, scene: scene2});
+  }
+}
+kit.start();
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>print test</title>
+<style>body{margin:0;background:#F2F1EB}#c{width:100vw;height:100vh;display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="assets/tote-model.js?v=2"></script>
+<script src="assets/tote-kit.js?v=5"></script>
+<script type="module">
+const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/+esm');
+const {GLTFLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js/+esm');
+const {DRACOLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/DRACOLoader.js/+esm');
+const kit = await ToteKit(THREE, GLTFLoader, DRACOLoader);
+const canvas = document.getElementById('c');
+const renderer = kit.makeRenderer(canvas);
+const scene = new THREE.Scene();
+kit.addLights(scene);
+const tote = kit.makeTote();
+scene.add(tote);
+const camera = new THREE.PerspectiveCamera(30, 1, .1, 50);
+camera.position.set(0, .35, 1.9);
+camera.lookAt(0, .17, 0);
+// slight turn via query: ?yaw=0.5
+const yaw = +(new URLSearchParams(location.search).get('yaw') || 0);
+tote.rotation.y = yaw;
+kit.register({renderer, camera, canvas, scene});
+kit.start();
+window.__ready = true;
+</script>
+</body>
+</html>

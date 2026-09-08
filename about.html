@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>About — Beehive Bin Co.</title>
+<meta name="description" content="Beehive Bin Co. is a locally operated reusable moving-bin rental service based in Clinton, Utah, serving Weber and Davis Counties.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Black&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css?v=30">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 1.5 29 9v14L16 30.5 3 23V9z' fill='%23FFC400' stroke='%2315130F' stroke-width='2'/%3E%3Cpath d='M10.5 13h11l-1.2 8.5h-8.6z' fill='%2315130F'/%3E%3Crect x='9' y='10.6' width='14' height='2.6' fill='%2315130F'/%3E%3C/svg%3E">
+<style>
+.about-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,480px);gap:48px;align-items:start}
+@media (min-width:961px){.about-3d{position:sticky;top:96px}}
+#quick-answers{position:relative;overflow:hidden}
+#quick-answers .wrap{position:relative;z-index:1}
+#c-lid-peek{position:absolute;right:0;top:0;width:340px;height:100%;pointer-events:none;z-index:0}
+@media (max-width:1250px){#c-lid-peek{display:none}}
+@media (max-width:960px){.about-layout{grid-template-columns:1fr}.about-3d{order:-1}}
+.local-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px);gap:48px;align-items:center}
+@media (max-width:960px){.local-split{grid-template-columns:1fr}}
+.big-q{
+  font-family:var(--font-display);font-size:clamp(24px,3vw,36px);line-height:1.15;
+  border-left:10px solid var(--yellow);padding:8px 0 8px 24px;margin:30px 0;
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="bar">
+    <a class="logo" href="index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+      <span class="name">BEEHIVE BIN CO.<span class="tag">Move Better. Skip the Cardboard.</span></span>
+    </a>
+    <button class="menu-btn" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav class="site-nav" id="site-nav">
+      <a href="pricing.html">Pricing</a>
+      <a href="about.html" aria-current="page">About</a>
+      <a href="contact.html">Contact</a>
+      <a class="nav-cta" href="reserve.html">Reserve Bins</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="section">
+  <div class="wrap">
+    <div class="about-layout">
+      <div>
+        <div class="eyebrow">About us</div>
+        <h1 style="font-size:clamp(36px,4.6vw,64px)">A Local Alternative to Cardboard</h1>
+        <p class="sub" style="margin-top:18px">Beehive Bin Co. is a locally operated reusable moving-bin rental service based in Clinton, Utah. We started with a pretty simple question:</p>
+        <p class="big-q">Why are people still spending money on piles of cardboard boxes every time they move?</p>
+        <p class="sub">Heavy-duty plastic totes are easier to pack, easier to stack, don’t require tape, and don’t need to be thrown away afterward. So we built a simple rental service specifically for Weber and Davis Counties.</p>
+        <ul class="checks stack" style="max-width:560px">
+          <li>No giant service territory</li>
+          <li>No complicated packages</li>
+          <li>Just affordable moving bins when you need them</li>
+        </ul>
+        <p style="margin-top:24px"><a class="btn btn-primary" href="reserve.html">Reserve Your Bins</a></p>
+      </div>
+      <div class="about-3d">
+        <div class="mini-scene" style="aspect-ratio:1/1"><canvas id="c-hive"></canvas></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="stripe-rule" role="presentation"></div>
+
+<section class="section dark" id="why-rent">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Rent vs. buy</div>
+      <h2>Why Rent Instead of Buy Cardboard?</h2>
+      <p class="sub" style="margin-top:14px">A move can require dozens of cardboard boxes. Then you still need tape. Then you have to assemble them. Then you have to break them all down when the move is over. With reusable bins, you simply:</p>
+    </div>
+    <p class="flow reveal" aria-label="Reserve, receive, return">
+      <span>Reserve</span><span class="arrow">→</span>
+      <span>Receive</span><span class="arrow">→</span>
+      <span>Return</span>
+    </p>
+    <p class="sub reveal">And because you’re renting them, you don’t have to figure out where to store 40 giant plastic totes afterward either.</p>
+  </div>
+</section>
+
+<section class="section tight paper2" id="uses">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Not just moving day</div>
+      <h2>Great for More Than Moving</h2>
+      <p class="sub" style="margin-top:14px">If you only need sturdy storage bins for a couple of weeks, renting may make a lot more sense than buying.</p>
+    </div>
+    <ul class="cities reveal">
+      <li>Moving homes</li><li>Apartment moves</li><li>College moves</li>
+      <li>Home renovations</li><li>Temporary storage</li><li>Decluttering</li>
+      <li>Estate cleanouts</li><li>Office moves</li><li>Preparing a home for sale</li>
+      <li>Garage &amp; estate sales</li><li>Weddings &amp; receptions</li><li>Event storage</li>
+      <li>Holiday d&eacute;cor rotation</li><li>Craft fairs &amp; market vendors</li>
+      <li>Church &amp; school events</li><li>Emergency-prep reorganizing</li>
+    </ul>
+  </div>
+</section>
+
+<section class="section dark" id="quick-answers">
+  <canvas id="c-lid-peek" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Quick answers</div>
+      <h2>The Three Things Everyone Asks</h2>
+    </div>
+    <div class="faq">
+      <details name="about-faq" open>
+        <summary>Is there a security deposit?</summary>
+        <div class="a"><p>No.</p><p>We require a valid card on file, photo ID, and acceptance of our rental agreement instead.</p></div>
+      </details>
+      <details name="about-faq">
+        <summary>Do you deliver?</summary>
+        <div class="a"><p>Yes — home delivery and pickup are <strong>included in every package</strong> within our service area.</p><p>Prefer not to share your address? We're happy to meet at a public location instead.</p></div>
+      </details>
+      <details name="about-faq">
+        <summary>How long do I get the bins?</summary>
+        <div class="a"><p>Rentals run <strong>one week</strong> at a time, and you can add extra weeks whenever you need them.</p></div>
+      </details>
+    </div>
+    <p style="margin-top:28px"><a class="btn btn-ghost" href="faq.html">Read the full FAQ</a></p>
+  </div>
+</section>
+
+<section class="section yellow">
+  <div class="wrap">
+    <div class="local-split">
+      <div>
+        <div class="section-head reveal" style="margin-bottom:24px">
+          <div class="eyebrow">Where we work</div>
+          <h2>Rooted in Weber &amp; Davis</h2>
+          <p class="sub" style="margin-top:14px">Because we stay local, deliveries are quick, scheduling is flexible, and you're dealing with neighbors — not a national call center.</p>
+        </div>
+        <ul class="cities reveal">
+          <li>Ogden</li><li>South Ogden</li><li>Roy</li><li>West Haven</li>
+          <li>Clinton</li><li>Sunset</li><li>Clearfield</li>
+          <li>Syracuse</li><li>Layton</li><li>Kaysville</li><li>Farmington</li>
+        </ul>
+      </div>
+      <div class="reveal">
+        <img src="assets/service-area-map.png" alt="Map of the service area: the Weber and Davis County corridor from North Ogden and Plain City south to North Salt Lake, outlined in yellow"
+             style="border:2px solid var(--ink);border-radius:var(--radius);display:block;width:100%;height:auto;max-width:440px;margin-inline:auto;background:var(--white)"
+             width="900" height="1100" loading="lazy">
+        <p class="note" style="text-align:center;margin-top:10px;font-size:12px;color:#6B5C1A">Map data &copy; OpenStreetMap contributors</p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="brand">
+      <a class="logo" href="index.html">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+        <span class="name">BEEHIVE BIN CO.</span>
+      </a>
+      <p>Reusable moving-bin rentals for Weber &amp; Davis Counties. Clinton, Utah.</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="reserve.html">Reserve</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="faq.html">FAQ</a>
+      <a href="requirements.html">Rental Requirements</a>
+      <a href="contact.html">Contact</a>
+      <a href="terms.html">Rental Terms</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </div>
+  <div class="legal">
+    <span>© <span id="year">2026</span> Beehive Bin Co. All rights reserved.</span>
+    <span>Move Better. Skip the Cardboard.</span>
+  </div>
+</footer>
+
+<script src="assets/tote-model.js?v=2"></script>
+<script src="assets/tote-kit.js?v=5"></script>
+<script src="assets/site.js?v=2"></script>
+<script type="module">
+const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/+esm');
+const {GLTFLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js/+esm');
+const {DRACOLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/DRACOLoader.js/+esm');
+const kit = await ToteKit(THREE, GLTFLoader, DRACOLoader);
+const {makeTote, makeRenderer, addLights, addFloor, register, baseScale, reducedMotion} = kit;
+
+/* A beehive-shaped pyramid of totes: rows of 4, 3, 2, 1. */
+const canvas = document.getElementById('c-hive');
+const renderer = makeRenderer(canvas);
+const scene = new THREE.Scene(); addLights(scene); addFloor(scene, -0.55);
+const camera = new THREE.PerspectiveCamera(31, 1, .01, 100);
+const group = new THREE.Group(); scene.add(group);
+
+const scale = baseScale * .42;
+const sample = makeTote(scale); sample.updateMatrixWorld(true);
+const sb = new THREE.Box3().setFromObject(sample);
+const ss = new THREE.Vector3(); sb.getSize(ss);
+const hStep = ss.x * .96, vStep = ss.y * .92;
+
+const rows = [4, 3, 2, 1];
+rows.forEach((n, row) => {
+  for (let c = 0; c < n; c++) {
+    const t = makeTote(scale);
+    t.position.set((c - (n - 1) / 2) * hStep, -0.53 + row * vStep, 0);
+    t.rotation.y = -.05 + (c % 2 ? .07 : -.07);
+    group.add(t);
+  }
+});
+
+// Center the camera on the pyramid's actual middle so it sits centered in the card.
+const bb = new THREE.Box3().setFromObject(group);
+const cy = (bb.min.y + bb.max.y) / 2;
+register({renderer, camera, canvas, scene, update(now){
+  const t = now * .001;
+  group.rotation.y = reducedMotion ? .3 : t * .25;
+  camera.position.set(2.1, cy + .95, 2.75);
+  camera.lookAt(0, cy, 0);
+}});
+
+/* A collage of lids strewn down the right edge of the Quick Answers section. */
+{
+  const canvas2 = document.getElementById('c-lid-peek');
+  if (canvas2) {
+    const renderer2 = kit.makeRenderer(canvas2, true);
+    const scene2 = new THREE.Scene(); kit.addLights(scene2, true);
+    const camera2 = new THREE.PerspectiveCamera(30, 1, .01, 100);
+    const rand = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
+    // Shuffled depth slots: each lid gets a distinct, well-separated depth so
+    // near/big and far/small mix across the pile instead of forming a gradient.
+    const DEPTH = [7, 2, 10, 0, 5, 8, 3, 11, 1, 9, 4, 6];
+    let i = 0;
+    for (let row = 0; row < 6; row++) {
+      for (let col = 0; col < 2; col++, i++) {
+        const lid = kit.findLid(kit.makeTote(kit.baseScale * 1.1));
+        lid.position.set(0, 0, 0);
+        lid.rotation.set(Math.PI / 2, 0, 0);
+        const w = new THREE.Group();
+        w.add(lid);
+        const x = -.45 + col * .9 + (row % 2 ? .3 : -.1) + (rand(i) - .5) * .18;
+        const y = 1.6 - row * .64 + (rand(i + 50) - .5) * .14;
+        w.position.set(x, y, DEPTH[i] * .18);
+        w.scale.setScalar(1.45 + rand(i + 100) * .4);
+        w.rotation.z = (rand(i + 200) - .5) * .8;
+        scene2.add(w);
+      }
+    }
+    camera2.position.set(0, 0, 6);
+    camera2.lookAt(0, 0, 0);
+    register({renderer: renderer2, camera: camera2, canvas: canvas2, scene: scene2});
+  }
+}
+kit.start();
+</script>
+</body>
+</html>

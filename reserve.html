@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Reserve Your Bins — Beehive Bin Co.</title>
+<meta name="description" content="Reserve heavy-duty reusable moving bins in Weber and Davis Counties. 20, 40, or 60 bins by the week — delivery and pickup included, no security deposit.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Black&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css?v=30">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 1.5 29 9v14L16 30.5 3 23V9z' fill='%23FFC400' stroke='%2315130F' stroke-width='2'/%3E%3Cpath d='M10.5 13h11l-1.2 8.5h-8.6z' fill='%2315130F'/%3E%3Crect x='9' y='10.6' width='14' height='2.6' fill='%2315130F'/%3E%3C/svg%3E">
+<style>
+.reserve-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,460px);gap:40px;align-items:start}
+.reserve-3d{position:sticky;top:96px}
+.reserve-3d .mini-scene{aspect-ratio:1/1.05}
+.summary{border:2px solid var(--ink);border-radius:var(--radius);background:var(--ink);color:var(--white);padding:22px 24px;margin-top:18px}
+.summary dl{display:grid;grid-template-columns:1fr auto;gap:8px 16px;margin:0;font-size:15px}
+.summary dt{color:var(--muted-dark)}
+.summary dd{margin:0;font-weight:700;text-align:right}
+.summary .total{font-family:var(--font-display);font-size:26px;color:var(--yellow)}
+fieldset{border:0;padding:0;margin:0 0 34px}
+legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding:0}
+.success-panel{border:2px solid var(--ink);border-radius:var(--radius);background:var(--yellow);padding:28px;margin-top:8px}
+.success-panel h3{margin-bottom:10px}
+.date-shell{position:relative}
+.date-shell .date-display{
+  display:flex;align-items:center;height:48px;padding:0 15px;
+  font:500 16px var(--font-body);color:var(--ink);
+  background:var(--white);border:2px solid var(--ink);border-radius:10px;
+}
+.date-shell .date-display.empty{color:var(--muted)}
+.date-shell input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+/* While focused, the native control becomes visible so every browser's own
+   date UI (Chrome's calendar, Safari's inline fields, iOS wheels) is usable. */
+.date-shell input:focus{opacity:1 !important;background:var(--white)}
+.date-shell:focus-within .date-display{visibility:hidden}
+.choice .mini-scene{aspect-ratio:16/9;margin-top:14px}
+#reserve-form .summary{margin:0 0 24px}
+.linklike{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer}
+.weeks-more{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.choice.mini .body{padding:11px 18px}
+.choice.mini .body strong{font-size:15px;display:inline}
+.drawer{display:none;transition:transform .25s ease}
+.drawer.drawer-hidden{transform:translateY(110%)}
+@media (max-width:960px){
+  .reserve-layout{grid-template-columns:1fr}
+  .reserve-3d{display:contents}
+  .reserve-3d .mini-scene{aspect-ratio:16/10;order:-1}
+  /* On phones the summary lives in the floating drawer instead. */
+  .reserve-3d .summary{display:none}
+  main.section{padding-bottom:calc(96px + env(safe-area-inset-bottom, 0px))}
+  body{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+  .drawer{display:block;position:fixed;left:0;right:0;bottom:0;z-index:60;box-shadow:0 -8px 24px rgba(0,0,0,.18)}
+  .drawer-panel{background:var(--char);color:var(--white);padding:14px 20px;border-top:1px solid rgba(255,255,255,.14)}
+  .drawer-panel dl{display:grid;grid-template-columns:1fr auto;gap:7px 16px;margin:0;font-size:14px}
+  .drawer-panel dt{color:var(--muted-dark)}
+  .drawer-panel dd{margin:0;font-weight:700;text-align:right}
+  .drawer-bar{
+    width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:var(--ink);color:var(--white);border:0;border-top:3px solid var(--yellow);
+    padding:13px 20px;font:700 15px var(--font-body);cursor:pointer;text-align:left;
+    /* keep the bar clear of the iPhone home indicator */
+    padding-bottom:calc(13px + env(safe-area-inset-bottom, 0px));
+  }
+  .drawer-bar .chev{color:var(--yellow);transition:transform .2s}
+  .drawer[data-open] .chev{transform:rotate(180deg)}
+  .drawer-bar strong{font-family:var(--font-display);font-size:21px;color:var(--yellow);margin-left:auto}
+  .drawer-bar small{font:600 11px var(--font-body);color:var(--muted-dark)}
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="bar">
+    <a class="logo" href="index.html">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+      <span class="name">BEEHIVE BIN CO.<span class="tag">Move Better. Skip the Cardboard.</span></span>
+    </a>
+    <button class="menu-btn" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav class="site-nav" id="site-nav">
+      <a href="pricing.html">Pricing</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+      <a class="nav-cta" href="reserve.html" aria-current="page">Reserve Bins</a>
+    </nav>
+  </div>
+</header>
+
+<main class="section">
+  <div class="wrap">
+    <div class="reserve-layout">
+      <div>
+    <div class="section-head">
+      <div class="eyebrow">Reservation</div>
+      <h1 style="font-size:clamp(38px,5vw,68px)">Reserve Your Moving Bins</h1>
+      <p class="sub" style="margin-top:14px">Pick a package and watch your moving kit stack up. Rentals run by the week, <strong>delivery and pickup are included</strong>, and there's no security deposit.</p>
+    </div>
+      <form id="reserve-form" novalidate>
+        <fieldset>
+          <legend>1. Choose your package</legend>
+          <div class="grid cols-3">
+            <label class="choice">
+              <input type="radio" name="bins" value="20">
+              <span class="body"><strong>20 Bins</strong><em>$79<span style="font-size:14px;font-family:var(--font-body);font-weight:700"> first week</span></em><small>Apartments &amp; smaller moves</small></span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="bins" value="40" checked>
+              <span class="body"><strong>40 Bins</strong><em>$129<span style="font-size:14px;font-family:var(--font-body);font-weight:700"> first week</span></em><small>Best for most moves</small></span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="bins" value="60">
+              <span class="body"><strong>60 Bins</strong><em>$179<span style="font-size:14px;font-family:var(--font-body);font-weight:700"> first week</span></em><small>Larger homes &amp; families</small></span>
+            </label>
+          </div>
+          <p class="note" style="margin-top:14px">Need more than 60? <a href="contact.html">Contact us</a> for custom quantities.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>2. How long do you need them?</legend>
+          <div class="grid cols-2">
+            <label class="choice">
+              <input type="radio" name="weeks" value="1" checked>
+              <span class="body"><strong>1 Week</strong><small>Covers most moves.</small></span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="weeks" value="2">
+              <span class="body"><strong>2 Weeks</strong><small id="extra-note">+$65 for the second week</small></span>
+            </label>
+          </div>
+          <p class="note" style="margin-top:14px" id="longer-note">Need even longer? <button type="button" class="linklike" id="more-weeks">Choose 3&ndash;5 weeks</button>.</p>
+          <div class="weeks-more" id="weeks-more" hidden>
+            <label class="choice mini"><input type="radio" name="weeks" value="3"><span class="body"><strong>3 weeks</strong></span></label>
+            <label class="choice mini"><input type="radio" name="weeks" value="4"><span class="body"><strong>4 weeks</strong></span></label>
+            <label class="choice mini"><input type="radio" name="weeks" value="5"><span class="body"><strong>5 weeks</strong></span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>3. Your dates</legend>
+          <div class="grid cols-2">
+            <div class="field">
+              <label for="start">Rental start date</label>
+              <div class="date-shell">
+                <span class="date-display empty" id="start-display" aria-hidden="true">Pick a date</span>
+                <input type="date" id="start" name="start" required>
+              </div>
+              <span class="help" id="sunday-warn" hidden style="color:#B3261E;font-weight:700">We don't deliver or pick up on Sundays — please pick another day.</span>
+            </div>
+            <div class="field">
+              <label for="end">Return date</label>
+              <input type="text" id="end" name="end" readonly value="Pick a start date">
+              <span class="help">Set automatically from your rental length.</span>
+            </div>
+          </div>
+          <p class="note" style="margin-top:4px">Deliveries and pickups happen <strong>in the evening</strong> on your start and return dates — we'll confirm an exact time window with you. We don't deliver or pick up on <strong>Sundays</strong>.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>4. Delivery &amp; pickup <span style="font-size:15px;color:var(--muted);font-family:var(--font-body);font-weight:600">— included</span></legend>
+          <div class="grid cols-2">
+            <div class="field">
+              <label for="dcity">Delivery city</label>
+              <select id="dcity" name="dcity" required>
+                <option value="" disabled selected>Choose a city&hellip;</option>
+                <option value="Bountiful">Bountiful</option>
+                <option value="Centerville">Centerville</option>
+                <option value="Clearfield">Clearfield</option>
+                <option value="Clinton">Clinton</option>
+                <option value="Eden">Eden</option>
+                <option value="Farmington">Farmington</option>
+                <option value="Farr West">Farr West</option>
+                <option value="Fruit Heights">Fruit Heights</option>
+                <option value="Harrisville">Harrisville</option>
+                <option value="Hooper">Hooper</option>
+                <option value="Huntsville">Huntsville</option>
+                <option value="Kaysville">Kaysville</option>
+                <option value="Layton">Layton</option>
+                <option value="Liberty">Liberty</option>
+                <option value="Marriott-Slaterville">Marriott-Slaterville</option>
+                <option value="Nordic Valley">Nordic Valley</option>
+                <option value="North Ogden">North Ogden</option>
+                <option value="North Salt Lake">North Salt Lake</option>
+                <option value="Ogden">Ogden</option>
+                <option value="Plain City">Plain City</option>
+                <option value="Pleasant View">Pleasant View</option>
+                <option value="Reese">Reese</option>
+                <option value="Riverdale">Riverdale</option>
+                <option value="Roy">Roy</option>
+                <option value="South Ogden">South Ogden</option>
+                <option value="South Weber">South Weber</option>
+                <option value="Sunset">Sunset</option>
+                <option value="Syracuse">Syracuse</option>
+                <option value="Taylor">Taylor</option>
+                <option value="Uintah">Uintah</option>
+                <option value="Warren">Warren</option>
+                <option value="Washington Terrace">Washington Terrace</option>
+                <option value="West Bountiful">West Bountiful</option>
+                <option value="West Haven">West Haven</option>
+                <option value="West Point">West Point</option>
+                <option value="West Weber">West Weber</option>
+                <option value="Wolf Creek">Wolf Creek</option>
+                <option value="Woods Cross">Woods Cross</option>
+              </select>
+              <span class="help">Where we drop off your bins.</span>
+            </div>
+            <div class="field">
+              <label for="pcity">Pickup city</label>
+              <select id="pcity" name="pcity">
+                <option value="">Same as delivery</option>
+                <option value="Bountiful">Bountiful</option>
+                <option value="Centerville">Centerville</option>
+                <option value="Clearfield">Clearfield</option>
+                <option value="Clinton">Clinton</option>
+                <option value="Eden">Eden</option>
+                <option value="Farmington">Farmington</option>
+                <option value="Farr West">Farr West</option>
+                <option value="Fruit Heights">Fruit Heights</option>
+                <option value="Harrisville">Harrisville</option>
+                <option value="Hooper">Hooper</option>
+                <option value="Huntsville">Huntsville</option>
+                <option value="Kaysville">Kaysville</option>
+                <option value="Layton">Layton</option>
+                <option value="Liberty">Liberty</option>
+                <option value="Marriott-Slaterville">Marriott-Slaterville</option>
+                <option value="Nordic Valley">Nordic Valley</option>
+                <option value="North Ogden">North Ogden</option>
+                <option value="North Salt Lake">North Salt Lake</option>
+                <option value="Ogden">Ogden</option>
+                <option value="Plain City">Plain City</option>
+                <option value="Pleasant View">Pleasant View</option>
+                <option value="Reese">Reese</option>
+                <option value="Riverdale">Riverdale</option>
+                <option value="Roy">Roy</option>
+                <option value="South Ogden">South Ogden</option>
+                <option value="South Weber">South Weber</option>
+                <option value="Sunset">Sunset</option>
+                <option value="Syracuse">Syracuse</option>
+                <option value="Taylor">Taylor</option>
+                <option value="Uintah">Uintah</option>
+                <option value="Warren">Warren</option>
+                <option value="Washington Terrace">Washington Terrace</option>
+                <option value="West Bountiful">West Bountiful</option>
+                <option value="West Haven">West Haven</option>
+                <option value="West Point">West Point</option>
+                <option value="West Weber">West Weber</option>
+                <option value="Wolf Creek">Wolf Creek</option>
+                <option value="Woods Cross">Woods Cross</option>
+              </select>
+              <span class="help">Moving across town? We'll grab the bins at your new place.</span>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>5. Your info</legend>
+          <div class="grid cols-2">
+            <div class="field">
+              <label for="fname">First name</label>
+              <input type="text" id="fname" name="fname" autocomplete="given-name" required>
+            </div>
+            <div class="field">
+              <label for="lname">Last name</label>
+              <input type="text" id="lname" name="lname" autocomplete="family-name" required>
+            </div>
+          </div>
+          <div class="grid cols-2">
+            <div class="field">
+              <label for="phone">Phone</label>
+              <input type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel" required>
+              <span class="help">For scheduling and delivery-day coordination.</span>
+            </div>
+            <div class="field">
+              <label for="email">Email <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+              <input type="email" id="email" name="email" autocomplete="email" inputmode="email">
+              <span class="help">We'll send your confirmation here.</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="notes">Anything we should know? <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <textarea id="notes" name="notes" placeholder="Stairs, gate codes, custom quantities, questions…"></textarea>
+          </div>
+        </fieldset>
+
+        <button class="btn btn-primary" type="submit" style="font-size:18px;padding:18px 32px">Request This Reservation</button>
+        <p class="note" style="margin-top:14px">We’ll confirm availability and finalize everything by phone or email. Nothing is charged online, and totals are shown before Utah sales tax.</p>
+
+        <div class="success-panel" id="success" hidden>
+          <h3>Request received!</h3>
+          <p id="success-text" style="margin-bottom:10px"></p>
+          <p class="mb-0" style="font-size:14.5px">This demo form isn’t connected to a booking system yet — reach us directly at <strong>[PHONE]</strong> or <strong>[EMAIL]</strong> to confirm your reservation.</p>
+        </div>
+      </form>
+      </div>
+
+      <aside class="reserve-3d" aria-label="Live preview of your bin package">
+        <div class="mini-scene"><canvas id="c-stack"></canvas></div>
+        <div class="summary">
+          <dl>
+            <dt>Package</dt><dd id="sum-bins">40 bins</dd>
+            <dt>Rental period</dt><dd id="sum-length">1 week</dd>
+            <dt>Delivery &amp; pickup</dt><dd id="sum-delivery">Included</dd>
+            <dt>Security deposit</dt><dd>None</dd>
+            <dt style="align-self:center">Total</dt><dd class="total"><span id="sum-total">$129</span> <small style="font-size:13px;font-weight:600;color:var(--muted-dark)">+ tax</small></dd>
+          </dl>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<div class="drawer" id="drawer">
+  <div class="drawer-panel" id="drawer-panel" hidden>
+    <dl>
+      <dt>Return date</dt><dd id="drawer-end">&mdash;</dd>
+      <dt>Delivery &amp; pickup</dt><dd>Included</dd>
+      <dt>Security deposit</dt><dd>None</dd>
+    </dl>
+  </div>
+  <button type="button" class="drawer-bar" id="drawer-toggle" aria-expanded="false" aria-controls="drawer-panel">
+    <span class="chev" aria-hidden="true">&#9650;</span>
+    <span id="drawer-line">40 bins &middot; 1 week</span>
+    <strong id="drawer-total">$129 <small>+ tax</small></strong>
+  </button>
+</div>
+
+<footer class="site-footer">
+  <div class="inner">
+    <div class="brand">
+      <a class="logo" href="index.html">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
+        <span class="name">BEEHIVE BIN CO.</span>
+      </a>
+      <p>Reusable moving-bin rentals for Weber &amp; Davis Counties. Clinton, Utah.</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="reserve.html">Reserve</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="faq.html">FAQ</a>
+      <a href="requirements.html">Rental Requirements</a>
+      <a href="contact.html">Contact</a>
+      <a href="terms.html">Rental Terms</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </div>
+  <div class="legal">
+    <span>© <span id="year">2026</span> Beehive Bin Co. All rights reserved.</span>
+    <span>Move Better. Skip the Cardboard.</span>
+  </div>
+</footer>
+
+<script src="assets/tote-model.js?v=2"></script>
+<script src="assets/tote-kit.js?v=5"></script>
+<script src="assets/site.js?v=2"></script>
+<script>
+/* Form logic (no 3D dependency). */
+(() => {
+  const PRICES = {20: 79, 40: 129, 60: 179};   // per week, delivery included
+  const EXTRA  = {20: 40, 40: 65,  60: 90};    // each additional week
+  const form = document.getElementById('reserve-form');
+  const sumBins = document.getElementById('sum-bins');
+  const sumLength = document.getElementById('sum-length');
+  const sumTotal = document.getElementById('sum-total');
+  const extraNote = document.getElementById('extra-note');
+  const startInput = document.getElementById('start');
+  const endInput = document.getElementById('end');
+
+  // Pre-select package from ?bins=20|40|60 links.
+  const wanted = new URLSearchParams(location.search).get('bins');
+  if (PRICES[wanted]) form.querySelector(`input[name="bins"][value="${wanted}"]`).checked = true;
+
+  const selectedBins = () => +form.querySelector('input[name="bins"]:checked').value;
+  const selectedWeeks = () => +form.querySelector('input[name="weeks"]:checked').value;
+
+  startInput.min = new Date().toISOString().slice(0, 10);
+  const FMT = {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'};
+  const startDisplay = document.getElementById('start-display');
+  function syncEndDate() {
+    if (!startInput.value) return;
+    const d = new Date(startInput.value + 'T12:00:00');
+    document.getElementById('sunday-warn').hidden = d.getDay() !== 0;
+    startDisplay.textContent = d.toLocaleDateString(undefined, FMT);
+    startDisplay.classList.remove('empty');
+    d.setDate(d.getDate() + 7 * selectedWeeks());
+    endInput.value = d.toLocaleDateString(undefined, FMT);
+  }
+
+  function syncSummary() {
+    const bins = selectedBins();
+    const weeks = selectedWeeks();
+    sumBins.textContent = bins + ' bins';
+    sumLength.textContent = weeks === 1 ? '1 week' : weeks + ' weeks';
+    extraNote.textContent = '+$' + EXTRA[bins] + ' for the second week';
+    const total = PRICES[bins] + (weeks - 1) * EXTRA[bins];
+    sumTotal.textContent = '$' + total;
+    syncEndDate();
+    // Mobile floating drawer mirrors the summary.
+    document.getElementById('drawer-line').textContent = bins + ' bins \u00B7 ' + (weeks === 1 ? '1 week' : weeks + ' weeks');
+    document.getElementById('drawer-total').innerHTML = '$' + total + ' <small>+ tax</small>';
+    document.getElementById('drawer-end').textContent = endInput.value.startsWith('Pick') ? '—' : endInput.value;
+    document.dispatchEvent(new CustomEvent('bins-changed', {detail: {count: bins}}));
+  }
+  const drawer = document.getElementById('drawer');
+  const drawerToggle = document.getElementById('drawer-toggle');
+  drawerToggle.addEventListener('click', () => {
+    const panel = document.getElementById('drawer-panel');
+    panel.hidden = !panel.hidden;
+    drawerToggle.setAttribute('aria-expanded', String(!panel.hidden));
+    if (panel.hidden) drawer.removeAttribute('data-open');
+    else drawer.setAttribute('data-open', '');
+  });
+  const longerNote = document.getElementById('longer-note');
+  const weeksMore = document.getElementById('weeks-more');
+  const NOTE_CLOSED = 'Need even longer? <button type="button" class="linklike" id="more-weeks">Choose 3\u20135 weeks</button>.';
+  const NOTE_OPEN = 'Each extra week: +$40 (20 bins), +$65 (40), +$90 (60). Need longer than 5 weeks? <a href="contact.html">Contact us</a> and we’ll sort out what makes sense. <button type="button" class="linklike" id="more-weeks">Hide these options</button>';
+  longerNote.addEventListener('click', e => {
+    if (e.target.id !== 'more-weeks') return;
+    const open = weeksMore.hidden;
+    weeksMore.hidden = !open;
+    longerNote.innerHTML = open ? NOTE_OPEN : NOTE_CLOSED;
+    // Never leave a hidden option selected.
+    if (!open && selectedWeeks() > 2) {
+      form.querySelector('input[name="weeks"][value="1"]').checked = true;
+      syncSummary();
+    }
+  });
+  form.addEventListener('change', syncSummary);
+  startInput.addEventListener('change', syncEndDate);
+  syncSummary();
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+    if (startInput.value && new Date(startInput.value + 'T12:00:00').getDay() === 0) {
+      document.getElementById('sunday-warn').hidden = false;
+      startInput.focus();
+      startInput.scrollIntoView({behavior:'smooth', block:'center'});
+      return;
+    }
+    /* To make this live, point it at a form endpoint (Formspree, FormSubmit,
+       Netlify Forms, or your own) and remove the demo panel. */
+    const bins = selectedBins();
+    const weeks = selectedWeeks();
+    const name = document.getElementById('fname').value.trim();
+    let where;
+    {
+      const d = document.getElementById('dcity').value.trim();
+      const p = document.getElementById('pcity').value.trim();
+      where = 'delivered in ' + d + (p && p !== d ? ', picked up in ' + p : '');
+    }
+    document.getElementById('success-text').textContent =
+      `Thanks, ${name}! We have your request for ${bins} bins for ${weeks === 1 ? '1 week' : weeks + ' weeks'}, starting ${startInput.value || 'your chosen date'} — ${where}.`;
+    const panel = document.getElementById('success');
+    panel.hidden = false;
+    panel.scrollIntoView({behavior:'smooth', block:'center'});
+  });
+})();
+
+</script>
+<script type="module">
+const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/+esm');
+const {GLTFLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js/+esm');
+const {DRACOLoader} = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/DRACOLoader.js/+esm');
+const kit = await ToteKit(THREE, GLTFLoader, DRACOLoader);
+const {makeTote, makeRenderer, addLights, addFloor, ease, register, baseScale, reducedMotion} = kit;
+
+const canvas = document.getElementById('c-stack');
+const renderer = makeRenderer(canvas);
+const scene = new THREE.Scene(); addLights(scene); addFloor(scene, -0.46);
+const camera = new THREE.PerspectiveCamera(30, 1, .01, 100);
+
+const group = new THREE.Group(); scene.add(group);
+const scale = baseScale * .5;
+const sample = makeTote(scale); sample.updateMatrixWorld(true);
+const sb = new THREE.Box3().setFromObject(sample);
+const ss = new THREE.Vector3(); sb.getSize(ss);
+const hStep = ss.x * 1.04, vStep = ss.y * .92, dStep = ss.z * 1.06;
+
+let bins = [];           // {obj, born:ms}
+let camDist = 3;
+const lookTarget = new THREE.Vector3();
+
+function buildStack(count) {
+  for (const b of bins) group.remove(b.obj);
+  bins = [];
+  const cols = 4, depth = Math.ceil(count / 20); // 20→1 row deep, 40→2, 60→3
+  const now = performance.now();
+  let i = 0;
+  for (let d = 0; d < depth; d++)
+    for (let c = 0; c < cols; c++)
+      for (let row = 0; row < 5 && i < count; row++, i++) {
+        const t = makeTote(scale);
+        t.position.set((c - (cols-1)/2) * hStep, -0.44 + row * vStep, -d * dStep);
+        t.rotation.y = -0.06;
+        t.userData.home = t.position.clone();
+        group.add(t);
+        bins.push({obj: t, born: now + i * 26});
+      }
+  camDist = 2.55 + depth * 0.5;
+  const bb = new THREE.Box3().setFromObject(group);
+  bb.getCenter(lookTarget);
+}
+// Only rebuild (and replay the drop animation) when the bin count actually changes.
+let builtCount = null;
+function requestStack(count) {
+  if (count === builtCount) return;
+  builtCount = count;
+  buildStack(count);
+}
+requestStack(+document.querySelector('input[name="bins"]:checked').value);
+document.addEventListener('bins-changed', e => requestStack(e.detail.count));
+
+register({renderer, camera, canvas, scene, update(now){
+  const t = now * 0.001;
+  group.rotation.y = reducedMotion ? -0.5 : -0.5 + Math.sin(t * 0.25) * 0.16;
+  for (const b of bins) {
+    const q = reducedMotion ? 1 : ease((now - b.born) / 320);
+    b.obj.visible = q > 0;
+    b.obj.position.copy(b.obj.userData.home);
+    b.obj.position.y += (1 - q) * 0.35;
+    b.obj.scale.setScalar(scale * (0.6 + 0.4 * q));
+  }
+  camera.position.set(camDist * 0.62, lookTarget.y + .8, camDist);
+  camera.lookAt(lookTarget.x, lookTarget.y, lookTarget.z);
+}});
+kit.start();
+
+// On phones, the 3D preview lives inside the selected package card.
+{
+  const scenebox = document.querySelector('.mini-scene');
+  const summary = document.querySelector('.summary');
+  const asideHome = document.querySelector('.reserve-3d');
+  const submitBtn = document.querySelector('#reserve-form button[type="submit"]');
+  const mq = matchMedia('(max-width:960px)');
+  function placeScene() {
+    if (mq.matches) {
+      const body = document.querySelector('input[name="bins"]:checked').closest('.choice').querySelector('.body');
+      if (scenebox.parentElement !== body) body.appendChild(scenebox);
+      // Summary reviews the order right above the submit button.
+      if (summary.nextElementSibling !== submitBtn) submitBtn.parentElement.insertBefore(summary, submitBtn);
+    } else {
+      if (scenebox.parentElement !== asideHome) asideHome.insertBefore(scenebox, asideHome.firstChild);
+      if (summary.parentElement !== asideHome) asideHome.appendChild(summary);
+    }
+    kit.resize();
+  }
+  document.addEventListener('bins-changed', placeScene);
+  mq.addEventListener('change', placeScene);
+  addEventListener('resize', placeScene);
+
+  // Once the full summary is on screen, the drawer is redundant — tuck it away.
+  const drawerEl = document.getElementById('drawer');
+  function syncDrawerVisibility() {
+    const r = summary.getBoundingClientRect();
+    const visible = r.top < innerHeight * .92 && r.bottom > 0;
+    drawerEl.classList.toggle('drawer-hidden', visible);
+  }
+  addEventListener('scroll', syncDrawerVisibility, {passive: true});
+  addEventListener('resize', syncDrawerVisibility);
+  syncDrawerVisibility();
+  placeScene();
+}
+</script>
+</body>
+</html>
