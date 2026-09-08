@@ -320,6 +320,10 @@ img,svg{display:block;max-width:100%}
   .scene .chip{right:18px;bottom:70px}
 }
 
+/* iOS Safari gives date inputs an intrinsic minimum width that ignores
+   width:100% and can push the page wider than the viewport. */
+input[type="date"]{min-width:0;max-width:100%}
+
 /* ---------- finale: the lineup ---------- */
 .finale{
   position:relative;height:min(82vh,700px);min-height:560px;overflow:hidden;
