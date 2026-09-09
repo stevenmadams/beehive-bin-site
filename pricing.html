@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pricing — Beehive Bin Co.</title>
-<meta name="description" content="Straightforward moving bin rental pricing: 20 bins from $79, 40 from $129, 60 from $179 — delivery and pickup included, no security deposit.">
+<meta name="description" content="Straightforward moving bin rental pricing: 10 bins from $49, 20 from $79, 40 from $129, 60 from $179 — delivery and pickup included, no security deposit.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Black&display=swap" rel="stylesheet">
@@ -62,7 +62,17 @@ table.pricing td:nth-child(4){background:rgba(21,19,15,.05)}
 
 <section class="section tight" style="padding-top:0">
   <div class="wrap">
-    <div class="grid cols-3">
+    <div class="grid cols-4">
+      <div class="pkg reveal">
+        <div class="mini-scene"><canvas id="c-10"></canvas></div>
+        <div class="price-card">
+          <span class="count">10 Bins</span>
+          <span class="amount">$49</span>
+          <span class="term">first week + tax</span>
+          <p>Studios, dorm rooms, or boxing up a couple of rooms.</p>
+          <a class="btn btn-primary" href="reserve.html?bins=10">Reserve 10 Bins</a>
+        </div>
+      </div>
       <div class="pkg reveal">
         <div class="mini-scene"><canvas id="c-20"></canvas></div>
         <div class="price-card">
@@ -111,6 +121,7 @@ table.pricing td:nth-child(4){background:rgba(21,19,15,.05)}
           <tr><th scope="col">Package</th><th scope="col">1 week</th><th scope="col">Each extra week</th><th scope="col" style="text-align:right">2-week total</th></tr>
         </thead>
         <tbody>
+          <tr><td><strong>10 bins</strong></td><td>$49</td><td>+$25</td><td class="price">$74</td></tr>
           <tr><td><strong>20 bins</strong></td><td>$79</td><td>+$40</td><td class="price">$119</td></tr>
           <tr><td><strong>40 bins</strong></td><td>$129</td><td>+$65</td><td class="price">$194</td></tr>
           <tr><td><strong>60 bins</strong></td><td>$179</td><td>+$90</td><td class="price">$269</td></tr>
@@ -125,7 +136,7 @@ table.pricing td:nth-child(4){background:rgba(21,19,15,.05)}
 
 <section class="section dark">
   <div class="wrap center">
-    <h2 class="reveal">20 bins. $79 first week. Delivered.</h2>
+    <h2 class="reveal">10 bins. $49 first week. Delivered.</h2>
     <p class="sub reveal" style="margin:16px auto 28px">Moving doesn’t need another complicated expense.</p>
     <p><a class="btn btn-primary" href="reserve.html">Reserve Your Bins</a></p>
   </div>
@@ -199,6 +210,7 @@ function stackScene(canvasId, count, phase) {
     camera.lookAt(0, c.y, c.z);
   }});
 }
+stackScene('c-10', 10, -1.1);
 stackScene('c-20', 20, 0);
 stackScene('c-40', 40, 2.1);
 stackScene('c-60', 60, 4.2);

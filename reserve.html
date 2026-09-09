@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Reserve Your Bins — Beehive Bin Co.</title>
-<meta name="description" content="Reserve heavy-duty reusable moving bins in Weber and Davis Counties. 20, 40, or 60 bins by the week — delivery and pickup included, no security deposit.">
+<meta name="description" content="Reserve heavy-duty reusable moving bins in Weber and Davis Counties. 10, 20, 40, or 60 bins by the week — delivery and pickup included, no security deposit.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Black&display=swap" rel="stylesheet">
@@ -100,7 +100,11 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
       <form id="reserve-form" novalidate>
         <fieldset>
           <legend>1. Choose your package</legend>
-          <div class="grid cols-3">
+          <div class="grid cols-4">
+            <label class="choice">
+              <input type="radio" name="bins" value="10">
+              <span class="body"><strong>10 Bins</strong><em>$49<span style="font-size:14px;font-family:var(--font-body);font-weight:700"> first week</span></em><small>Studios &amp; dorm-size moves</small></span>
+            </label>
             <label class="choice">
               <input type="radio" name="bins" value="20">
               <span class="body"><strong>20 Bins</strong><em>$79<span style="font-size:14px;font-family:var(--font-body);font-weight:700"> first week</span></em><small>Apartments &amp; smaller moves</small></span>
@@ -356,8 +360,8 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
 <script>
 /* Form logic (no 3D dependency). */
 (() => {
-  const PRICES = {20: 79, 40: 129, 60: 179};   // per week, delivery included
-  const EXTRA  = {20: 40, 40: 65,  60: 90};    // each additional week
+  const PRICES = {10: 49, 20: 79, 40: 129, 60: 179};   // per week, delivery included
+  const EXTRA  = {10: 25, 20: 40, 40: 65,  60: 90};    // each additional week
   const form = document.getElementById('reserve-form');
   const sumBins = document.getElementById('sum-bins');
   const sumLength = document.getElementById('sum-length');
@@ -413,7 +417,7 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
   const longerNote = document.getElementById('longer-note');
   const weeksMore = document.getElementById('weeks-more');
   const NOTE_CLOSED = 'Need even longer? <button type="button" class="linklike" id="more-weeks">Choose 3\u20135 weeks</button>.';
-  const NOTE_OPEN = 'Each extra week: +$40 (20 bins), +$65 (40), +$90 (60). Need longer than 5 weeks? <a href="contact.html">Contact us</a> and we’ll sort out what makes sense. <button type="button" class="linklike" id="more-weeks">Hide these options</button>';
+  const NOTE_OPEN = 'Each extra week: +$25 (10 bins), +$40 (20), +$65 (40), +$90 (60). Need longer than 5 weeks? <a href="contact.html">Contact us</a> and we’ll sort out what makes sense. <button type="button" class="linklike" id="more-weeks">Hide these options</button>';
   longerNote.addEventListener('click', e => {
     if (e.target.id !== 'more-weeks') return;
     const open = weeksMore.hidden;
