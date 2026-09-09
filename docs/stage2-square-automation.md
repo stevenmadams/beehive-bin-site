@@ -77,6 +77,20 @@ payment webhook (paid) ──▶ Worker:
 - **Square Appointments** — built for service time slots, fights the
   package/date model.
 
+## Stage 3 idea: admin.beehivebin.co (owner request, 2026-09-09)
+
+An employee-facing dashboard, gated by **Cloudflare Access** (free zero-trust
+login, up to 50 seats, no auth code to write — employees sign in with email or
+Google; access revoked from a dashboard). Lives on Workers/Pages next to the
+Stage 2 backend and reads the same data store:
+
+- request queue with approve/deny (replaces Stage 2's email links)
+- inventory: which bin sets are out, where, due back when
+- rental calendar and delivery run sheet
+
+Build only after Stage 2 exists — the panel is a nicer skin over the
+pipeline's data, and has nothing to show before then.
+
 ## Rough build order when the time comes
 
 1. Worker + form POST + Airtable + owner notification email (half a day).
