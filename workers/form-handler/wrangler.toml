@@ -1,0 +1,5 @@
+name = "beehive-forms"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+# Custom domain api.beehivebin.co is attached via the account-level Workers
+# Domains API (not here) — the deploy token lacks zone Workers Routes access.

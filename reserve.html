@@ -98,6 +98,8 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
       <p class="sub" style="margin-top:14px">Pick a package and watch your moving kit stack up. Rentals run by the week, <strong>delivery and pickup are included</strong>, and there's no security deposit.</p>
     </div>
       <form id="reserve-form" novalidate>
+        <input type="hidden" name="form" value="reserve">
+        <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;height:0;width:0;border:0;padding:0">
         <fieldset>
           <legend>1. Choose your package</legend>
           <div class="grid cols-4">
@@ -439,7 +441,7 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
      endpoint here (looks like "https://formspree.io/f/abcdefgh"). While this
      is empty the form runs in demo mode: the success panel shows, but nothing
      is sent anywhere. */
-  const FORM_ENDPOINT = '';
+  const FORM_ENDPOINT = 'https://api.beehivebin.co/submit';
 
   form.addEventListener('submit', async e => {
     e.preventDefault();

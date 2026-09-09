@@ -49,6 +49,8 @@
       </div>
 
       <form id="contact-form" class="card" style="padding:32px" novalidate>
+        <input type="hidden" name="form" value="contact">
+        <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;height:0;width:0;border:0;padding:0">
         <h3 style="margin-bottom:20px">Or use the form below</h3>
         <div class="grid cols-2">
           <div class="field">
@@ -118,7 +120,7 @@
 /* LIVE SWITCH: create a free form at https://formspree.io, then paste its
    endpoint here (looks like "https://formspree.io/f/abcdefgh"). While this is
    empty the form runs in demo mode: the success panel shows, nothing is sent. */
-const FORM_ENDPOINT = '';
+const FORM_ENDPOINT = 'https://api.beehivebin.co/submit';
 
 document.getElementById('contact-form').addEventListener('submit', async e => {
   e.preventDefault();
