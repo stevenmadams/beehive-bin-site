@@ -76,9 +76,11 @@
         </div>
         <button class="btn btn-primary" type="submit">Send Message</button>
         <div class="success-panel" id="success" hidden>
-          <h3>Message ready!</h3>
-          <p class="mb-0" style="font-size:14.5px">This demo form isn’t connected yet — reach us directly at <strong>[PHONE]</strong> or <strong>[EMAIL]</strong> and we’ll get right back to you.</p>
+          <h3 id="success-title">Message sent!</h3>
+          <p style="font-size:14.5px;margin-bottom:10px">We’ll get back to you shortly — usually the same evening.</p>
+          <p class="mb-0" id="demo-note" style="font-size:14.5px">This demo form isn’t connected yet — reach us directly at <strong>[PHONE]</strong> or <strong>[EMAIL]</strong> and we’ll get right back to you.</p>
         </div>
+        <p class="note" id="send-error" hidden style="margin-top:14px;color:#B3261E;font-weight:700">Something went wrong sending your message. Please try again, or reach us directly at [PHONE] / [EMAIL].</p>
       </form>
     </div>
   </div>
@@ -113,14 +115,37 @@
 <script src="assets/tote-kit.js?v=5"></script>
 <script src="assets/site.js?v=2"></script>
 <script>
-document.getElementById('contact-form').addEventListener('submit', e => {
+/* LIVE SWITCH: create a free form at https://formspree.io, then paste its
+   endpoint here (looks like "https://formspree.io/f/abcdefgh"). While this is
+   empty the form runs in demo mode: the success panel shows, nothing is sent. */
+const FORM_ENDPOINT = '';
+
+document.getElementById('contact-form').addEventListener('submit', async e => {
   e.preventDefault();
-  if (!e.target.reportValidity()) return;
-  /* To make this live, point it at a form endpoint (Formspree, FormSubmit,
-     Netlify Forms, or your own). */
-  const panel = document.getElementById('success');
-  panel.hidden = false;
-  panel.scrollIntoView({behavior:'smooth', block:'center'});
+  const form = e.target;
+  if (!form.reportValidity()) return;
+  document.getElementById('send-error').hidden = true;
+  const show = () => {
+    document.getElementById('demo-note').hidden = !!FORM_ENDPOINT;
+    document.getElementById('success-title').textContent = FORM_ENDPOINT ? 'Message sent!' : 'Message ready!';
+    const panel = document.getElementById('success');
+    panel.hidden = false;
+    panel.scrollIntoView({behavior:'smooth', block:'center'});
+  };
+  if (!FORM_ENDPOINT) { show(); return; }
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true; const label = btn.textContent; btn.textContent = 'Sending\u2026';
+  try {
+    const res = await fetch(FORM_ENDPOINT, {method: 'POST', body: new FormData(form), headers: {Accept: 'application/json'}});
+    if (!res.ok) throw new Error(res.status);
+    show();
+  } catch (err) {
+    const el = document.getElementById('send-error');
+    el.hidden = false;
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+  }
 });
 </script>
 <script type="module">

@@ -293,8 +293,10 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
         <div class="success-panel" id="success" hidden>
           <h3>Request received!</h3>
           <p id="success-text" style="margin-bottom:10px"></p>
-          <p class="mb-0" style="font-size:14.5px">This demo form isn’t connected to a booking system yet — reach us directly at <strong>[PHONE]</strong> or <strong>[EMAIL]</strong> to confirm your reservation.</p>
+          <p style="font-size:14.5px;font-weight:700;margin-bottom:10px">What happens next: we confirm availability &rarr; you sign the rental agreement online &rarr; pay by card. We’ll be in touch shortly.</p>
+          <p class="mb-0" id="demo-note" style="font-size:14.5px">This demo form isn’t connected to a booking system yet — reach us directly at <strong>[PHONE]</strong> or <strong>[EMAIL]</strong> to confirm your reservation.</p>
         </div>
+        <p class="note" id="send-error" hidden style="margin-top:14px;color:#B3261E;font-weight:700">Something went wrong sending your request. Please try again, or reach us directly at [PHONE] / [EMAIL].</p>
       </form>
       </div>
 
@@ -433,7 +435,13 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
   startInput.addEventListener('change', syncEndDate);
   syncSummary();
 
-  form.addEventListener('submit', e => {
+  /* LIVE SWITCH: create a free form at https://formspree.io, then paste its
+     endpoint here (looks like "https://formspree.io/f/abcdefgh"). While this
+     is empty the form runs in demo mode: the success panel shows, but nothing
+     is sent anywhere. */
+  const FORM_ENDPOINT = '';
+
+  form.addEventListener('submit', async e => {
     e.preventDefault();
     if (!form.reportValidity()) return;
     if (startInput.value && new Date(startInput.value + 'T12:00:00').getDay() === 0) {
@@ -442,8 +450,6 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
       startInput.scrollIntoView({behavior:'smooth', block:'center'});
       return;
     }
-    /* To make this live, point it at a form endpoint (Formspree, FormSubmit,
-       Netlify Forms, or your own) and remove the demo panel. */
     const bins = selectedBins();
     const weeks = selectedWeeks();
     const name = document.getElementById('fname').value.trim();
@@ -453,11 +459,34 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
       const p = document.getElementById('pcity').value.trim();
       where = 'delivered in ' + d + (p && p !== d ? ', picked up in ' + p : '');
     }
-    document.getElementById('success-text').textContent =
-      `Thanks, ${name}! We have your request for ${bins} bins for ${weeks === 1 ? '1 week' : weeks + ' weeks'}, starting ${startInput.value || 'your chosen date'} — ${where}.`;
-    const panel = document.getElementById('success');
-    panel.hidden = false;
-    panel.scrollIntoView({behavior:'smooth', block:'center'});
+    const showSuccess = () => {
+      document.getElementById('success-text').textContent =
+        `Thanks, ${name}! We have your request for ${bins} bins for ${weeks === 1 ? '1 week' : weeks + ' weeks'}, starting ${startInput.value || 'your chosen date'} — ${where}.`;
+      document.getElementById('demo-note').hidden = !!FORM_ENDPOINT;
+      const panel = document.getElementById('success');
+      panel.hidden = false;
+      panel.scrollIntoView({behavior:'smooth', block:'center'});
+    };
+    document.getElementById('send-error').hidden = true;
+    if (!FORM_ENDPOINT) { showSuccess(); return; }
+    const data = new FormData(form);
+    data.set('weeks', weeks);
+    data.set('return_date', endInput.value);
+    data.set('total_before_tax', sumTotal.textContent);
+    data.set('_subject', `Bin reservation: ${bins} bins, ${startInput.value}`);
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Sending\u2026';
+    try {
+      const res = await fetch(FORM_ENDPOINT, {method: 'POST', body: data, headers: {Accept: 'application/json'}});
+      if (!res.ok) throw new Error(res.status);
+      showSuccess();
+    } catch (err) {
+      const e = document.getElementById('send-error');
+      e.hidden = false;
+      e.scrollIntoView({behavior:'smooth', block:'center'});
+    } finally {
+      btn.disabled = false; btn.textContent = label;
+    }
   });
 })();
 </script>
