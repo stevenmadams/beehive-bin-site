@@ -74,16 +74,16 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
 
 <header class="site-header">
   <div class="bar">
-    <a class="logo" href="index.html">
+    <a class="logo" href="/">
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
       <span class="name">BEEHIVE BIN CO.<span class="tag">Move Better. Skip the Cardboard.</span></span>
     </a>
     <button class="menu-btn" aria-expanded="false" aria-controls="site-nav">Menu</button>
     <nav class="site-nav" id="site-nav">
-      <a href="pricing.html">Pricing</a>
-      <a href="about.html">About</a>
-      <a href="contact.html">Contact</a>
-      <a class="nav-cta" href="reserve.html" aria-current="page">Reserve Bins</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+      <a class="nav-cta" href="/reserve" aria-current="page">Reserve Bins</a>
     </nav>
   </div>
 </header>
@@ -120,7 +120,7 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
               <span class="body"><strong>60 Bins</strong><em>$179<span style="font-size:14px;font-family:var(--font-body);font-weight:700"> first week</span></em><small>Larger homes &amp; families</small></span>
             </label>
           </div>
-          <p class="note" style="margin-top:14px">Need more than 60? <a href="contact.html">Contact us</a> for custom quantities.</p>
+          <p class="note" style="margin-top:14px">Need more than 60? <a href="/contact">Contact us</a> for custom quantities.</p>
         </fieldset>
 
         <fieldset>
@@ -336,20 +336,20 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
 <footer class="site-footer">
   <div class="inner">
     <div class="brand">
-      <a class="logo" href="index.html">
+      <a class="logo" href="/">
         <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1.5 29 9v14L16 30.5 3 23V9z" fill="#FFC400" stroke="#15130F" stroke-width="2"/><path d="M10.5 13h11l-1.2 8.5h-8.6z" fill="#15130F"/><rect x="9" y="10.6" width="14" height="2.6" fill="#15130F"/></svg>
         <span class="name">BEEHIVE BIN CO.</span>
       </a>
       <p>Reusable moving-bin rentals for Weber &amp; Davis Counties. Clinton, Utah.</p>
     </div>
     <nav aria-label="Footer">
-      <a href="reserve.html">Reserve</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="faq.html">FAQ</a>
-      <a href="requirements.html">Rental Requirements</a>
-      <a href="contact.html">Contact</a>
-      <a href="terms.html">Rental Terms</a>
-      <a href="privacy.html">Privacy</a>
+      <a href="/reserve">Reserve</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/faq">FAQ</a>
+      <a href="/requirements">Rental Requirements</a>
+      <a href="/contact">Contact</a>
+      <a href="/terms">Rental Terms</a>
+      <a href="/privacy">Privacy</a>
     </nav>
   </div>
   <div class="legal">
@@ -421,7 +421,7 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
   const longerNote = document.getElementById('longer-note');
   const weeksMore = document.getElementById('weeks-more');
   const NOTE_CLOSED = 'Need even longer? <button type="button" class="linklike" id="more-weeks">Choose 3\u20135 weeks</button>.';
-  const NOTE_OPEN = 'Each extra week: +$25 (10 bins), +$40 (20), +$65 (40), +$90 (60). Need longer than 5 weeks? <a href="contact.html">Contact us</a> and we’ll sort out what makes sense. <button type="button" class="linklike" id="more-weeks">Hide these options</button>';
+  const NOTE_OPEN = 'Each extra week: +$25 (10 bins), +$40 (20), +$65 (40), +$90 (60). Need longer than 5 weeks? <a href="/contact">Contact us</a> and we’ll sort out what makes sense. <button type="button" class="linklike" id="more-weeks">Hide these options</button>';
   longerNote.addEventListener('click', e => {
     if (e.target.id !== 'more-weeks') return;
     const open = weeksMore.hidden;
