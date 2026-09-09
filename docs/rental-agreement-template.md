@@ -98,7 +98,7 @@ us about this rental and replaces the website summary where they differ.
 
 **Date:** ____________
 
-**Questions?** [PHONE] · [EMAIL]
+**Questions?** [PHONE] · support@beehivebin.co
 
 ---
 
@@ -106,5 +106,5 @@ us about this rental and replaces the website summary where they differ.
 - *Set the per-bin and per-lid replacement fees in §4 and §6 (bins retail ~$10;
   a common approach is retail + handling, e.g. $15/bin, $5/lid).*
 - *Pick the cancellation window in §7.*
-- *Replace [PHONE]/[EMAIL] once the business line exists.*
+- *Replace [PHONE] once the business line exists.*
 - *Have a Utah attorney give it a once-over.*
