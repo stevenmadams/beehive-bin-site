@@ -315,7 +315,7 @@ async function updateEmployee(env, user, id, body) {
 /* ---------- rentals ---------- */
 
 const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
-  photo_hold, confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
+  photo_hold, signed_on_behalf, confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
   first_name, last_name, email, phone, contact_pref,
   bins, weeks, start_date, due_date, total_cents,

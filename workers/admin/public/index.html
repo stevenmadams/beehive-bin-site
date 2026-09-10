@@ -1045,7 +1045,8 @@ async function openRental(id) {
         </div>` : ''}
 
       ${r.signed_at ? `<p class="signed">Signed by <strong>${esc(r.agreement_name || '—')}</strong>
-        ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}</p>` : ''}
+        ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}${
+          r.signed_on_behalf ? ` · <span style="color:var(--warn);font-weight:700">on behalf of ${esc(fullName(r))}</span>` : ''}</p>` : ''}
 
       <div class="sqbox">
         <h4>${r.square_invoice_id ? 'Payment' : 'Next step'}</h4>

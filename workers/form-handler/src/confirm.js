@@ -22,6 +22,31 @@ const niceDate = iso => {
     { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 };
 
+/* Names are compared loosely on purpose. "Bob" for "Robert", a married name, a
+   dropped middle name and an accent typed without it are all the same person;
+   rejecting them would strand someone at 9pm with no way to finish. What the
+   check is for is catching a name with no relationship to the rental at all —
+   which is either a mistake or somebody else signing, and both should be
+   deliberate rather than silent. */
+const normalizeName = n => String(n || '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // strip accents
+  .toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+function nameLooksRight(typed, first, last) {
+  const t = normalizeName(typed);
+  if (t.length < 3 || !t.includes(' ') && !last) return !!t;
+
+  const parts = new Set(t.split(' ').filter(w => w.length > 1));
+  const f = normalizeName(first), l = normalizeName(last);
+
+  // A surname match is the strong signal; a first-name match is enough when we
+  // have no surname on file.
+  if (l && parts.has(l)) return true;
+  if (!l && f && parts.has(f)) return true;
+  if (f && l && t === `${f} ${l}`) return true;
+  return false;
+}
+
 /* The per-rental values the agreement text needs. Kept in one place so the page
    and the emailed copy can never show different terms for the same rental. */
 /* The cities we actually serve. Must stay in step with the list on index.html —
@@ -348,7 +373,7 @@ const addressRecap = r => `
     <a class="backlink" href="?step=address">Change this</a>
   </div>`;
 
-const agreementStep = r => page('Rental agreement', `
+const agreementStep = (r, opts = {}) => page('Rental agreement', `
   <h1>Rental agreement</h1>
   <p class="sub">Have a read, then sign at the bottom.</p>
   ${progress('agreement')}
@@ -357,9 +382,19 @@ const agreementStep = r => page('Rental agreement', `
     <input type="hidden" name="step" value="agreement">
     <div class="card">
       <div class="agreement">${renderAgreement(AGREEMENT_HTML, agreementValues(r))}</div>
+      ${opts.mismatch ? `<div class="banner err" style="margin-top:18px">
+        This rental is in the name of <strong>${esc([r.first_name, r.last_name].filter(Boolean).join(' '))}</strong>,
+        but you&rsquo;ve typed <strong>${esc(opts.typed)}</strong>. If that was a typo, correct it below.
+        If you&rsquo;re signing for them, tick the box and carry on.</div>` : ''}
       <label class="fl" for="signature">Type your full name to sign</label>
       <input id="signature" name="agreement_name" required autocomplete="name"
+        value="${esc(opts.typed || '')}"
         placeholder="${esc([r.first_name, r.last_name].filter(Boolean).join(' '))}">
+      ${opts.mismatch ? `<label class="accept" style="background:var(--white)">
+        <input type="checkbox" name="on_behalf" value="yes">
+        <span>I&rsquo;m signing on behalf of ${esc([r.first_name, r.last_name].filter(Boolean).join(' '))},
+        and I&rsquo;m authorised to agree to these terms for them.</span>
+      </label>` : ''}
       <label class="accept">
         <input type="checkbox" name="accept" value="yes" required>
         <span>I&rsquo;ve read and agree to the rental agreement above, including keeping a
@@ -386,7 +421,7 @@ const payStep = r => page('Payment', `
   </div>
   ${addressRecap(r)}`);
 
-const COLUMNS = `id, confirm_token, status, details_confirmed_at, first_name, last_name, email, phone, bins, weeks,
+const COLUMNS = `id, confirm_token, status, details_confirmed_at, signed_on_behalf, first_name, last_name, email, phone, bins, weeks,
   start_date, due_date, total_cents, delivery_city, pickup_city,
   delivery_address, pickup_address, delivery_notes, pickup_notes,
   agreement_signed_at, agreement_name, paid_at, square_invoice_url, square_status`;
@@ -411,6 +446,9 @@ export async function handleConfirm(request, env, url) {
       : step === 'agreement' ? await saveSignature(request, env, r, form)
       : 'Something went wrong. Please try again.';
 
+    // A name mismatch is a question, not a failure: send them back to the form
+    // with what they typed and the option to say they are signing for someone.
+    if (problem && problem.mismatch) return agreementStep(r, problem);
     if (problem) return retry(r, step, problem);
 
     // Redirect after a write: a refresh should never re-submit a signature, and
@@ -487,6 +525,11 @@ async function saveSignature(request, env, r, form) {
   const name = String(form.get('agreement_name') || '').trim().slice(0, 120);
   if (!form.get('accept') || !name) return 'Please type your name and tick the box to agree.';
 
+  const onBehalf = !!form.get('on_behalf');
+  if (!onBehalf && !nameLooksRight(name, r.first_name, r.last_name)) {
+    return { mismatch: true, typed: name };
+  }
+
   // Signing happens once. A stale tab, a double-tap or a forwarded link must not
   // overwrite who signed or when.
   if (r.agreement_signed_at) return null;
@@ -504,10 +547,14 @@ async function saveSignature(request, env, r, form) {
     r.id,
   ).run();
 
+  if (onBehalf) {
+    await env.DB.prepare('UPDATE rentals SET signed_on_behalf = 1 WHERE id = ?1').bind(r.id).run();
+  }
+
   await env.DB.prepare(
     'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
   ).bind(r.email || 'customer', 'rental.agreement_signed', 'rental', String(r.id),
-         `${name} · ${AGREEMENT_VERSION}`).run();
+         `${name}${onBehalf ? ' (on behalf)' : ''} · ${AGREEMENT_VERSION}`).run();
 
   if (r.email) {
     const sent = await emailSignedCopy(env, r, name, new Date().toISOString())
