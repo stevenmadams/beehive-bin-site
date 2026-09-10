@@ -5,7 +5,12 @@
    signed-copy email should land in the same inbox as every other reply. */
 
 export const INBOX = 'support@beehivebin.co';
-export const FROM = 'Beehive Bin Co. <noreply@beehivebin.co>';
+
+/* Sent from the inbox we actually read, not a noreply box. Every message this
+   Worker sends invites a reply — the confirmation link, the signed agreement,
+   the owner's own notifications — and "noreply" in the From line tells people
+   not to bother, whatever the Reply-To header says or the body asks. */
+export const FROM = 'Beehive Bin Co. <support@beehivebin.co>';
 
 export async function sendEmail(env, { to, subject, text, html, replyTo = INBOX }) {
   if (!env.RESEND_API_KEY) return { ok: false, error: 'no Resend key configured' };
