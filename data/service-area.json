@@ -1,0 +1,235 @@
+{
+  "_comment": [
+    "The single source of truth for where Beehive Bin Co. delivers and what tax",
+    "applies there. Generates the reserve form's city dropdown, the booking",
+    "flow's validation, and the admin Worker's tax table \u2014 run",
+    "scripts/build-service-area.py after editing, and commit the generated files.",
+    "",
+    "Rates: Utah State Tax Commission combined sales & use tax table, read from",
+    "https://files.tax.utah.gov/tax/salestax/rate/26q3combined.pdf on 2026-09-10.",
+    "Re-check quarterly at tax.utah.gov/sales/ratechanges \u2014 a stale rate",
+    "undercollects silently.",
+    "",
+    "`bookable: false` marks a jurisdiction that exists for tax purposes but is",
+    "not offered in the dropdown (unincorporated areas, which nobody types)."
+  ],
+  "rates_verified": "2026-09-10",
+  "rates_effective": "2026-07-01",
+  "rates_source": "UT TC combined rates, effective 2026-07-01",
+  "cities": [
+    {
+      "name": "Bountiful",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "Centerville",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "Clearfield",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "Clinton",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "Davis County",
+      "county": "Davis",
+      "rate": "7.15",
+      "bookable": false
+    },
+    {
+      "name": "Farmington",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "Fruit Heights",
+      "county": "Davis",
+      "rate": "7.15"
+    },
+    {
+      "name": "Kaysville",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "Layton",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "North Salt Lake",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "South Weber",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "Sunset",
+      "county": "Davis",
+      "rate": "7.15"
+    },
+    {
+      "name": "Syracuse",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "West Bountiful",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "West Point",
+      "county": "Davis",
+      "rate": "7.15"
+    },
+    {
+      "name": "Woods Cross",
+      "county": "Davis",
+      "rate": "7.25"
+    },
+    {
+      "name": "Eden",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Farr West",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Harrisville",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Hooper",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Huntsville",
+      "county": "Weber",
+      "rate": "8.25"
+    },
+    {
+      "name": "Liberty",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Marriott-Slaterville",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Nordic Valley",
+      "county": "Weber",
+      "rate": "7.25",
+      "bookable": false
+    },
+    {
+      "name": "North Ogden",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Ogden",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Ogden Valley",
+      "county": "Weber",
+      "rate": "7.25",
+      "bookable": false
+    },
+    {
+      "name": "Plain City",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Pleasant View",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Reese",
+      "county": "Weber",
+      "rate": "7.25",
+      "note": "unincorporated Weber"
+    },
+    {
+      "name": "Riverdale",
+      "county": "Weber",
+      "rate": "7.45"
+    },
+    {
+      "name": "Roy",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "South Ogden",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Taylor",
+      "county": "Weber",
+      "rate": "7.25",
+      "note": "unincorporated Weber"
+    },
+    {
+      "name": "Uintah",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Warren",
+      "county": "Weber",
+      "rate": "7.25",
+      "note": "unincorporated Weber"
+    },
+    {
+      "name": "Washington Terrace",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "Weber County",
+      "county": "Weber",
+      "rate": "7.25",
+      "bookable": false
+    },
+    {
+      "name": "West Haven",
+      "county": "Weber",
+      "rate": "7.25"
+    },
+    {
+      "name": "West Weber",
+      "county": "Weber",
+      "rate": "7.25",
+      "note": "unincorporated Weber"
+    },
+    {
+      "name": "Wolf Creek",
+      "county": "Weber",
+      "rate": "7.25",
+      "note": "unincorporated Weber (Ogden Valley) \u2014 VERIFY: neighbouring Huntsville carries a resort tax at 8.25%"
+    }
+  ]
+}

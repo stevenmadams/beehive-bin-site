@@ -1,84 +1,77 @@
-/* Utah sales tax rates for the service area.
+/* GENERATED from data/service-area.json — do not edit by hand.
+   Regenerate with: python3 scripts/build-service-area.py */
+
+/* Utah sales tax, by delivery city.
 
    Utah sources a rental to where the customer RECEIVES the property, so the
    rate follows the delivery address rather than ours. Rates vary within a
-   county — assuming a county default would be wrong for West Point (7.15%),
-   Riverdale (7.45%) and Huntsville (8.25%) — so every jurisdiction is listed.
+   county — West Point is 7.15% where the rest of Davis is 7.25%, Riverdale is
+   7.45%, Huntsville 8.25% — so every jurisdiction is listed rather than
+   defaulted.
 
-   SOURCE: Utah State Tax Commission combined sales & use tax rate table,
-   "Rates in effect as of July 1, 2026"
-   https://files.tax.utah.gov/tax/salestax/rate/26q3combined.pdf
-   Read directly from that table on 2026-09-10, not transcribed from summaries.
-
-   Rates change quarterly, so each entry is effective-dated: the applicable rate
-   is the last one whose `from` date is on or before the date being taxed. As of
-   2026-09-10 the Commission has announced NO changes effective 2026-10-01.
-
-   RE-CHECK EACH QUARTER at tax.utah.gov/sales/ratechanges. A stale table
+   Source: UT TC combined rates, effective 2026-07-01. Verified 2026-09-10.
+   RE-CHECK QUARTERLY at tax.utah.gov/sales/ratechanges — a stale rate
    undercollects silently, which is the expensive direction to be wrong in. */
 
-export const TAX_TABLE_VERIFIED = '2026-09-10';
-export const TAX_TABLE_SOURCE = 'UT TC combined rates, effective 2026-07-01';
-
-const at = rate => [{ from: '2026-07-01', rate }];
+export const TAX_TABLE_VERIFIED = "2026-09-10";
+export const TAX_TABLE_SOURCE = "UT TC combined rates, effective 2026-07-01";
 
 const RATES = {
-  // ---- Davis County ----
-  'bountiful': at('7.25'),
-  'centerville': at('7.25'),
-  'clearfield': at('7.25'),
-  'clinton': at('7.25'),
-  'farmington': at('7.25'),
-  'fruit heights': at('7.15'),
-  'kaysville': at('7.25'),
-  'layton': at('7.25'),
-  'north salt lake': at('7.25'),
-  'south weber': at('7.25'),
-  'sunset': at('7.15'),
-  'syracuse': at('7.25'),
-  'west bountiful': at('7.25'),
-  'west point': at('7.15'),
-  'woods cross': at('7.25'),
-  'davis county': at('7.15'),          // unincorporated
-
-  // ---- Weber County ----
-  'farr west': at('7.25'),
-  'harrisville': at('7.25'),
-  'hooper': at('7.25'),
-  'huntsville': at('8.25'),            // resort community tax
-  'marriott slaterville': at('7.25'),
-  'north ogden': at('7.25'),
-  'ogden': at('7.25'),
-  'ogden valley': at('7.25'),
-  'plain city': at('7.25'),
-  'pleasant view': at('7.25'),
-  'riverdale': at('7.45'),
-  'roy': at('7.25'),
-  'south ogden': at('7.25'),
-  'uintah': at('7.25'),
-  'washington terrace': at('7.25'),
-  'west haven': at('7.25'),
-  'weber county': at('7.25'),          // unincorporated
-
-  // Places people write that are not their own taxing jurisdiction. Eden,
-  // Liberty and Nordic Valley sit in the Ogden Valley / unincorporated Weber
-  // area and take its rate.
-  'eden': at('7.25'),
-  'liberty': at('7.25'),
-  'nordic valley': at('7.25'),
+  "bountiful":                [{ from: "2026-07-01", rate: "7.25" }],
+  "centerville":              [{ from: "2026-07-01", rate: "7.25" }],
+  "clearfield":               [{ from: "2026-07-01", rate: "7.25" }],
+  "clinton":                  [{ from: "2026-07-01", rate: "7.25" }],
+  "davis county":             [{ from: "2026-07-01", rate: "7.15" }],   // not offered for booking
+  "farmington":               [{ from: "2026-07-01", rate: "7.25" }],
+  "fruit heights":            [{ from: "2026-07-01", rate: "7.15" }],
+  "kaysville":                [{ from: "2026-07-01", rate: "7.25" }],
+  "layton":                   [{ from: "2026-07-01", rate: "7.25" }],
+  "north salt lake":          [{ from: "2026-07-01", rate: "7.25" }],
+  "south weber":              [{ from: "2026-07-01", rate: "7.25" }],
+  "sunset":                   [{ from: "2026-07-01", rate: "7.15" }],
+  "syracuse":                 [{ from: "2026-07-01", rate: "7.25" }],
+  "west bountiful":           [{ from: "2026-07-01", rate: "7.25" }],
+  "west point":               [{ from: "2026-07-01", rate: "7.15" }],
+  "woods cross":              [{ from: "2026-07-01", rate: "7.25" }],
+  "eden":                     [{ from: "2026-07-01", rate: "7.25" }],
+  "farr west":                [{ from: "2026-07-01", rate: "7.25" }],
+  "harrisville":              [{ from: "2026-07-01", rate: "7.25" }],
+  "hooper":                   [{ from: "2026-07-01", rate: "7.25" }],
+  "huntsville":               [{ from: "2026-07-01", rate: "8.25" }],
+  "liberty":                  [{ from: "2026-07-01", rate: "7.25" }],
+  "marriott slaterville":     [{ from: "2026-07-01", rate: "7.25" }],
+  "nordic valley":            [{ from: "2026-07-01", rate: "7.25" }],   // not offered for booking
+  "north ogden":              [{ from: "2026-07-01", rate: "7.25" }],
+  "ogden":                    [{ from: "2026-07-01", rate: "7.25" }],
+  "ogden valley":             [{ from: "2026-07-01", rate: "7.25" }],   // not offered for booking
+  "plain city":               [{ from: "2026-07-01", rate: "7.25" }],
+  "pleasant view":            [{ from: "2026-07-01", rate: "7.25" }],
+  "reese":                    [{ from: "2026-07-01", rate: "7.25" }],
+  "riverdale":                [{ from: "2026-07-01", rate: "7.45" }],
+  "roy":                      [{ from: "2026-07-01", rate: "7.25" }],
+  "south ogden":              [{ from: "2026-07-01", rate: "7.25" }],
+  "taylor":                   [{ from: "2026-07-01", rate: "7.25" }],
+  "uintah":                   [{ from: "2026-07-01", rate: "7.25" }],
+  "warren":                   [{ from: "2026-07-01", rate: "7.25" }],
+  "washington terrace":       [{ from: "2026-07-01", rate: "7.25" }],
+  "weber county":             [{ from: "2026-07-01", rate: "7.25" }],   // not offered for booking
+  "west haven":               [{ from: "2026-07-01", rate: "7.25" }],
+  "west weber":               [{ from: "2026-07-01", rate: "7.25" }],
+  "wolf creek":               [{ from: "2026-07-01", rate: "7.25" }],
 };
 
 export class TaxError extends Error {}
 
-/* Delivery city arrives as free text from the public reserve form, so
-   "Kaysville", " kaysville " and "Kaysville, UT" have to land on one entry.
+/* Delivery city may still arrive as free text on older records, so "Kaysville",
+   " kaysville " and "Kaysville, UT 84037" have to land on one entry.
    Deliberately NOT done: falling back to a default for an unrecognised city.
    Taxing an unknown jurisdiction at a guessed rate is worse than stopping. */
 export function normalizeCity(city) {
   return String(city || '')
     .toLowerCase()
-    .replace(/,?\s*(ut|utah)\.?\s*\d*$/i, '')   // trailing state and any ZIP
-    .replace(/[^a-z\s]/g, ' ')                   // hyphens, periods, commas
+    .trim()
+    .replace(/,?\s*(ut|utah)\.?\s*\d*$/i, '')
+    .replace(/[^a-z\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -90,7 +83,7 @@ export function rateFor(city, onDate) {
   const entries = RATES[key];
   if (!entries) {
     throw new TaxError(
-      `No Utah tax rate on file for "${city}". If we now serve it, add it to workers/admin/src/tax.js from the Tax Commission table before invoicing.`,
+      `No Utah tax rate on file for "${city}". If we now serve it, add it to data/service-area.json and regenerate before invoicing.`,
     );
   }
 

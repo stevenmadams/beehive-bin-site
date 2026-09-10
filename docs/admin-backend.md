@@ -198,6 +198,37 @@ webhook subscriptions and signature keys. To flip:
 > Sandbox invoices **do** email real addresses. Use your own for tests, never a
 > customer's.
 
+## Service area and sales tax
+
+`data/service-area.json` is the single source for where we deliver and what tax
+applies. Run `python3 scripts/build-service-area.py` after editing it and commit
+the generated files; it writes three things that were previously kept by hand
+and drifting apart:
+
+| Generated | Used for |
+|---|---|
+| the `dcity` options in `reserve.html` | the public booking form's city list |
+| `workers/form-handler/src/service-area.js` | validating bookings, the pickup dropdown |
+| `workers/admin/src/tax.js` | the per-city rate the invoice is taxed at |
+
+That drift was not hypothetical: the booking form offered Reese, Taylor, Warren,
+West Weber and Wolf Creek, none of which had a tax rate, so those bookings could
+be taken and then could not be invoiced.
+
+**Rates are per city, not per county.** West Point is 7.15% where the rest of
+Davis is 7.25%; Riverdale is 7.45%; Huntsville is 8.25% on a resort tax. Utah
+sources a rental to where the customer *receives* the property, so the rate
+follows the delivery address rather than ours.
+
+**Re-check the rates each quarter** at tax.utah.gov/sales/ratechanges, and update
+`rates_verified` when you do. `/api/square/ping` reports the date it was last
+checked. A stale table undercollects silently.
+
+**Open questions for the Tax Commission**, both flagged in the code: whether the
+rate should follow the delivery date (what we use) or the payment date, and
+whether Wolf Creek takes the unincorporated Weber rate given neighbouring
+Huntsville carries a resort tax.
+
 ## Operating notes
 
 - **`audit_log` is append-only.** Nothing in the app updates or deletes it. It
@@ -222,8 +253,9 @@ In the order that pays off soonest:
    already carries the street address the run sheet needs.
 3. **Availability** — with 3–4 bin sets, check sets-booked against sets-owned
    for the requested dates and flag conflicts before anyone approves.
-4. **Settings** — pricing currently lives in both `reserve.html` and the admin
+4. **Settings** — pricing still lives in both `reserve.html` and the admin
    Worker's `PRICES`/`EXTRA`. Change one without the other and the panel quotes
-   differently than the website.
+   differently than the website. (The service area no longer has this problem —
+   see below.)
 5. **E-sign** — per this repo's Stage 2 research, Square Contracts has no public
    API, so this stays manual unless that has changed.

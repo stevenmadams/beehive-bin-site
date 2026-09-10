@@ -8,6 +8,7 @@
 
 import { AGREEMENT_HTML, AGREEMENT_TEXT, AGREEMENT_VERSION, renderAgreement } from './agreement.js';
 import { sendEmail, INBOX } from './mail.js';
+import { SERVICE_CITIES, canonicalCity } from './service-area.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -49,18 +50,6 @@ function nameLooksRight(typed, first, last) {
 
 /* The per-rental values the agreement text needs. Kept in one place so the page
    and the emailed copy can never show different terms for the same rental. */
-/* The cities we actually serve. Must stay in step with the list on index.html —
-   there is no single source yet, so changing one without the other means the
-   website advertises an area the booking flow refuses.
-
-   Pickup is constrained to this list rather than validated afterwards: a free
-   text box lets someone book a collection we cannot make, and they only find
-   out when nobody turns up. */
-const SERVICE_CITIES = [
-  'Clearfield', 'Clinton', 'Farmington', 'Kaysville', 'Layton',
-  'Ogden', 'Roy', 'South Ogden', 'Sunset', 'Syracuse', 'West Haven',
-];
-
 const agreementValues = r => ({
   BINS: r.bins,
   START_DATE: niceDate(r.start_date),
@@ -490,12 +479,12 @@ async function saveAddress(env, r, form) {
 
   const same = !!form.get('same');
   const paddr = same ? daddr : String(form.get('pickup_address') || '').trim().slice(0, 300);
-  const pcity = same ? r.delivery_city : String(form.get('pickup_city') || '').trim();
+  const pcity = same ? r.delivery_city : (canonicalCity(form.get('pickup_city')) || String(form.get('pickup_city') || '').trim());
 
   if (!same) {
     if (!paddr) return 'Please add the pickup address, or tick that it is the same.';
     // The dropdown is a convenience; this is the rule.
-    if (!SERVICE_CITIES.includes(pcity)) {
+    if (!canonicalCity(pcity)) {
       return 'We can only collect from the cities listed. Email support@beehivebin.co if yours is not there and we will sort something out.';
     }
   }
