@@ -6,7 +6,8 @@
    address and agreement — it is generated with crypto.randomUUID and is never
    guessable, but it is also never shown anywhere except the email we send. */
 
-import { AGREEMENT_HTML, AGREEMENT_VERSION } from './agreement.js';
+import { AGREEMENT_HTML, AGREEMENT_TEXT, AGREEMENT_VERSION } from './agreement.js';
+import { sendEmail, INBOX } from './mail.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -115,6 +116,81 @@ const allDone = r => page('You&rsquo;re all set', `
     <p style="color:var(--muted);font-size:14.5px">We&rsquo;ll confirm your delivery window
     closer to the day. Nothing else is needed from you.</p>
   </div>`);
+
+/* The customer's copy of what they signed.
+
+   Sent at the moment of signing rather than on request, because the question
+   this answers — "show me what I agreed to" — is always asked later, under
+   pressure, by someone who no longer trusts us to produce it fairly. An email
+   in their own inbox is theirs, not ours. */
+async function emailSignedCopy(env, r, name, signedAt) {
+  const when = new Date(signedAt).toLocaleString('en-US', {
+    dateStyle: 'long', timeStyle: 'short', timeZone: 'America/Denver',
+  });
+  const weeksText = r.weeks === 1 ? '1 week' : `${r.weeks} weeks`;
+  const total = r.total_cents == null ? '—'
+    : `$${(r.total_cents / 100).toFixed(r.total_cents % 100 ? 2 : 0)}`;
+
+  const summary = [
+    ['Signed by', name],
+    ['Signed on', `${when} (Mountain Time)`],
+    ['Agreement version', AGREEMENT_VERSION],
+    ['Package', `${r.bins} bins · ${weeksText}`],
+    ['Delivery', niceDate(r.start_date)],
+    ['Return', niceDate(r.due_date)],
+    ['Total', `${total} plus tax`],
+  ];
+
+  const text = `Hi ${r.first_name || 'there'},
+
+Here's your copy of the rental agreement you just signed. Keep this email —
+it's your record of exactly what you agreed to.
+
+${summary.map(([k, v]) => `${k}: ${v}`).join('\n')}
+
+Questions about any of it? Just reply to this email.
+
+────────────────────────────────────────
+RENTAL AGREEMENT (version ${AGREEMENT_VERSION})
+────────────────────────────────────────
+
+${AGREEMENT_TEXT}
+
+────────────────────────────────────────
+Beehive Bin Co. · ${INBOX}`;
+
+  const html = `<!doctype html><html><body style="margin:0;background:#F2F1EB;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    color:#15130F;line-height:1.55">
+    <div style="max-width:640px;margin:0 auto;padding:24px 20px 48px">
+      <div style="background:#15130F;color:#fff;border-bottom:3px solid #FFC400;
+        padding:18px 20px;border-radius:12px 12px 0 0">
+        <strong style="font-size:16px;letter-spacing:.02em">BEEHIVE BIN CO.</strong>
+      </div>
+      <div style="background:#fff;padding:24px 22px;border:1px solid rgba(21,19,15,.14);border-top:0">
+        <p style="margin-top:0">Hi ${esc(r.first_name || 'there')},</p>
+        <p>Here's your copy of the rental agreement you just signed. Keep this email
+        &mdash; it's your record of exactly what you agreed to.</p>
+        <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14.5px">
+          ${summary.map(([k, v]) => `<tr>
+            <td style="padding:7px 0;color:#6B675C;width:150px">${esc(k)}</td>
+            <td style="padding:7px 0;font-weight:600">${esc(v)}</td></tr>`).join('')}
+        </table>
+        <p style="font-size:14.5px;color:#6B675C">Questions about any of it? Just reply to this email.</p>
+        <hr style="border:0;border-top:1px solid rgba(21,19,15,.14);margin:26px 0">
+        <p style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#6B675C;
+          font-weight:700;margin-bottom:14px">Rental agreement &middot; version ${esc(AGREEMENT_VERSION)}</p>
+        <div style="font-size:14px">${AGREEMENT_HTML}</div>
+      </div>
+    </div></body></html>`;
+
+  return sendEmail(env, {
+    to: r.email,
+    subject: `Your signed rental agreement — ${r.bins} bins, ${niceDate(r.start_date)}`,
+    text,
+    html,
+  });
+}
 
 export async function handleConfirm(request, env, url) {
   const token = url.pathname.split('/').filter(Boolean)[0] || '';
@@ -253,6 +329,17 @@ async function accept(request, env, r, token) {
       'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
     ).bind(r.email || 'customer', 'rental.agreement_signed', 'rental', String(r.id),
            `${name} · ${AGREEMENT_VERSION}`).run();
+
+    // Their copy. A failure here must not block them reaching payment — the
+    // signature is already recorded — but it is logged so it can be resent.
+    if (r.email) {
+      const sent = await emailSignedCopy(env, r, name, new Date().toISOString())
+        .catch(err => ({ ok: false, error: err.message }));
+      await env.DB.prepare(
+        'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
+      ).bind('system', sent.ok ? 'rental.signed_copy_sent' : 'rental.signed_copy_failed',
+             'rental', String(r.id), sent.ok ? r.email : (sent.error || 'unknown')).run();
+    }
   } else {
     // Already signed, but let them correct where the bins go. Worth recording:
     // an address that changes the day before delivery makes the run sheet wrong,

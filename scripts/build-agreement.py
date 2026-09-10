@@ -65,6 +65,20 @@ flush()
 if in_list:
     html.append('</ul>')
 
+# A plain-text rendering as well: the signed copy goes out as an email, and the
+# text part is what survives every client, forward and printout.
+text_lines = []
+for raw in body.split('\n'):
+    line = raw.rstrip()
+    if line.startswith('### '):
+        text_lines += ['', line[4:].upper(), '']
+    elif line.startswith('- '):
+        text_lines.append('  * ' + line[2:])
+    else:
+        text_lines.append(line)
+plain = re.sub(r'\*\*(.+?)\*\*', r'\1', '\n'.join(text_lines))
+plain = re.sub(r'\n{3,}', '\n\n', plain).strip()
+
 out = '''/* GENERATED — do not edit by hand.
    Source: docs/rental-agreement-template.md
    Regenerate with: python3 scripts/build-agreement.py
@@ -78,9 +92,12 @@ export const AGREEMENT_VERSION = %s;
 export const AGREEMENT_SOURCE_SHA = %s;
 
 export const AGREEMENT_HTML = %s;
+
+export const AGREEMENT_TEXT = %s;
 ''' % (json.dumps(version),
        json.dumps(hashlib.sha256(src.encode()).hexdigest()[:12]),
-       json.dumps('\n'.join(html)))
+       json.dumps('\n'.join(html)),
+       json.dumps(plain))
 
 (ROOT / 'workers/form-handler/src/agreement.js').write_text(out)
 print('agreement version', version, '·', len('\n'.join(html)), 'bytes')

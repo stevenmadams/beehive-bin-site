@@ -1,12 +1,13 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { handleConfirm } from './confirm.js';
+import { sendEmail, FROM, INBOX } from './mail.js';
 
 /* Beehive Bin Co. — form handler.
    Receives reserve/contact form POSTs from beehivebin.co and emails them to
    the shared inbox via Resend. Stage 2 (Square pipeline) builds on this. */
 
-const INBOX = 'support@beehivebin.co';
-const FROM = 'Beehive Bin Co. site <noreply@beehivebin.co>';
+// FROM/INBOX live in mail.js so the confirmation flow and the panel's mailer
+// cannot disagree about who a customer is replying to.
 const ALLOWED_ORIGINS = [
   'https://beehivebin.co',
   'https://www.beehivebin.co',
