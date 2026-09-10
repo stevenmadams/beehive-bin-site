@@ -50,6 +50,22 @@ owner cannot be removed.
 
 ## One-time setup
 
+*Steps 1 and 2 were completed 2026-09-10. They are kept here as a record of what
+was done and how to redo it — for a second environment, or after a disaster.*
+
+**Live values**
+
+| Thing | Value |
+|---|---|
+| D1 database | `beehive` · `4dfd9b23-a6a4-40ba-87ee-0e9abc57d828` (WNAM) |
+| Access team domain | `beehivebin.cloudflareaccess.com` |
+| Access application | `admin` · AUD `d3430bffb…fda5816` |
+| Access policy | `Staff` — Allow, emails ending in `@beehivebin.co` |
+
+**Do not rename the Zero Trust team.** The team domain is the JWT issuer the
+Worker checks. Renaming it invalidates every token and locks everyone out of the
+panel until someone edits `ACCESS_TEAM_DOMAIN` and redeploys.
+
 ### 1. Create the database
 
 ```bash
@@ -95,8 +111,10 @@ npx wrangler deploy -c workers/admin/wrangler.toml
 npx wrangler deploy -c workers/form-handler/wrangler.toml
 ```
 
-Attach `admin.beehivebin.co` to `beehive-admin` the same way
-`api.beehivebin.co` is attached to `beehive-forms`.
+`admin.beehivebin.co` is attached by the `routes` entry in
+`workers/admin/wrangler.toml` — deploying creates the DNS record. That works
+because the OAuth login carries `workers_routes:write`, which the older deploy
+token used for `api.beehivebin.co` did not.
 
 **Deploy the Access application before the Worker.** If you get the order wrong
 the panel is not exposed — it rejects every request that arrives without a valid
