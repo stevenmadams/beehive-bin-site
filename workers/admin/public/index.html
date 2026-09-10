@@ -170,6 +170,11 @@ tr.late td{background:rgba(163,44,44,.05)}
   line-height:1;cursor:pointer;padding:0}
 .step.photorow .rm:hover{background:var(--bad)}
 .step.photorow .need{font-size:12.5px;color:var(--warn);font-weight:600}
+/* A step whose turn has not come is shown, not hidden — the sequence is part of
+   what the panel is telling you — but it offers nothing to press. */
+.step.waiting{opacity:.55}
+.step.waiting .tick{cursor:not-allowed}
+.step.waiting .soon{font-size:12.5px;color:var(--muted)}
 .step.photorow .addr{margin:12px 0 0 32px}
 .step.photorow .addr label{display:block;font-size:11px;font-weight:700;
   letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
@@ -1051,6 +1056,8 @@ async function openRental(id) {
         if (key === 'delivered' || key === 'returned') {
           const kind = key === 'delivered' ? 'delivery' : 'pickup';
           const mine = photos.filter(ph => ph.kind === kind);
+          // Nothing comes back before it goes out, so the pickup row waits.
+          const waiting = key === 'returned' && !r.delivered_at;
           const thumbs = mine.map(ph => `
             <figure>
               <img loading="lazy" src="/api/photo/${encodeURIComponent(ph.r2_key)}"
@@ -1058,16 +1065,15 @@ async function openRental(id) {
               <button class="rm" data-rm="${ph.id}" title="Remove">×</button>
             </figure>`).join('');
           return `
-          <div class="step photorow" data-done="${done}">
+          <div class="step photorow${waiting ? ' waiting' : ''}" data-done="${done}">
             <div class="top">
-              <button class="tick" data-step="${key}" data-done="${done}">✓</button>
+              <button class="tick"${waiting ? ' disabled' : ` data-step="${key}"`} data-done="${done}">✓</button>
               <span class="lbl">${label}</span>
+              ${waiting ? '<span class="soon">after the bins are delivered</span>' : ''}
               <span class="when" style="margin-left:auto">${r[col] ? esc(ago(r[col])) : ''}</span>
             </div>
             <div class="addr">
-              <label for="${kind === 'delivery' ? 'r-daddr' : 'r-paddr'}">${
-                kind === 'delivery' ? 'Delivery address' : 'Pickup address'} &mdash; ${
-                esc((kind === 'delivery' ? r.delivery_city : r.pickup_city) || 'city not set')}</label>
+              <label>${kind === 'delivery' ? 'Delivery address' : 'Pickup address'}</label>
               ${(() => {
                 const val = (kind === 'delivery' ? r.delivery_address : r.pickup_address) || '';
                 const id = kind === 'delivery' ? 'r-daddr' : 'r-paddr';
@@ -1100,11 +1106,13 @@ async function openRental(id) {
                     esc(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)}</div>` : ''}
             </div>
             <div class="ev">
-              ${thumbs || `<span class="need">Photo needed</span>`}
-              <label class="shoot">
-                <input type="file" accept="image/*" capture="environment" data-kind="${kind}" multiple>
-                <span>📷 ${mine.length ? 'Add' : `Take ${kind} photo`}</span>
-              </label>
+              ${waiting
+                ? '<span class="soon">The pickup photo is taken when the bins come back.</span>'
+                : `${thumbs || `<span class="need">Photo needed</span>`}
+                   <label class="shoot">
+                     <input type="file" accept="image/*" capture="environment" data-kind="${kind}" multiple>
+                     <span>📷 ${mine.length ? 'Add' : `Take ${kind} photo`}</span>
+                   </label>`}
             </div>
           </div>`;
         }
@@ -1167,7 +1175,15 @@ async function openRental(id) {
       openRental(id);
     } catch (err) {
       // Delivering something unpaid is allowed, but only on purpose.
-      if (/not paid yet/i.test(err.message) && confirm(`${err.message}`)) {
+      // A hard ordering rule — nothing comes back before it goes out. No reason
+      // makes it true, so there is nothing to prompt for.
+      if (/cannot come back|already marked back|nothing to photograph/i.test(err.message)) {
+        msg.replaceChildren(banner(err.message));
+        return;
+      }
+      // Delivering early is a decision, not an error.
+      if (/Deliver anyway\?/i.test(err.message)) {
+        if (!confirm(err.message)) return;
         try { await patch({ milestone: b.dataset.step, done: true, force: true }); openRental(id); }
         catch (e2) { msg.replaceChildren(banner(e2.message)); }
         return;

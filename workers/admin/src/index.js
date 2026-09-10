@@ -382,6 +382,31 @@ async function listRentals(env, url) {
   return results;
 }
 
+/* Milestones happen in an order that reflects what physically happened. Bins
+   cannot come back before they went out; delivering before the agreement is
+   signed or the money has arrived is possible but should be a decision.
+   `soft` prerequisites can be overridden with a recorded reason; a hard one
+   cannot, because no reason makes it true. */
+const PREREQ = {
+  agreement: [],
+  paid: [],
+  delivered: [
+    { col: 'agreement_signed_at', soft: true,  msg: 'The agreement is not signed yet. Deliver anyway?' },
+    { col: 'paid_at',             soft: true,  msg: 'This rental is not paid yet. Deliver anyway?' },
+  ],
+  returned: [
+    { col: 'delivered_at',        soft: false, msg: 'These bins have not been delivered yet, so they cannot come back.' },
+  ],
+};
+
+function checkPrereqs(milestone, state, body) {
+  const unmet = (PREREQ[milestone] || []).filter(p => !state[p.col]);
+  const hard = unmet.find(p => !p.soft);
+  if (hard) throw new HttpError(409, hard.msg);
+  if (unmet.length && !body.force) throw new HttpError(409, unmet[0].msg);
+  return unmet.map(p => p.col);
+}
+
 const MILESTONES = {
   agreement: 'agreement_signed_at',
   paid: 'paid_at',
@@ -407,6 +432,10 @@ async function updateRental(env, user, id, body) {
     if (body.milestone === 'paid' && body.done === false && row.square_status === 'PAID') {
       throw new HttpError(409, 'Square has this invoice as paid. Refund it in Square if that is wrong.');
     }
+    if (body.done === false && body.milestone === 'delivered' && row.returned_at) {
+      throw new HttpError(409, 'These bins are already marked back. Undo that first.');
+    }
+
     /* A customer's e-signature is theirs, not ours. Once one exists it cannot be
        re-ticked or un-ticked from the panel — same reasoning as Square owning
        payment: the panel has no business contradicting a signed record. */
@@ -433,13 +462,17 @@ async function updateRental(env, user, id, body) {
       patch.agreement_manual_reason = null;
     }
 
+    if (body.done !== false) {
+      const skipped = checkPrereqs(body.milestone, row, body);
+      if (skipped.length) {
+        await audit(env, user.email, `rental.${body.milestone}_early`, 'rental', id,
+          `without ${skipped.join(', ')}`);
+      }
+    }
+
     patch[col] = body.done === false ? null : now();
 
     if (body.milestone === 'delivered' && patch.delivered_at) {
-      if (!patch.paid_at && !body.force) {
-        // Not fatal — sometimes you deliver on trust — but it should be deliberate.
-        throw new HttpError(409, 'This rental is not paid yet. Mark it delivered anyway?');
-      }
       const why = await requirePhoto(env, id, 'delivery', body.photo_reason);
       if (why) await audit(env, user.email, 'rental.delivered_no_photo', 'rental', id, why);
     }
@@ -675,6 +708,14 @@ async function uploadPhoto(request, env, user, rentalId, url) {
 
   const rental = await env.DB.prepare('SELECT id FROM rentals WHERE id = ?1').bind(rentalId).first();
   if (!rental) throw new HttpError(404, 'no such rental');
+
+  if (kind === 'pickup') {
+    const { delivered_at } = await env.DB.prepare('SELECT delivered_at FROM rentals WHERE id = ?1')
+      .bind(rentalId).first();
+    if (!delivered_at) {
+      throw new HttpError(409, 'These bins have not been delivered yet, so there is nothing to photograph coming back.');
+    }
+  }
 
   const type = (request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
   if (!ALLOWED_IMAGE.includes(type)) throw new HttpError(400, `That file type (${type || 'unknown'}) is not an image we accept.`);
