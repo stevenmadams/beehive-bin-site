@@ -114,6 +114,10 @@ tbody tr.clickable:hover{background:rgba(255,196,0,.09)}
 .pill.returned{background:rgba(21,19,15,.1);color:var(--char)}
 .pill.cancelled{background:rgba(163,44,44,.12);color:var(--bad)}
 .pill.overdue{background:var(--bad);color:#fff}
+.pill.lapsed{background:rgba(21,19,15,.75);color:var(--yellow)}
+.pill.stalled{background:rgba(180,83,26,.16);color:var(--warn)}
+nav a .badge.warn{background:var(--warn);color:#fff}
+tr.stale td{background:rgba(21,19,15,.035)}
 nav a .badge.overdue{background:var(--bad);color:#fff}
 tr.late td{background:rgba(163,44,44,.05)}
 .steps{display:flex;flex-direction:column;gap:8px;margin:4px 0 20px}
@@ -405,7 +409,8 @@ const reqState = { status: 'new', q: '' };
 
 async function viewRequests() {
   const view = $('<div></div>');
-  const filters = [['new', 'New'], ['converted', 'Booked'], ['declined', 'Declined'], ['all', 'All']];
+  const filters = [['new', 'New'], ['lapsed', 'Lapsed'], ['converted', 'Booked'],
+    ['declined', 'Declined'], ['all', 'All']];
   const head = $(`<div>
     <div class="head">
       <h1>Requests</h1><span class="count" id="rcount"></span>
@@ -449,12 +454,16 @@ async function loadList(list, head) {
 
     if (!requests.length) {
       list.replaceChildren($(`<div class="empty"><strong>Nothing here</strong>${
-        reqState.q ? 'No request matches that search.' : 'Nothing in this list yet.'}</div>`));
+        reqState.q ? 'No request matches that search.'
+          : reqState.status === 'lapsed' ? 'Nothing has gone past its date unanswered.'
+          : 'Nothing in this list yet.'}</div>`));
       return;
     }
 
-    const rows = requests.map(r => `<tr class="clickable" data-id="${r.id}">
-      <td><span class="pill ${r.status}">${r.status}</span>${
+    const rows = requests.map(r => `<tr class="clickable${r.lapsed ? ' stale' : ''}" data-id="${r.id}">
+      <td>${r.lapsed
+        ? '<span class="pill lapsed" title="The date they asked for has passed">lapsed</span>'
+        : `<span class="pill ${r.status}">${r.status}</span>`}${
         r.source === 'manual' ? ' <span class="pill manual" title="Taken by phone">phone</span>' : ''}</td>
       <td><div class="who">${esc(fullName(r))}<small>${esc(r.email || r.phone || '—')}</small></div></td>
       <td class="nowrap">${r.kind === 'contact' ? '<em style="color:var(--muted)">Question</em>' : esc(pkg(r))}</td>
@@ -873,7 +882,8 @@ function openNewRequest() {
 
 /* ---------- rentals ---------- */
 const rentState = { status: 'active' };
-const RENT_FILTERS = [['active','Active'],['pending','Pending'],['out','Out'],['returned','Returned'],['all','All']];
+const RENT_FILTERS = [['active','Active'],['stalled','Stalled'],['pending','Pending'],
+  ['out','Out'],['returned','Returned'],['all','All']];
 
 const isLate = r => r.status === 'out' && r.due_date && r.due_date < new Date().toISOString().slice(0, 10);
 
@@ -907,9 +917,10 @@ async function viewRentals() {
       return;
     }
 
-    const rows = rentals.map(r => `<tr class="clickable${isLate(r) ? ' late' : ''}" data-id="${r.id}">
+    const rows = rentals.map(r => `<tr class="clickable${isLate(r) ? ' late' : r.stalled ? ' stale' : ''}" data-id="${r.id}">
       <td><span class="pill ${r.status}">${r.status}</span>${
-        isLate(r) ? ' <span class="pill overdue">late</span>' : ''}</td>
+        isLate(r) ? ' <span class="pill overdue">late</span>'
+        : r.stalled ? ' <span class="pill stalled" title="Never confirmed and the start date has passed">stalled</span>' : ''}</td>
       <td><div class="who">${esc(fullName(r))}<small>${esc(r.delivery_city || '—')}</small></div></td>
       <td class="nowrap">${r.bins} bins · ${r.weeks === 1 ? '1 wk' : r.weeks + ' wks'}</td>
       <td class="nowrap num">${esc(niceDate(r.start_date))}</td>
@@ -993,6 +1004,9 @@ async function openRental(id) {
         pref ? `<span class="prefnote">prefers ${esc(pref)}</span>` : ''}</div>` : ''}
 
       ${isLate(r) ? '<div class="banner err">Past its return date and still out.</div>' : ''}
+      ${r.stalled ? `<div class="banner err">This never got confirmed and its start date
+        (${esc(niceDate(r.start_date))}) has passed. Chase it or cancel it &mdash; the bins
+        are not going anywhere while it sits here.</div>` : ''}
 
       ${r.confirm_token ? `<div class="linkbox">
           <h4>Confirmation link${r.confirm_sent_at
@@ -1332,7 +1346,14 @@ async function openRental(id) {
   }));
 
   drawer.querySelectorAll('[data-status]').forEach(b => b.addEventListener('click', async () => {
-    try { await patch({ status: b.dataset.status }); openRental(id); }
+    let reason;
+    if (b.dataset.status === 'cancelled') {
+      reason = prompt(r.paid_at
+        ? 'This rental has been paid. Cancelling here does NOT refund anything — issue that in Square.\n\nWhy is it being cancelled?'
+        : 'Why is this being cancelled?');
+      if (reason === null || !reason.trim()) return;
+    }
+    try { await patch({ status: b.dataset.status, reason }); openRental(id); }
     catch (err) { msg.replaceChildren(banner(err.message)); }
   }));
 }
@@ -1487,7 +1508,9 @@ function updateBadges() {
     el.textContent = value;
   };
   setBadge('#/requests', counts.new || 0);
-  setBadge('#/rentals', rentalCounts.overdue || 0, 'overdue');
+  // Overdue is louder than stalled, but a stalled rental still wants an eye.
+  const rentalAlert = rentalCounts.overdue || rentalCounts.stalled || 0;
+  setBadge('#/rentals', rentalAlert, rentalCounts.overdue ? 'overdue' : 'warn');
 }
 
 let pollTimer = null;

@@ -112,7 +112,9 @@ const audit = (env, actor, action, entity, entityId, detail = null) =>
 
 /* ---------- request handlers ---------- */
 
-const REQUEST_COLUMNS = `id, created_at, kind, source, status, contact_pref, first_name, last_name, email, phone,
+const REQUEST_COLUMNS = `id, created_at, kind, source, status, contact_pref,
+  CASE WHEN status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('now')
+       THEN 1 ELSE 0 END AS lapsed, first_name, last_name, email, phone,
   bins, weeks, start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
   customer_notes, message, internal_notes, decided_at, decided_by, decline_reason`;
 
@@ -124,10 +126,19 @@ async function listRequests(env, url) {
   const where = [];
   const binds = [];
 
-  if (status && status !== 'all') {
+  /* A request for a date that has passed is dead — the customer needed bins on
+     the 25th and it is the 26th. It is still unhandled work, so it stays in the
+     queue, but it must not read as live. Derived rather than stored: a date
+     passing should not silently rewrite a record. */
+  if (status === 'lapsed') {
+    where.push("status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('now')");
+  } else if (status && status !== 'all') {
     if (!STATUSES.includes(status)) throw new HttpError(400, 'unknown status');
     binds.push(status);
     where.push(`status = ?${binds.length}`);
+    if (status === 'new') {
+      where.push("(start_date IS NULL OR date(start_date) >= date('now'))");
+    }
   }
   if (q) {
     binds.push(`%${q.toLowerCase()}%`);
@@ -310,6 +321,8 @@ async function updateEmployee(env, user, id, body) {
 /* ---------- rentals ---------- */
 
 const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
+  CASE WHEN status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('now')
+       THEN 1 ELSE 0 END AS stalled,
   photo_hold, signed_on_behalf, agreement_manual, agreement_manual_by,
   agreement_manual_reason, confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
@@ -369,6 +382,9 @@ async function listRentals(env, url) {
   if (status === 'active') {
     // What someone actually needs on a Monday: everything not finished.
     where = "WHERE status IN ('pending','confirmed','out')";
+  } else if (status === 'stalled') {
+    // Never confirmed, and the day it was meant to go out has passed.
+    where = "WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('now')";
   } else if (status !== 'all') {
     if (!RENTAL_STATUSES.includes(status)) throw new HttpError(400, 'unknown status');
     binds.push(status);
@@ -500,10 +516,30 @@ async function updateRental(env, user, id, body) {
   }
   if ('status' in body) {
     if (!RENTAL_STATUSES.includes(body.status)) throw new HttpError(400, 'unknown status');
+
+    if (body.status === 'cancelled') {
+      /* Cancelling a rental whose bins are at someone's house is not a
+         cancellation, it is a loose end. And cancelling a paid one without
+         saying what happened to the money leaves a customer out of pocket with
+         no record of why. */
+      if (row.delivered_at && !row.returned_at) {
+        throw new HttpError(409, 'These bins are still out. Mark them back before cancelling, or this rental disappears with your bins at a customer\'s house.');
+      }
+      const why = String(body.reason || '').trim().slice(0, 300);
+      if (!why) throw new HttpError(428, 'Why is this being cancelled?');
+
+      if (row.paid_at) {
+        await audit(env, user.email, 'rental.cancelled_after_payment', 'rental', id,
+          `${why} — refund must be issued in Square`);
+      }
+      await audit(env, user.email, 'rental.cancel', 'rental', id, why);
+    }
+
     patch.status = body.status;
   }
 
   patch.status = statusFrom(patch);
+  if (body.status === 'cancelled') patch.status = 'cancelled';
 
   await env.DB.prepare(
     `UPDATE rentals SET status=?1, agreement_signed_at=?2, paid_at=?3, delivered_at=?4,
@@ -873,14 +909,23 @@ async function api(request, env, url) {
     const counts = Object.fromEntries(STATUSES.map(s => [s, 0]));
     for (const r of results) counts[r.status] = r.count;
 
+    const { count: lapsed } = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM requests WHERE status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('now')",
+    ).first();
+    counts.lapsed = lapsed;
+    counts.new = Math.max(0, counts.new - lapsed);   // the badge should count live work
+
     const { count: activeRentals } = await env.DB.prepare(
       "SELECT COUNT(*) AS count FROM rentals WHERE status IN ('pending','confirmed','out')",
     ).first();
     const { count: overdue } = await env.DB.prepare(
       "SELECT COUNT(*) AS count FROM rentals WHERE status = 'out' AND due_date < date('now')",
     ).first();
+    const { count: stalled } = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM rentals WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('now')",
+    ).first();
 
-    return json({ counts, rentals: { active: activeRentals, overdue } });
+    return json({ counts, rentals: { active: activeRentals, overdue, stalled } });
   }
 
   if (path === '/requests') {
