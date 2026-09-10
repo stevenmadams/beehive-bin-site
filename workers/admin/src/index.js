@@ -411,9 +411,19 @@ async function updateRental(env, user, id, body) {
       throw new HttpError(409, 'Square has this invoice as paid. Refund it in Square if that is wrong.');
     }
     patch[col] = body.done === false ? null : now();
-    if (body.milestone === 'delivered' && patch.delivered_at && !patch.paid_at) {
-      // Not fatal — sometimes you deliver on trust — but it should be deliberate.
-      if (!body.force) throw new HttpError(409, 'This rental is not paid yet. Mark it delivered anyway?');
+
+    if (body.milestone === 'delivered' && patch.delivered_at) {
+      if (!patch.paid_at && !body.force) {
+        // Not fatal — sometimes you deliver on trust — but it should be deliberate.
+        throw new HttpError(409, 'This rental is not paid yet. Mark it delivered anyway?');
+      }
+      const why = await requirePhoto(env, id, 'delivery', body.photo_reason);
+      if (why) await audit(env, user.email, 'rental.delivered_no_photo', 'rental', id, why);
+    }
+
+    if (body.milestone === 'returned' && patch.returned_at) {
+      const why = await requirePhoto(env, id, 'pickup', body.photo_reason);
+      if (why) await audit(env, user.email, 'rental.returned_no_photo', 'rental', id, why);
     }
   }
 
@@ -596,6 +606,110 @@ async function updateNote(env, user, id, body) {
   return listNotes(env, note.entity, note.entity_id);
 }
 
+/* ---------- photos ----------
+
+   Taken on a phone at the door. The Worker streams the body straight into R2
+   and records the key; nothing about the image passes through D1. */
+
+const PHOTO_KINDS = ['delivery', 'pickup'];
+const MAX_PHOTO_BYTES = 12 * 1024 * 1024;   // comfortably above a phone photo
+const ALLOWED_IMAGE = ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp'];
+
+async function listPhotos(env, rentalId) {
+  const { results } = await env.DB.prepare(
+    `SELECT id, kind, r2_key, content_type, bytes, taken_by, taken_at, caption, deleted_at
+     FROM rental_photos WHERE rental_id = ?1 AND deleted_at IS NULL
+     ORDER BY kind, taken_at DESC`,
+  ).bind(rentalId).all();
+  return results;
+}
+
+async function uploadPhoto(request, env, user, rentalId, url) {
+  if (!env.PHOTOS) throw new HttpError(503, 'Photo storage is not connected yet (R2 is not enabled).');
+
+  const kind = url.searchParams.get('kind');
+  if (!PHOTO_KINDS.includes(kind)) throw new HttpError(400, 'Photo must be for delivery or pickup.');
+
+  const rental = await env.DB.prepare('SELECT id FROM rentals WHERE id = ?1').bind(rentalId).first();
+  if (!rental) throw new HttpError(404, 'no such rental');
+
+  const type = (request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!ALLOWED_IMAGE.includes(type)) throw new HttpError(400, `That file type (${type || 'unknown'}) is not an image we accept.`);
+
+  const body = await request.arrayBuffer();
+  if (!body.byteLength) throw new HttpError(400, 'That photo came through empty.');
+  if (body.byteLength > MAX_PHOTO_BYTES) throw new HttpError(413, 'That photo is too large.');
+
+  // Keyed by rental and kind so the bucket is browsable if anyone ever has to
+  // go looking without the database.
+  const key = `rentals/${rentalId}/${kind}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  await env.PHOTOS.put(key, body, { httpMetadata: { contentType: type } });
+
+  await env.DB.prepare(
+    `INSERT INTO rental_photos (rental_id, kind, r2_key, content_type, bytes, taken_by, caption)
+     VALUES (?1,?2,?3,?4,?5,?6,?7)`,
+  ).bind(rentalId, kind, key, type, body.byteLength, user.email,
+         (url.searchParams.get('caption') || '').slice(0, 300) || null).run();
+
+  await audit(env, user.email, `rental.photo_${kind}`, 'rental', rentalId, `${Math.round(body.byteLength / 1024)}KB`);
+  return listPhotos(env, rentalId);
+}
+
+/* Served through the Worker rather than from a public bucket URL: these are
+   pictures of customers' homes, and Access already decides who may look. */
+async function servePhoto(env, key) {
+  if (!env.PHOTOS) throw new HttpError(503, 'Photo storage is not connected yet.');
+  const row = await env.DB.prepare(
+    'SELECT content_type FROM rental_photos WHERE r2_key = ?1 AND deleted_at IS NULL').bind(key).first();
+  if (!row) throw new HttpError(404, 'no such photo');
+
+  const obj = await env.PHOTOS.get(key);
+  if (!obj) throw new HttpError(404, 'photo missing from storage');
+
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': row.content_type,
+      // Private: an Access session got them here, and a shared cache must not
+      // hand the image to the next person.
+      'Cache-Control': 'private, max-age=3600',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
+async function deletePhoto(env, user, id) {
+  const row = await env.DB.prepare(
+    'SELECT id, rental_id, r2_key, taken_by, deleted_at FROM rental_photos WHERE id = ?1').bind(id).first();
+  if (!row) throw new HttpError(404, 'no such photo');
+  if (row.deleted_at) return listPhotos(env, row.rental_id);
+  if (row.taken_by !== user.email && user.role !== 'owner') {
+    throw new HttpError(403, 'You can only remove photos you took.');
+  }
+
+  // The object goes; the row stays, so the record shows a photo existed and who
+  // removed it. A photo that can vanish without trace is not evidence.
+  await env.PHOTOS?.delete(row.r2_key);
+  await env.DB.prepare('UPDATE rental_photos SET deleted_at = ?1, deleted_by = ?2 WHERE id = ?3')
+    .bind(now(), user.email, id).run();
+  await audit(env, user.email, 'rental.photo_deleted', 'rental', row.rental_id);
+  return listPhotos(env, row.rental_id);
+}
+
+/* Marking a visit done without its photo is allowed, because a flat battery at
+   a basement door is a real thing — but it needs a reason, and the reason is
+   recorded. Otherwise the habit quietly lapses on exactly the jobs where the
+   evidence would have mattered. */
+async function requirePhoto(env, rentalId, kind, reason) {
+  const { count } = await env.DB.prepare(
+    'SELECT COUNT(*) AS count FROM rental_photos WHERE rental_id = ?1 AND kind = ?2 AND deleted_at IS NULL',
+  ).bind(rentalId, kind).first();
+  if (count > 0) return null;
+  if (!reason || !String(reason).trim()) {
+    throw new HttpError(428, `No ${kind} photo yet. Add one, or give a reason to continue without it.`);
+  }
+  return String(reason).trim().slice(0, 300);
+}
+
 /* ---------- router ---------- */
 
 async function api(request, env, url) {
@@ -605,7 +719,8 @@ async function api(request, env, url) {
   // Some POSTs are pure commands with nothing to send (invoice, sync), so an
   // empty body is valid — only malformed JSON is an error.
   let body = {};
-  if (['POST', 'PATCH', 'PUT'].includes(method)) {
+  const isUpload = method === 'POST' && /^\/rentals\/\d+\/photos$/.test(path);
+  if (!isUpload && ['POST', 'PATCH', 'PUT'].includes(method)) {
     const raw = await request.text();
     if (raw.trim()) {
       try { body = JSON.parse(raw); }
@@ -689,6 +804,20 @@ async function api(request, env, url) {
   if ((m = match(/^\/rentals\/(\d+)\/invoice$/)) && method === 'POST') {
     return json({ rental: await invoiceRental(env, user, Number(m[1])) });
   }
+  if ((m = match(/^\/rentals\/(\d+)\/photos$/))) {
+    const rid = Number(m[1]);
+    if (method === 'GET') return json({ photos: await listPhotos(env, rid) });
+    if (method === 'POST') return json({ photos: await uploadPhoto(request, env, user, rid, url) }, 201);
+  }
+
+  if ((m = match(/^\/photos\/(\d+)$/)) && method === 'DELETE') {
+    return json({ photos: await deletePhoto(env, user, Number(m[1])) });
+  }
+
+  if (path.startsWith('/photo/') && method === 'GET') {
+    return servePhoto(env, decodeURIComponent(path.slice('/photo/'.length)));
+  }
+
   if ((m = match(/^\/rentals\/(\d+)\/send$/)) && method === 'POST') {
     const rid = Number(m[1]);
     await sendConfirmLink(env, user, rid);

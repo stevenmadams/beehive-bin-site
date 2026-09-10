@@ -49,6 +49,12 @@ SQUARE_LOCATION_ID = "LJR9D95SRQSN7"
 # Resend lives on beehive-forms, so the panel asks it to send rather than
 # holding a second copy of the API key. RPC entrypoints have no URL, so this
 # adds nothing publicly reachable.
+# Delivery and pickup photos. Images do not belong in D1; the database holds
+# the index and R2 holds the bytes.
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "beehive-photos"
+
 [[services]]
 binding = "MAILER"
 service = "beehive-forms"

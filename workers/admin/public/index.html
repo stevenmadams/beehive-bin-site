@@ -169,6 +169,25 @@ tr.late td{background:rgba(163,44,44,.05)}
 .history .what{font-weight:600}
 .history .who{color:var(--muted)}
 .history .when{color:var(--muted);font-size:12px}
+.photos{margin-bottom:18px}
+.photos .set{margin-bottom:14px}
+.photos .set h5{margin:0 0 7px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);font-weight:700;font-family:var(--font-body)}
+.photos .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.photos figure{margin:0;position:relative}
+.photos img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:9px;border:1px solid var(--line);
+  display:block;background:rgba(21,19,15,.05)}
+.photos figcaption{font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.35}
+.photos .rm{position:absolute;top:5px;right:5px;border:0;border-radius:6px;width:22px;height:22px;
+  background:rgba(21,19,15,.72);color:#fff;font-size:13px;line-height:1;cursor:pointer}
+.photos .rm:hover{background:var(--bad)}
+/* A file input styled as a button: on a phone this opens the camera. */
+.shoot{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);
+  background:var(--white);padding:9px 14px;border-radius:9px;font-weight:600;font-size:13px;cursor:pointer}
+.shoot:hover{border-color:rgba(21,19,15,.3)}
+.shoot input{display:none}
+.shoot.needed{background:var(--yellow);border-color:var(--yellow-deep)}
+.photos .none{font-size:12.5px;color:var(--muted);margin-bottom:7px}
 .pill.staff{background:rgba(21,19,15,.08);color:var(--char)}
 .pill.owner{background:var(--yellow);color:var(--ink)}
 .pill.off{background:rgba(163,44,44,.12);color:var(--bad)}
@@ -409,6 +428,84 @@ async function loadList(list, head) {
   } catch (err) {
     list.replaceChildren($(`<div class="empty"><strong>Could not load requests</strong>${esc(err.message)}</div>`));
   }
+}
+
+/* ---------- photos ----------
+   The driver is at a door, on a phone, probably in the dark. `capture` makes
+   the button open the camera directly rather than a file browser. */
+
+function photosPanel(container, rentalId, onChange) {
+  const render = photos => {
+    const set = kind => {
+      const mine = photos.filter(p => p.kind === kind);
+      const grid = mine.map(p => `
+        <figure data-id="${p.id}">
+          <img loading="lazy" src="/api/photo/${encodeURIComponent(p.r2_key)}" alt="${kind} photo">
+          <button class="rm" data-rm="${p.id}" title="Remove">×</button>
+          <figcaption>${esc(ago(p.taken_at))}<br>${esc((p.taken_by || '').split('@')[0])}</figcaption>
+        </figure>`).join('');
+      return `<div class="set">
+        <h5>${kind === 'delivery' ? 'At delivery' : 'At pickup'} (${mine.length})</h5>
+        ${mine.length ? `<div class="grid">${grid}</div>`
+          : '<div class="none">No photo yet — needed before this step can be ticked.</div>'}
+        <label class="shoot${mine.length ? '' : ' needed'}" style="margin-top:8px">
+          <input type="file" accept="image/*" capture="environment" data-kind="${kind}" multiple>
+          <span>📷 ${mine.length ? 'Add another' : `Take ${kind} photo`}</span>
+        </label>
+      </div>`;
+    };
+
+    container.replaceChildren($(`<div>
+      <label class="fl">Condition photos</label>
+      <div class="photos">${set('delivery')}${set('pickup')}<div id="ph-msg"></div></div>
+    </div>`));
+
+    const msg = container.querySelector('#ph-msg');
+
+    container.querySelectorAll('input[type="file"]').forEach(input =>
+      input.addEventListener('change', async () => {
+        const files = [...input.files];
+        if (!files.length) return;
+        const label = input.closest('.shoot').querySelector('span');
+        const was = label.textContent;
+        msg.replaceChildren();
+        try {
+          let latest = photos;
+          for (const [i, file] of files.entries()) {
+            label.textContent = files.length > 1 ? `Uploading ${i + 1} of ${files.length}…` : 'Uploading…';
+            // Sent as a raw body: multipart would buffer the whole image twice
+            // for no benefit when there is exactly one file per request.
+            const res = await fetch(`/api/rentals/${rentalId}/photos?kind=${input.dataset.kind}`, {
+              method: 'POST',
+              headers: { 'Content-Type': file.type || 'image/jpeg' },
+              body: file,
+            });
+            const out = await res.json();
+            if (!res.ok) throw new Error(out.error || `Upload failed (${res.status})`);
+            latest = out.photos;
+          }
+          render(latest);
+          onChange?.();
+        } catch (err) {
+          label.textContent = was;
+          msg.replaceChildren(banner(err.message));
+        }
+      }));
+
+    container.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Remove this photo? The record that it existed stays.')) return;
+      try {
+        const { photos: fresh } = await api(`/photos/${b.dataset.rm}`, { method: 'DELETE' });
+        render(fresh);
+        onChange?.();
+      } catch (err) { msg.replaceChildren(banner(err.message)); }
+    }));
+  };
+
+  container.replaceChildren($('<div class="none">Loading photos…</div>'));
+  api(`/rentals/${rentalId}/photos`)
+    .then(({ photos }) => render(photos))
+    .catch(err => container.replaceChildren(banner(err.message)));
 }
 
 /* ---------- history ----------
@@ -936,9 +1033,9 @@ async function openRental(id) {
         <h4>${r.square_invoice_id ? 'Payment' : 'Next step'}</h4>
         ${r.square_invoice_id ? `
           <div class="row">
-            <span class="sqstatus">${esc(r.square_status || 'sent')}</span>
             ${r.square_invoice_url ? `<a class="btn sm" href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">Open invoice</a>` : ''}
             ${r.square_status === 'PAID' ? '' : '<button class="btn sm" id="r-sync">Check for payment</button>'}
+            <span style="color:var(--muted);font-size:12.5px">${esc(money(r.total_cents))}</span>
           </div>`
         : `
           <div class="row">
@@ -954,7 +1051,8 @@ async function openRental(id) {
         <button class="step" data-step="${key}" data-done="${r[col] ? 1 : 0}"
           data-locked="${locked ? 1 : 0}"${locked ? ' aria-disabled="true"' : ''}>
           <span class="tick">✓</span><span class="lbl">${label}</span>
-          ${locked ? '<span class="src">via Square</span>' : ''}
+          ${locked ? '<span class="src">via Square</span>'
+            : key === 'paid' && r.square_invoice_id ? `<span class="src">${esc(r.square_status || 'sent')}</span>` : ''}
           <span class="when">${r[col] ? esc(ago(r[col])) : ''}</span>
         </button>`; }).join('')}</div>
 
@@ -980,6 +1078,7 @@ async function openRental(id) {
       </div>
 
       <div style="height:20px"></div>
+      <div id="rent-photos"></div>
       <div id="rent-notes"></div>
       <div id="rent-history" style="margin-top:6px"></div>
 
@@ -1017,10 +1116,21 @@ async function openRental(id) {
         catch (e2) { msg.replaceChildren(banner(e2.message)); }
         return;
       }
+      // No photo. Allowed, but the reason is recorded rather than shrugged off.
+      if (/photo yet/i.test(err.message)) {
+        const why = prompt(`${err.message}\n\nWhy is there no photo?`);
+        if (why === null || !why.trim()) return;
+        try {
+          await patch({ milestone: b.dataset.step, done: true, force: true, photo_reason: why });
+          openRental(id);
+        } catch (e2) { msg.replaceChildren(banner(e2.message)); }
+        return;
+      }
       msg.replaceChildren(banner(err.message));
     }
   }));
 
+  photosPanel(drawer.querySelector('#rent-photos'), id);
   notesPanel(drawer.querySelector('#rent-notes'), 'rentals', id);
   historyPanel(drawer.querySelector('#rent-history'), 'rentals', id);
 
