@@ -310,7 +310,8 @@ async function updateEmployee(env, user, id, body) {
 /* ---------- rentals ---------- */
 
 const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
-  photo_hold, signed_on_behalf, confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
+  photo_hold, signed_on_behalf, agreement_manual, agreement_manual_by,
+  agreement_manual_reason, confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
   first_name, last_name, email, phone, contact_pref,
   bins, weeks, start_date, due_date, total_cents,
@@ -405,6 +406,32 @@ async function updateRental(env, user, id, body) {
     if (body.milestone === 'paid' && body.done === false && row.square_status === 'PAID') {
       throw new HttpError(409, 'Square has this invoice as paid. Refund it in Square if that is wrong.');
     }
+    /* A customer's e-signature is theirs, not ours. Once one exists it cannot be
+       re-ticked or un-ticked from the panel — same reasoning as Square owning
+       payment: the panel has no business contradicting a signed record. */
+    if (body.milestone === 'agreement' && row.agreement_signed_at && !row.agreement_manual) {
+      throw new HttpError(409, `${row.agreement_name} signed this on ${String(row.agreement_signed_at).slice(0, 10)}. A customer's signature cannot be changed here.`);
+    }
+
+    /* Recording it by hand is allowed — someone signs a paper copy at the door,
+       or agrees on a call — but it needs a reason and is never presented as an
+       e-signature. Writing a bare timestamp produced a record that looked like
+       a signature and named nobody. */
+    if (body.milestone === 'agreement' && body.done !== false) {
+      const why = String(body.reason || '').trim().slice(0, 300);
+      if (!why) {
+        throw new HttpError(428, 'The customer signs through their own link. To record it here instead, say how they agreed.');
+      }
+      patch.agreement_manual = 1;
+      patch.agreement_manual_by = user.email;
+      patch.agreement_manual_reason = why;
+    }
+    if (body.milestone === 'agreement' && body.done === false) {
+      patch.agreement_manual = 0;
+      patch.agreement_manual_by = null;
+      patch.agreement_manual_reason = null;
+    }
+
     patch[col] = body.done === false ? null : now();
 
     if (body.milestone === 'delivered' && patch.delivered_at) {
@@ -435,11 +462,14 @@ async function updateRental(env, user, id, body) {
   await env.DB.prepare(
     `UPDATE rentals SET status=?1, agreement_signed_at=?2, paid_at=?3, delivered_at=?4,
        returned_at=?5, delivery_address=?6, pickup_address=?7, delivery_city=?8,
-       pickup_city=?9, notes=?10 WHERE id=?11`,
+       pickup_city=?9, notes=?10, agreement_manual=?11, agreement_manual_by=?12,
+       agreement_manual_reason=?13 WHERE id=?14`,
   ).bind(
     patch.status, patch.agreement_signed_at, patch.paid_at, patch.delivered_at,
     patch.returned_at, patch.delivery_address, patch.pickup_address,
-    patch.delivery_city, patch.pickup_city, patch.notes, id,
+    patch.delivery_city, patch.pickup_city, patch.notes,
+    patch.agreement_manual ? 1 : 0, patch.agreement_manual_by, patch.agreement_manual_reason,
+    id,
   ).run();
 
   await audit(env, user.email, body.milestone ? `rental.${body.milestone}` : 'rental.update',

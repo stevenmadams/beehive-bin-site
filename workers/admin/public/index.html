@@ -129,11 +129,63 @@ tr.late td{background:rgba(163,44,44,.05)}
 .step[data-locked="1"]:hover{border-color:var(--line)}
 .step .src{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
   color:var(--muted);margin-left:8px}
-.sqbox{background:var(--white);border:1px solid var(--line);border-radius:10px;
-  padding:13px 15px;margin-bottom:18px}
-.sqbox h4{margin:0 0 8px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
-.sqbox .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.sqbox .sqstatus{font-weight:700;font-size:13px}
+/* The payment row carries buttons, so it is a div with its own tick control
+   rather than one big button — a button inside a button is invalid and stops
+   the inner one working. */
+/* Before the invoice exists there is nothing to check off, so the checklist is
+   replaced by the one thing that can actually be done. */
+.kickoff{background:var(--ink);color:#fff;border-radius:12px;padding:20px;margin-bottom:20px}
+.kickoff h4{margin:0 0 7px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--yellow)}
+.kickoff p{margin:0 0 15px;font-size:13.5px;color:rgba(255,255,255,.72);line-height:1.5}
+.kickoff .btn{width:100%;justify-content:center;padding:13px;font-size:15px}
+.kickoff .to{display:block;margin-top:11px;font-size:12.5px;color:rgba(255,255,255,.6);text-align:center}
+.step.payrow{display:flex;flex-wrap:wrap;gap:10px;cursor:default;align-items:center}
+.step.payrow .lbl{flex:none}
+.step.payrow:hover{border-color:var(--line)}
+.step.payrow .tick{cursor:pointer;background:none;padding:0}
+.step.payrow[data-locked="1"] .tick{cursor:default}
+/* Actions sit right; if the row ever does wrap they stay together and stay
+   right-aligned rather than scattering. */
+.step.payrow .acts{display:flex;gap:7px;align-items:center;margin-left:auto;flex:none}
+.step.payrow .amt{color:var(--muted);font-size:12.5px}
+/* Delivery and pickup rows carry their own evidence, so they are two-line
+   cards: the milestone on top, what proves it underneath. */
+.step.photorow{display:block;cursor:default}
+.step.photorow:hover{border-color:var(--line)}
+.step.photorow .top{display:flex;align-items:center;gap:11px}
+.step.photorow .tick{cursor:pointer;background:none;padding:0;flex:none}
+.step.photorow[data-locked="1"] .tick{cursor:default}
+.step.photorow .ev{display:flex;gap:7px;align-items:center;flex-wrap:wrap;
+  margin:11px 0 0 32px}
+.step.photorow figure{margin:0;position:relative;width:52px}
+.step.photorow img{width:52px;height:52px;object-fit:cover;border-radius:7px;
+  border:1px solid var(--line);display:block;background:rgba(21,19,15,.05)}
+.step.photorow .rm{position:absolute;top:2px;right:2px;border:0;border-radius:5px;
+  width:17px;height:17px;background:rgba(21,19,15,.75);color:#fff;font-size:11px;
+  line-height:1;cursor:pointer;padding:0}
+.step.photorow .rm:hover{background:var(--bad)}
+.step.photorow .need{font-size:12.5px;color:var(--warn);font-weight:600}
+.step.photorow .addr{margin:12px 0 0 32px}
+.step.photorow .addr label{display:block;font-size:11px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.step.photorow .addr input{width:100%;padding:9px 11px;border:1px solid var(--line);
+  border-radius:9px;background:var(--white)}
+.step.photorow .addr .cust{background:#FBFAF6;border:1px solid var(--line);
+  border-radius:8px;padding:8px 10px;margin-top:7px;font-size:12.5px;white-space:pre-wrap}
+.step.photorow .addr .cust b{display:block;font-size:10px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.step.photorow .addr .saverow{display:flex;gap:8px;align-items:center;margin-top:8px}
+.step.photorow .addr .saved{font-size:12px;color:var(--muted)}
+/* Shown, not offered for editing. The customer supplies this when they confirm;
+   staff correcting it is the exception, and an open box invites overwriting
+   what they wrote. */
+.step.photorow .addr .shown{display:flex;gap:9px;align-items:flex-start}
+.step.photorow .addr .shown .val{flex:1;font-weight:600;font-size:14px;padding-top:1px}
+.step.photorow .addr .shown .val.empty{font-weight:400;color:var(--muted)}
+.step.photorow .addr .edit[hidden]{display:none}
+.holdline{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;
+  color:var(--muted);margin:-8px 0 20px 2px}
+.holdline input{width:16px;height:16px;flex:none;margin-top:1px}
 .linkbox{background:var(--ink);color:#fff;border-radius:10px;padding:13px 15px;margin-bottom:18px}
 .linkbox h4{margin:0 0 8px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--yellow)}
 .linkbox code{display:block;font-size:12px;word-break:break-all;color:rgba(255,255,255,.8);
@@ -169,25 +221,11 @@ tr.late td{background:rgba(163,44,44,.05)}
 .history .what{font-weight:600}
 .history .who{color:var(--muted)}
 .history .when{color:var(--muted);font-size:12px}
-.photos{margin-bottom:18px}
-.photos .set{margin-bottom:14px}
-.photos .set h5{margin:0 0 7px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--muted);font-weight:700;font-family:var(--font-body)}
-.photos .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
-.photos figure{margin:0;position:relative}
-.photos img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:9px;border:1px solid var(--line);
-  display:block;background:rgba(21,19,15,.05)}
-.photos figcaption{font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.35}
-.photos .rm{position:absolute;top:5px;right:5px;border:0;border-radius:6px;width:22px;height:22px;
-  background:rgba(21,19,15,.72);color:#fff;font-size:13px;line-height:1;cursor:pointer}
-.photos .rm:hover{background:var(--bad)}
 /* A file input styled as a button: on a phone this opens the camera. */
 .shoot{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);
   background:var(--white);padding:9px 14px;border-radius:9px;font-weight:600;font-size:13px;cursor:pointer}
 .shoot:hover{border-color:rgba(21,19,15,.3)}
 .shoot input{display:none}
-.shoot.needed{background:var(--yellow);border-color:var(--yellow-deep)}
-.photos .none{font-size:12.5px;color:var(--muted);margin-bottom:7px}
 .pill.staff{background:rgba(21,19,15,.08);color:var(--char)}
 .pill.owner{background:var(--yellow);color:var(--ink)}
 .pill.off{background:rgba(163,44,44,.12);color:var(--bad)}
@@ -428,102 +466,6 @@ async function loadList(list, head) {
   } catch (err) {
     list.replaceChildren($(`<div class="empty"><strong>Could not load requests</strong>${esc(err.message)}</div>`));
   }
-}
-
-/* ---------- photos ----------
-   The driver is at a door, on a phone, probably in the dark. `capture` makes
-   the button open the camera directly rather than a file browser. */
-
-function photosPanel(container, rentalId, onChange, hold = false) {
-  const render = photos => {
-    const set = kind => {
-      const mine = photos.filter(p => p.kind === kind);
-      const grid = mine.map(p => `
-        <figure data-id="${p.id}">
-          <img loading="lazy" src="/api/photo/${encodeURIComponent(p.r2_key)}" alt="${kind} photo">
-          <button class="rm" data-rm="${p.id}" title="Remove">×</button>
-          <figcaption>${esc(ago(p.taken_at))}<br>${esc((p.taken_by || '').split('@')[0])}</figcaption>
-        </figure>`).join('');
-      return `<div class="set">
-        <h5>${kind === 'delivery' ? 'At delivery' : 'At pickup'} (${mine.length})</h5>
-        ${mine.length ? `<div class="grid">${grid}</div>`
-          : '<div class="none">No photo yet — needed before this step can be ticked.</div>'}
-        <label class="shoot${mine.length ? '' : ' needed'}" style="margin-top:8px">
-          <input type="file" accept="image/*" capture="environment" data-kind="${kind}" multiple>
-          <span>📷 ${mine.length ? 'Add another' : `Take ${kind} photo`}</span>
-        </label>
-      </div>`;
-    };
-
-    container.replaceChildren($(`<div>
-      <label class="fl">Condition photos</label>
-      <div class="photos">${set('delivery')}${set('pickup')}
-        <label class="same" style="font-size:13px;color:var(--muted);margin:4px 0 0">
-          <input type="checkbox" id="ph-hold"${hold ? ' checked' : ''}>
-          <span>Keep these past the 90-day limit — there's a dispute open</span>
-        </label>
-        <div id="ph-msg"></div>
-      </div>
-    </div>`));
-
-    const msg = container.querySelector('#ph-msg');
-
-    container.querySelectorAll('input[type="file"]').forEach(input =>
-      input.addEventListener('change', async () => {
-        const files = [...input.files];
-        if (!files.length) return;
-        const label = input.closest('.shoot').querySelector('span');
-        const was = label.textContent;
-        msg.replaceChildren();
-        try {
-          let latest = photos;
-          for (const [i, file] of files.entries()) {
-            label.textContent = files.length > 1 ? `Uploading ${i + 1} of ${files.length}…` : 'Uploading…';
-            // Sent as a raw body: multipart would buffer the whole image twice
-            // for no benefit when there is exactly one file per request.
-            const res = await fetch(`/api/rentals/${rentalId}/photos?kind=${input.dataset.kind}`, {
-              method: 'POST',
-              headers: { 'Content-Type': file.type || 'image/jpeg' },
-              body: file,
-            });
-            const out = await res.json();
-            if (!res.ok) throw new Error(out.error || `Upload failed (${res.status})`);
-            latest = out.photos;
-          }
-          render(latest);
-          onChange?.();
-        } catch (err) {
-          label.textContent = was;
-          msg.replaceChildren(banner(err.message));
-        }
-      }));
-
-    container.querySelector('#ph-hold')?.addEventListener('change', async e => {
-      try {
-        await api(`/rentals/${rentalId}/photo-hold`, {
-          method: 'POST', body: JSON.stringify({ hold: e.target.checked }),
-        });
-        hold = e.target.checked;
-      } catch (err) {
-        e.target.checked = !e.target.checked;
-        msg.replaceChildren(banner(err.message));
-      }
-    });
-
-    container.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', async () => {
-      if (!confirm('Remove this photo? The record that it existed stays.')) return;
-      try {
-        const { photos: fresh } = await api(`/photos/${b.dataset.rm}`, { method: 'DELETE' });
-        render(fresh);
-        onChange?.();
-      } catch (err) { msg.replaceChildren(banner(err.message)); }
-    }));
-  };
-
-  container.replaceChildren($('<div class="none">Loading photos…</div>'));
-  api(`/rentals/${rentalId}/photos`)
-    .then(({ photos }) => render(photos))
-    .catch(err => container.replaceChildren(banner(err.message)));
 }
 
 /* ---------- history ----------
@@ -1000,8 +942,17 @@ async function openRental(id) {
   document.addEventListener('keydown', onKey);
   document.body.append(scrim, drawer);
 
-  let r;
-  try { ({ rental: r } = await api(`/rentals/${id}`)); }
+  let r, photos = [];
+  try {
+    // Fetched together so the checklist can render its own evidence rather than
+    // filling in underneath a moment later.
+    const [rental, shots] = await Promise.all([
+      api(`/rentals/${id}`),
+      api(`/rentals/${id}/photos`).catch(() => ({ photos: [] })),
+    ]);
+    r = rental.rental;
+    photos = shots.photos || [];
+  }
   catch (err) {
     drawer.replaceChildren($(`<div class="dbody"><div class="banner err">${esc(err.message)}</div></div>`));
     return;
@@ -1046,36 +997,114 @@ async function openRental(id) {
           </div>
         </div>` : ''}
 
-      ${r.signed_at ? `<p class="signed">Signed by <strong>${esc(r.agreement_name || '—')}</strong>
-        ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}${
-          r.signed_on_behalf ? ` · <span style="color:var(--warn);font-weight:700">on behalf of ${esc(fullName(r))}</span>` : ''}</p>` : ''}
+      ${r.signed_at ? (r.agreement_manual
+        ? `<p class="signed"><span style="color:var(--warn);font-weight:700">Recorded by staff</span> —
+           ${esc(r.agreement_manual_by || '—')} ${esc(ago(r.signed_at))}${
+             r.agreement_manual_reason ? ` · ${esc(r.agreement_manual_reason)}` : ''}.
+           Not a customer e-signature.</p>`
+        : `<p class="signed">Signed by <strong>${esc(r.agreement_name)}</strong>
+           ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}${
+             r.signed_on_behalf ? ` · <span style="color:var(--warn);font-weight:700">on behalf of ${esc(fullName(r))}</span>` : ''}</p>`) : ''}
 
-      <div class="sqbox">
-        <h4>${r.square_invoice_id ? 'Payment' : 'Next step'}</h4>
-        ${r.square_invoice_id ? `
-          <div class="row">
-            ${r.square_invoice_url ? `<a class="btn sm" href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">Open invoice</a>` : ''}
-            ${r.square_status === 'PAID' ? '' : '<button class="btn sm" id="r-sync">Check for payment</button>'}
-            <span style="color:var(--muted);font-size:12.5px">${esc(money(r.total_cents))}</span>
-          </div>`
-        : `
-          <div class="row">
-            <button class="btn sm primary" id="r-invoice">Create invoice &amp; email the customer</button>
-            <span style="color:var(--muted);font-size:12.5px">${esc(money(r.total_cents))} · ${esc(r.email || 'no email on file')}</span>
-          </div>`}
-      </div>
 
+      ${!r.square_invoice_id ? `
+      <div class="kickoff">
+        <h4>Start this rental</h4>
+        <p>Nothing else can happen until the customer has their link &mdash; they
+        confirm the details, sign the agreement and pay from it.</p>
+        <button class="btn primary" id="r-invoice"${r.email ? '' : ' disabled'}>
+          ${r.email ? 'Create invoice &amp; email the customer' : 'No email address on this rental'}</button>
+        <span class="to">${esc(money(r.total_cents))} + tax${r.email ? ` &rarr; ${esc(r.email)}` : ''}</span>
+      </div>` : `
       <div class="steps">${STEPS.map(([key, col, label]) => {
-        // Paid is Square's to state once it has reported the invoice paid.
-        const locked = key === 'paid' && r.square_status === 'PAID';
+        const done = r[col] ? 1 : 0;
+
+        /* Payment is the one row with anything to do, so the invoice controls
+           live in it rather than in a separate card repeating its status. */
+        if (key === 'paid') {
+          const locked = r.square_status === 'PAID';
+          // The checklist only renders once an invoice exists, so this row is
+          // never the place an invoice gets created.
+          const acts = `${r.square_invoice_url ? `<a class="btn sm" href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">Open</a>` : ''}
+               ${locked ? '' : '<button class="btn sm" id="r-sync">Check</button>'}`;
+          return `
+          <div class="step payrow" data-done="${done}" data-locked="${locked ? 1 : 0}">
+            <button class="tick" data-step="paid" data-done="${done}"
+              data-locked="${locked ? 1 : 0}" title="${locked ? 'Square has this paid' : 'Mark paid by hand'}">✓</button>
+            <span class="lbl">Payment</span>
+            <span class="amt">${esc(money(r.total_cents))} + tax</span>
+            ${locked ? '<span class="src">via Square</span>'
+              : r.square_invoice_id ? `<span class="src">${esc(r.square_status || 'sent')}</span>` : ''}
+            <div class="acts">${acts}${
+              r[col] ? `<span class="when">${esc(ago(r[col]))}</span>` : ''}</div>
+          </div>`;
+        }
+
+        /* Delivery and pickup each carry the photo that proves them, in the row
+           that needs it — a separate gallery lower down meant taking the photo
+           and ticking the box were two different places on the screen. */
+        if (key === 'delivered' || key === 'returned') {
+          const kind = key === 'delivered' ? 'delivery' : 'pickup';
+          const mine = photos.filter(ph => ph.kind === kind);
+          const thumbs = mine.map(ph => `
+            <figure>
+              <img loading="lazy" src="/api/photo/${encodeURIComponent(ph.r2_key)}"
+                alt="${kind} photo" title="${esc(ph.taken_by)} · ${esc(ago(ph.taken_at))}">
+              <button class="rm" data-rm="${ph.id}" title="Remove">×</button>
+            </figure>`).join('');
+          return `
+          <div class="step photorow" data-done="${done}">
+            <div class="top">
+              <button class="tick" data-step="${key}" data-done="${done}">✓</button>
+              <span class="lbl">${label}</span>
+              <span class="when" style="margin-left:auto">${r[col] ? esc(ago(r[col])) : ''}</span>
+            </div>
+            <div class="addr">
+              <label for="${kind === 'delivery' ? 'r-daddr' : 'r-paddr'}">${
+                kind === 'delivery' ? 'Delivery address' : 'Pickup address'} &mdash; ${
+                esc((kind === 'delivery' ? r.delivery_city : r.pickup_city) || 'city not set')}</label>
+              ${(() => {
+                const val = (kind === 'delivery' ? r.delivery_address : r.pickup_address) || '';
+                const id = kind === 'delivery' ? 'r-daddr' : 'r-paddr';
+                return `
+                <div class="shown">
+                  <span class="val${val ? '' : ' empty'}">${
+                    esc(val || (kind === 'delivery' ? 'Not given yet' : 'Same as delivery'))}</span>
+                  <button class="btn sm" data-editaddr="${id}">${val ? 'Edit' : 'Add'}</button>
+                </div>
+                <div class="edit" hidden>
+                  <input id="${id}" value="${esc(val)}"
+                    placeholder="${kind === 'delivery' ? 'Street address, unit, gate code' : 'If different from delivery'}">
+                  <div class="saverow">
+                    <button class="btn sm primary" data-saveaddr="1">Save</button>
+                    <button class="btn sm" data-canceladdr="1">Cancel</button>
+                    <span class="saved" data-savedmsg="1"></span>
+                  </div>
+                </div>`;
+              })()}
+              ${(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)
+                ? `<div class="cust"><b>From the customer</b>${
+                    esc(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)}</div>` : ''}
+            </div>
+            <div class="ev">
+              ${thumbs || `<span class="need">Photo needed</span>`}
+              <label class="shoot">
+                <input type="file" accept="image/*" capture="environment" data-kind="${kind}" multiple>
+                <span>📷 ${mine.length ? 'Add' : `Take ${kind} photo`}</span>
+              </label>
+            </div>
+          </div>`;
+        }
+
+        // A customer's own signature is locked here, the way Square's payment is.
+        const sigLocked = key === 'agreement' && r.signed_at && !r.agreement_manual;
         return `
-        <button class="step" data-step="${key}" data-done="${r[col] ? 1 : 0}"
-          data-locked="${locked ? 1 : 0}"${locked ? ' aria-disabled="true"' : ''}>
+        <button class="step" data-step="${key}" data-done="${done}" data-locked="${sigLocked ? 1 : 0}"${
+          sigLocked ? ' aria-disabled="true"' : ''}>
           <span class="tick">✓</span><span class="lbl">${label}</span>
-          ${locked ? '<span class="src">via Square</span>'
-            : key === 'paid' && r.square_invoice_id ? `<span class="src">${esc(r.square_status || 'sent')}</span>` : ''}
+          ${sigLocked ? '<span class="src">signed by customer</span>' : ''}
           <span class="when">${r[col] ? esc(ago(r[col])) : ''}</span>
-        </button>`; }).join('')}</div>
+        </button>`; }).join('')}</div>`}
 
       <dl class="kv">
         <dt>Package</dt><dd>${r.bins} bins · ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'}</dd>
@@ -1086,20 +1115,12 @@ async function openRental(id) {
         <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
       </dl>
 
-      <label class="fl" for="r-daddr">Delivery address — ${esc(r.delivery_city || 'city not set')}</label>
-      <input id="r-daddr" value="${esc(r.delivery_address || '')}" placeholder="Street address, unit, gate code">
-      ${r.delivery_notes ? `<div class="note" style="margin:8px 0 0"><h4>From the customer</h4>${esc(r.delivery_notes)}</div>` : ''}
-      <div style="height:14px"></div>
-      <label class="fl" for="r-paddr">Pickup address — ${esc(r.pickup_city || 'same')}</label>
-      <input id="r-paddr" value="${esc(r.pickup_address || '')}" placeholder="If different from delivery">
-      ${r.pickup_notes ? `<div class="note" style="margin:8px 0 0"><h4>From the customer</h4>${esc(r.pickup_notes)}</div>` : ''}
-      <div class="actions" style="margin-top:14px">
-        <button class="btn sm" id="r-save">Save addresses</button>
-        <span id="r-state" style="align-self:center;color:var(--muted);font-size:12.5px"></span>
-      </div>
 
       <div style="height:20px"></div>
-      <div id="rent-photos"></div>
+      ${r.square_invoice_id ? `<label class="holdline">
+        <input type="checkbox" id="ph-hold"${r.photo_hold ? ' checked' : ''}>
+        <span>Keep photos past the 90-day limit &mdash; there&rsquo;s a dispute open</span>
+      </label>` : ''}
       <div id="rent-notes"></div>
       <div id="rent-history" style="margin-top:6px"></div>
 
@@ -1121,12 +1142,13 @@ async function openRental(id) {
     return res;
   };
 
-  drawer.querySelectorAll('.step').forEach(b => b.addEventListener('click', async () => {
+  drawer.querySelectorAll('.step[data-step], .payrow .tick, .photorow .tick').forEach(b => b.addEventListener('click', async () => {
     if (b.dataset.locked === '1') return;
     const done = b.dataset.done === '1';
     // Undoing a milestone is a correction, not a routine action — a stray click
     // should not quietly rewrite what happened.
-    if (done && !confirm(`Undo "${b.querySelector('.lbl').textContent}"?`)) return;
+    const label = b.querySelector('.lbl')?.textContent || 'Payment';
+    if (done && !confirm(`Undo "${label}"?`)) return;
     try {
       await patch({ milestone: b.dataset.step, done: !done });
       openRental(id);
@@ -1134,6 +1156,15 @@ async function openRental(id) {
       // Delivering something unpaid is allowed, but only on purpose.
       if (/not paid yet/i.test(err.message) && confirm(`${err.message}`)) {
         try { await patch({ milestone: b.dataset.step, done: true, force: true }); openRental(id); }
+        catch (e2) { msg.replaceChildren(banner(e2.message)); }
+        return;
+      }
+      // The customer signs through their own link; recording it here instead is
+      // allowed but has to say how they actually agreed.
+      if (/say how they agreed/i.test(err.message)) {
+        const why = prompt('The customer signs through their own link.\n\nIf they agreed another way — a paper copy at the door, or on a call — say how:');
+        if (why === null || !why.trim()) return;
+        try { await patch({ milestone: 'agreement', done: true, reason: why }); openRental(id); }
         catch (e2) { msg.replaceChildren(banner(e2.message)); }
         return;
       }
@@ -1151,7 +1182,44 @@ async function openRental(id) {
     }
   }));
 
-  photosPanel(drawer.querySelector('#rent-photos'), id, null, !!r.photo_hold);
+  drawer.querySelectorAll('.photorow input[type="file"]').forEach(input =>
+    input.addEventListener('change', async () => {
+      const files = [...input.files];
+      if (!files.length) return;
+      const label = input.closest('.shoot').querySelector('span');
+      msg.replaceChildren();
+      try {
+        for (const [i, file] of files.entries()) {
+          label.textContent = files.length > 1 ? `${i + 1}/${files.length}…` : 'Uploading…';
+          const res = await fetch(`/api/rentals/${id}/photos?kind=${input.dataset.kind}`, {
+            method: 'POST',
+            headers: { 'Content-Type': file.type || 'image/jpeg' },
+            body: file,
+          });
+          if (!res.ok) throw new Error((await res.json()).error || `Upload failed (${res.status})`);
+        }
+        openRental(id);
+      } catch (err) {
+        label.textContent = '📷 Try again';
+        msg.replaceChildren(banner(err.message));
+      }
+    }));
+
+  drawer.querySelectorAll('.photorow [data-rm]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Remove this photo? The record that it existed stays.')) return;
+    try { await api(`/photos/${b.dataset.rm}`, { method: 'DELETE' }); openRental(id); }
+    catch (err) { msg.replaceChildren(banner(err.message)); }
+  }));
+
+  drawer.querySelector('#ph-hold')?.addEventListener('change', async e => {
+    try {
+      await api(`/rentals/${id}/photo-hold`, { method: 'POST', body: JSON.stringify({ hold: e.target.checked }) });
+    } catch (err) {
+      e.target.checked = !e.target.checked;
+      msg.replaceChildren(banner(err.message));
+    }
+  });
+
   notesPanel(drawer.querySelector('#rent-notes'), 'rentals', id);
   historyPanel(drawer.querySelector('#rent-history'), 'rentals', id);
 
@@ -1206,18 +1274,34 @@ async function openRental(id) {
     }
   });
 
-  drawer.querySelector('#r-save').addEventListener('click', async e => {
-    const state = drawer.querySelector('#r-state');
-    e.target.disabled = true; state.textContent = 'Saving…';
+  drawer.querySelectorAll('[data-editaddr]').forEach(b => b.addEventListener('click', () => {
+    const box = b.closest('.addr');
+    box.querySelector('.shown').hidden = true;
+    box.querySelector('.edit').hidden = false;
+    box.querySelector('input').focus();
+  }));
+
+  drawer.querySelectorAll('[data-canceladdr]').forEach(b => b.addEventListener('click', () => {
+    const box = b.closest('.addr');
+    box.querySelector('.edit').hidden = true;
+    box.querySelector('.shown').hidden = false;
+  }));
+
+  // Either row's Save writes both fields — they are one record, and a driver
+  // correcting the pickup address should not silently drop an edit to delivery.
+  drawer.querySelectorAll('[data-saveaddr]').forEach(b => b.addEventListener('click', async () => {
+    const state = b.parentElement.querySelector('[data-savedmsg]');
+    b.disabled = true; state.textContent = 'Saving…';
     try {
       await patch({
-        delivery_address: drawer.querySelector('#r-daddr').value,
-        pickup_address: drawer.querySelector('#r-paddr').value,
+        delivery_address: drawer.querySelector('#r-daddr')?.value ?? r.delivery_address,
+        pickup_address: drawer.querySelector('#r-paddr')?.value ?? r.pickup_address,
       });
-      state.textContent = 'Saved';
+      openRental(id);
+      return;
     } catch (err) { state.textContent = ''; msg.replaceChildren(banner(err.message)); }
-    e.target.disabled = false;
-  });
+    b.disabled = false;
+  }));
 
   drawer.querySelectorAll('[data-status]').forEach(b => b.addEventListener('click', async () => {
     try { await patch({ status: b.dataset.status }); openRental(id); }
