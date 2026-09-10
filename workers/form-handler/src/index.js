@@ -26,7 +26,7 @@ const json = (body, status, origin) =>
 const FORMS = {
   reserve: {
     subjectField: '_subject',
-    required: ['bins', 'weeks', 'start', 'dcity', 'fname', 'phone'],
+    required: ['bins', 'weeks', 'start', 'dcity', 'fname', 'phone', 'email'],
     fields: [
       ['bins', 'Package'], ['weeks', 'Weeks'], ['start', 'Start date'],
       ['return_date', 'Return date'], ['total_before_tax', 'Total (before tax)'],
