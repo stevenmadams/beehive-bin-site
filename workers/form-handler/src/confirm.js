@@ -24,6 +24,18 @@ const niceDate = iso => {
 
 /* The per-rental values the agreement text needs. Kept in one place so the page
    and the emailed copy can never show different terms for the same rental. */
+/* The cities we actually serve. Must stay in step with the list on index.html —
+   there is no single source yet, so changing one without the other means the
+   website advertises an area the booking flow refuses.
+
+   Pickup is constrained to this list rather than validated afterwards: a free
+   text box lets someone book a collection we cannot make, and they only find
+   out when nobody turns up. */
+const SERVICE_CITIES = [
+  'Clearfield', 'Clinton', 'Farmington', 'Kaysville', 'Layton',
+  'Ogden', 'Roy', 'South Ogden', 'Sunset', 'Syracuse', 'West Haven',
+];
+
 const agreementValues = r => ({
   BINS: r.bins,
   START_DATE: niceDate(r.start_date),
@@ -82,10 +94,10 @@ dt{color:var(--muted);font-size:14px}
 dd{margin:0;font-weight:600}
 label.fl{display:block;font-size:12px;font-weight:700;letter-spacing:.05em;
   text-transform:uppercase;color:var(--muted);margin:16px 0 6px}
-input,textarea{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;
+input,textarea,select{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;
   background:var(--white);font:inherit;color:inherit}
 textarea{min-height:80px;resize:vertical}
-input:focus,textarea:focus{outline:2px solid var(--yellow);outline-offset:1px}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--yellow);outline-offset:1px}
 .help{display:block;color:var(--muted);font-size:13.5px;margin-top:6px}
 /* Shown in full, never in a scrolling window. Terms someone has to hunt through
    a 340px box to read are terms they can fairly say they were not shown. */
@@ -280,6 +292,14 @@ const addressStep = r => page('Where are we going?', `
         <span>Pick up from the same address</span>
       </label>
       <div id="pickupfields">
+        <label class="fl" for="pcity">Pickup city</label>
+        <select id="pcity" name="pickup_city">
+          <option value="">Choose a city&hellip;</option>
+          ${SERVICE_CITIES.map(c => `<option value="${esc(c)}"${
+            r.pickup_city === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}
+        </select>
+        <span class="help">Not listed? We can&rsquo;t collect from there &mdash;
+        <a href="mailto:support@beehivebin.co">email us</a> and we&rsquo;ll sort something out.</span>
         <label class="fl" for="paddr">Pickup address</label>
         <input id="paddr" name="pickup_address" autocomplete="street-address"
           placeholder="Where should we collect them?" value="${esc(r.pickup_address || '')}">
@@ -403,13 +423,22 @@ async function saveAddress(env, r, form) {
   if (!daddr) return 'Please add the delivery address.';
 
   const same = !!form.get('same');
-  const paddr = same ? daddr : String(form.get('pickup_address') || '').trim().slice(0, 300) || daddr;
+  const paddr = same ? daddr : String(form.get('pickup_address') || '').trim().slice(0, 300);
+  const pcity = same ? r.delivery_city : String(form.get('pickup_city') || '').trim();
+
+  if (!same) {
+    if (!paddr) return 'Please add the pickup address, or tick that it is the same.';
+    // The dropdown is a convenience; this is the rule.
+    if (!SERVICE_CITIES.includes(pcity)) {
+      return 'We can only collect from the cities listed. Email support@beehivebin.co if yours is not there and we will sort something out.';
+    }
+  }
 
   await env.DB.prepare(
-    `UPDATE rentals SET delivery_address=?1, pickup_address=?2,
-       delivery_notes=?3, pickup_notes=?4 WHERE id=?5`,
+    `UPDATE rentals SET delivery_address=?1, pickup_address=?2, pickup_city=?3,
+       delivery_notes=?4, pickup_notes=?5 WHERE id=?6`,
   ).bind(
-    daddr, paddr,
+    daddr, paddr || daddr, pcity || r.delivery_city,
     String(form.get('delivery_notes') || '').trim().slice(0, 2000) || null,
     same ? null : String(form.get('pickup_notes') || '').trim().slice(0, 2000) || null,
     r.id,
