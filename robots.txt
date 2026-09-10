@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /print-test
+Disallow: /beehive_bin_four_section_story
+
+Sitemap: https://beehivebin.co/sitemap.xml
