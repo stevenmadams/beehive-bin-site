@@ -304,8 +304,20 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
 
         <div class="success-panel" id="success" hidden>
           <h3>Request received!</h3>
-          <p id="success-text" style="margin-bottom:10px"></p>
-          <p style="font-size:14.5px;font-weight:700;margin-bottom:10px">What happens next: we confirm availability &rarr; you sign the rental agreement online &rarr; pay by card. We’ll be in touch shortly.</p>
+          <p id="success-text" style="margin-bottom:12px"></p>
+          <dl style="display:grid;grid-template-columns:auto 1fr;gap:6px 18px;margin:0 0 18px">
+            <dt style="font-weight:800">Package</dt><dd id="ok-package" style="margin:0"></dd>
+            <dt style="font-weight:800">Starts</dt><dd id="ok-start" style="margin:0"></dd>
+            <dt style="font-weight:800">Delivery</dt><dd id="ok-delivery" style="margin:0"></dd>
+            <dt style="font-weight:800" id="ok-pickup-label">Pickup</dt><dd id="ok-pickup" style="margin:0"></dd>
+          </dl>
+          <p style="font-size:14.5px;font-weight:800;margin:0 0 6px">What happens next</p>
+          <ol style="margin:0 0 14px;padding-left:22px;font-size:14.5px;font-weight:600">
+            <li>We confirm availability</li>
+            <li>You sign the rental agreement online</li>
+            <li>You pay by card</li>
+          </ol>
+          <p style="font-size:14.5px;font-weight:700;margin-bottom:10px">We’ll be in touch shortly.</p>
           <p class="mb-0" id="demo-note" style="font-size:14.5px">This demo form isn’t connected to a booking system yet — reach us directly at <strong>[PHONE]</strong> or <strong>support@beehivebin.co</strong> to confirm your reservation.</p>
         </div>
         <p class="note" id="send-error" hidden style="margin-top:14px;color:#B3261E;font-weight:700">Something went wrong sending your request. Please try again, or reach us directly at [PHONE] / support@beehivebin.co.</p>
@@ -465,15 +477,24 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
     const bins = selectedBins();
     const weeks = selectedWeeks();
     const name = document.getElementById('fname').value.trim();
-    let where;
-    {
-      const d = document.getElementById('dcity').value.trim();
-      const p = document.getElementById('pcity').value.trim();
-      where = 'delivered in ' + d + (p && p !== d ? ', picked up in ' + p : '');
-    }
+    const dcity = document.getElementById('dcity').value.trim();
+    const pcity = document.getElementById('pcity').value.trim();
     const showSuccess = () => {
       document.getElementById('success-text').textContent =
-        `Thanks, ${name}! We have your request for ${bins} bins for ${weeks === 1 ? '1 week' : weeks + ' weeks'}, starting ${startInput.value || 'your chosen date'} — ${where}.`;
+        `Thanks, ${name}! Here’s what we have:`;
+      document.getElementById('ok-package').textContent =
+        `${bins} bins · ${weeks === 1 ? '1 week' : weeks + ' weeks'}`;
+      let startText = 'your chosen date';
+      if (startInput.value) {
+        const d = new Date(startInput.value + 'T00:00:00');
+        if (!isNaN(d)) startText = d.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+      }
+      document.getElementById('ok-start').textContent = startText;
+      document.getElementById('ok-delivery').textContent = dcity;
+      const samePickup = !pcity || pcity === dcity;
+      document.getElementById('ok-pickup-label').hidden = samePickup;
+      document.getElementById('ok-pickup').hidden = samePickup;
+      document.getElementById('ok-pickup').textContent = pcity;
       document.getElementById('demo-note').hidden = !!FORM_ENDPOINT;
       const panel = document.getElementById('success');
       panel.hidden = false;
