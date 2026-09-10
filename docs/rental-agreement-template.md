@@ -65,6 +65,12 @@ is charged at the $15 replacement rate. We will email you a receipt for every
 charge. This authorization ends when the Bins are returned and any amounts
 owed are settled.
 
+We photograph the Bins at delivery and at pickup to record their condition and
+to confirm the visit happened. Those photos show the Bins and their immediate
+surroundings, are used only for that purpose, and are deleted within 90 days of
+your rental ending unless they are needed to resolve an open dispute. We do not
+publish them or share them with anyone outside our team.
+
 ### 5. Care and use
 
 - Use the Bins for ordinary household packing and moving. Don't store

@@ -315,7 +315,7 @@ async function updateEmployee(env, user, id, body) {
 /* ---------- rentals ---------- */
 
 const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
-  confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
+  photo_hold, confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
   first_name, last_name, email, phone, contact_pref,
   bins, weeks, start_date, due_date, total_cents,
@@ -710,6 +710,55 @@ async function requirePhoto(env, rentalId, kind, reason) {
   return String(reason).trim().slice(0, 300);
 }
 
+/* ---------- photo retention ----------
+
+   The privacy policy and the rental agreement both promise photos are gone
+   within 90 days of a rental ending. A promise nothing enforces is just wording,
+   so this runs on a schedule and actually deletes them.
+
+   The clock starts at whichever end date we have: when the bins actually came
+   back, or the day they were due if a rental never closed out. A rental on
+   photo_hold is skipped — an open dispute is exactly when deleting the evidence
+   on schedule would be the wrong outcome. */
+
+const RETENTION_DAYS = 90;
+
+async function sweepPhotos(env) {
+  const cutoff = `-${RETENTION_DAYS} days`;
+  const { results } = await env.DB.prepare(
+    `SELECT p.id, p.r2_key, p.rental_id
+     FROM rental_photos p JOIN rentals r ON r.id = p.rental_id
+     WHERE p.deleted_at IS NULL
+       AND r.photo_hold = 0
+       AND date(coalesce(r.returned_at, r.due_date)) < date('now', ?1)
+     LIMIT 500`,
+  ).bind(cutoff).all();
+
+  if (!results.length) return { deleted: 0 };
+
+  let deleted = 0;
+  for (const row of results) {
+    try {
+      await env.PHOTOS.delete(row.r2_key);
+      // The row survives with a deletion stamp: "there was a photo and it was
+      // removed on schedule" is a different claim from "there was never one".
+      await env.DB.prepare(
+        'UPDATE rental_photos SET deleted_at = ?1, deleted_by = ?2 WHERE id = ?3',
+      ).bind(now(), 'retention', row.id).run();
+      deleted++;
+    } catch (err) {
+      console.log('retention: could not delete', row.r2_key, err.message);
+    }
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
+  ).bind('retention', 'photos.swept', null, null,
+         `${deleted} photo(s) past ${RETENTION_DAYS} days`).run();
+
+  return { deleted };
+}
+
 /* ---------- router ---------- */
 
 async function api(request, env, url) {
@@ -810,6 +859,21 @@ async function api(request, env, url) {
     if (method === 'POST') return json({ photos: await uploadPhoto(request, env, user, rid, url) }, 201);
   }
 
+  if ((m = match(/^\/rentals\/(\d+)\/photo-hold$/)) && method === 'POST') {
+    const rid = Number(m[1]);
+    const on = body.hold ? 1 : 0;
+    const res = await env.DB.prepare('UPDATE rentals SET photo_hold = ?1 WHERE id = ?2')
+      .bind(on, rid).run();
+    if (!res.meta.changes) throw new HttpError(404, 'no such rental');
+    await audit(env, user.email, on ? 'rental.photo_hold_on' : 'rental.photo_hold_off', 'rental', rid);
+    return json({ photo_hold: !!on });
+  }
+
+  if (path === '/photos/sweep' && method === 'POST') {
+    requireOwner(user);
+    return json(await sweepPhotos(env));
+  }
+
   if ((m = match(/^\/photos\/(\d+)$/)) && method === 'DELETE') {
     return json({ photos: await deletePhoto(env, user, Number(m[1])) });
   }
@@ -877,6 +941,15 @@ async function api(request, env, url) {
 }
 
 export default {
+  /* Retention runs itself. Anything that depends on someone remembering to run
+     it is a promise the business will eventually break. */
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(sweepPhotos(env).then(
+      r => console.log('photo retention swept', r.deleted),
+      err => console.log('photo retention failed', err.message),
+    ));
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 

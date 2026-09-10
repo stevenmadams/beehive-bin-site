@@ -434,7 +434,7 @@ async function loadList(list, head) {
    The driver is at a door, on a phone, probably in the dark. `capture` makes
    the button open the camera directly rather than a file browser. */
 
-function photosPanel(container, rentalId, onChange) {
+function photosPanel(container, rentalId, onChange, hold = false) {
   const render = photos => {
     const set = kind => {
       const mine = photos.filter(p => p.kind === kind);
@@ -457,7 +457,13 @@ function photosPanel(container, rentalId, onChange) {
 
     container.replaceChildren($(`<div>
       <label class="fl">Condition photos</label>
-      <div class="photos">${set('delivery')}${set('pickup')}<div id="ph-msg"></div></div>
+      <div class="photos">${set('delivery')}${set('pickup')}
+        <label class="same" style="font-size:13px;color:var(--muted);margin:4px 0 0">
+          <input type="checkbox" id="ph-hold"${hold ? ' checked' : ''}>
+          <span>Keep these past the 90-day limit — there's a dispute open</span>
+        </label>
+        <div id="ph-msg"></div>
+      </div>
     </div>`));
 
     const msg = container.querySelector('#ph-msg');
@@ -491,6 +497,18 @@ function photosPanel(container, rentalId, onChange) {
           msg.replaceChildren(banner(err.message));
         }
       }));
+
+    container.querySelector('#ph-hold')?.addEventListener('change', async e => {
+      try {
+        await api(`/rentals/${rentalId}/photo-hold`, {
+          method: 'POST', body: JSON.stringify({ hold: e.target.checked }),
+        });
+        hold = e.target.checked;
+      } catch (err) {
+        e.target.checked = !e.target.checked;
+        msg.replaceChildren(banner(err.message));
+      }
+    });
 
     container.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', async () => {
       if (!confirm('Remove this photo? The record that it existed stays.')) return;
@@ -1130,7 +1148,7 @@ async function openRental(id) {
     }
   }));
 
-  photosPanel(drawer.querySelector('#rent-photos'), id);
+  photosPanel(drawer.querySelector('#rent-photos'), id, null, !!r.photo_hold);
   notesPanel(drawer.querySelector('#rent-notes'), 'rentals', id);
   historyPanel(drawer.querySelector('#rent-history'), 'rentals', id);
 
