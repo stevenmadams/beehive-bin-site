@@ -250,10 +250,12 @@ img,svg{display:block;max-width:100%}
   z-index:3;max-width:580px;pointer-events:none;
 }
 .hero .copy a{pointer-events:auto}
-/* Faint white scrim across the whole hero — stronger over the copy, fading right. */
-.hero::after{
-  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
-  background:linear-gradient(100deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.3) 45%,rgba(255,255,255,.08) 100%);
+/* Small screens: the bin sits behind the copy, so wash the hero for legibility. */
+@media (max-width:760px){
+  .hero::after{
+    content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:linear-gradient(170deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.3) 55%,rgba(255,255,255,.08) 100%);
+  }
 }
 /* The sub sits over the 3D lid on small screens — full ink for contrast. */
 .hero .sub{color:var(--ink);font-weight:600}
@@ -279,7 +281,7 @@ img,svg{display:block;max-width:100%}
 
 @media (max-width:760px){
   /* Phones: the bin stays full-bleed BEHIND the copy — big, edges cropped.
-     The ticker holds the cities, so no scrim needed. */
+     The .hero::after scrim above keeps the copy legible over it. */
   .hero{min-height:640px}
   .hero .copy{left:18px;right:18px;top:32px;transform:none;max-width:none}
 }
