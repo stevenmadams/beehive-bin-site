@@ -6,7 +6,7 @@
 
 import { verifyAccessJwt } from './auth.js';
 import { createInvoice, fetchInvoice, ping as squarePing, SquareError } from './square.js';
-import { PRICES, quoteCents } from './pricing.js';
+import { PRICES, EXTRA, quoteCents } from './pricing.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -879,6 +879,99 @@ async function sweepPhotos(env) {
   return { deleted };
 }
 
+/* ---------- extensions ----------
+
+   A customer keeping the bins longer. Priced at the package's extra-week rate,
+   invoiced separately — the original invoice is a document the customer already
+   has, and rewriting it would be dishonest — and taxed at the rate in force
+   when the extra weeks are sold, not when the rental began. */
+
+const listExtensions = (env, rentalId) => env.DB.prepare(
+  `SELECT id, weeks, amount_cents, previous_due_date, new_due_date, reason,
+          created_at, created_by, square_invoice_url, square_status, paid_at
+   FROM rental_extensions WHERE rental_id = ?1 ORDER BY created_at`,
+).bind(rentalId).all().then(r => r.results);
+
+async function extendRental(env, user, id, body) {
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+    .bind(id).first();
+  if (!rental) throw new HttpError(404, 'no such rental');
+
+  /* Extending is only meaningful while the customer has the bins, or is about
+     to. Nothing to extend on a rental that never went out or already came back
+     — that is a new rental, not more weeks on an old one. */
+  if (rental.status === 'cancelled') throw new HttpError(400, 'This rental is cancelled.');
+  if (rental.returned_at) throw new HttpError(409, 'These bins are already back. An extension after the fact is a new rental.');
+  if (!rental.agreement_signed_at || !rental.paid_at) {
+    throw new HttpError(409, 'Finish the original rental first — it is not signed and paid yet.');
+  }
+
+  const weeks = parseInt(body.weeks, 10);
+  if (!Number.isFinite(weeks) || weeks < 1 || weeks > 12) {
+    throw new HttpError(400, 'Extensions run from 1 to 12 weeks.');
+  }
+  if (EXTRA[rental.bins] == null) {
+    throw new HttpError(400, `No extra-week rate on file for a ${rental.bins}-bin package.`);
+  }
+
+  // Priced from the source of truth, with an override for a negotiated case —
+  // the same shape as a phone-in quote.
+  let amount = EXTRA[rental.bins] * weeks;
+  const override = String(body.amount ?? '').trim();
+  if (override) {
+    const m = /([\d,]+(?:\.\d{1,2})?)/.exec(override);
+    if (!m) throw new HttpError(400, 'That amount is not a number.');
+    amount = Math.round(parseFloat(m[1].replace(/,/g, '')) * 100);
+  }
+
+  const previousDue = rental.due_date;
+  const newDue = addWeeks(previousDue, weeks);
+
+  const res = await env.DB.prepare(
+    `INSERT INTO rental_extensions (rental_id, weeks, amount_cents, previous_due_date,
+       new_due_date, reason, created_by)
+     VALUES (?1,?2,?3,?4,?5,?6,?7)`,
+  ).bind(id, weeks, amount, previousDue, newDue,
+         clean(body.reason, 300), user.email).run();
+  const extId = res.meta.last_row_id;
+
+  let sq;
+  try {
+    sq = await createInvoice(env, rental, {
+      amountCents: amount,
+      lineName: `${weeks === 1 ? '1 extra week' : `${weeks} extra weeks`} — ${rental.bins} bins`,
+      lineNote: `Return date moves from ${previousDue} to ${newDue}`,
+      title: `Bin rental extension — ${weeks === 1 ? '1 week' : `${weeks} weeks`}`,
+      description: `Keeping the bins to ${newDue}.`,
+      // Taxed and dated as of today: this is sold now, not when the rental began.
+      serviceDate: new Date().toISOString().slice(0, 10),
+      dueDate: new Date().toISOString().slice(0, 10),
+    });
+  } catch (err) {
+    // The extension row would otherwise linger with no way to pay for it.
+    await env.DB.prepare('DELETE FROM rental_extensions WHERE id = ?1').bind(extId).run();
+    if (err instanceof SquareError) throw new HttpError(err.status === 503 ? 503 : 400, err.message);
+    throw err;
+  }
+
+  await env.DB.prepare(
+    `UPDATE rental_extensions SET square_order_id=?1, square_invoice_id=?2,
+       square_invoice_url=?3, square_status=?4 WHERE id=?5`,
+  ).bind(sq.square_order_id, sq.square_invoice_id, sq.square_invoice_url,
+         sq.square_status, extId).run();
+
+  // The rental's due date moves now, not on payment: the customer has the bins
+  // for those weeks either way, and an overdue flag firing while an extension
+  // invoice is outstanding would be wrong.
+  await env.DB.prepare('UPDATE rentals SET due_date = ?1 WHERE id = ?2')
+    .bind(newDue, id).run();
+
+  await audit(env, user.email, 'rental.extend', 'rental', id,
+    `${weeks} week(s), ${(amount / 100).toFixed(2)}, due ${previousDue} → ${newDue}`);
+
+  return listExtensions(env, id);
+}
+
 /* ---------- router ---------- */
 
 async function api(request, env, url) {
@@ -1015,6 +1108,12 @@ async function api(request, env, url) {
     const rid = Number(m[1]);
     await sendConfirmLink(env, user, rid);
     return json({ rental: await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(rid).first() });
+  }
+
+  if ((m = match(/^\/rentals\/(\d+)\/extensions$/))) {
+    const rid = Number(m[1]);
+    if (method === 'GET') return json({ extensions: await listExtensions(env, rid) });
+    if (method === 'POST') return json({ extensions: await extendRental(env, user, rid, body) }, 201);
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/sync$/)) && method === 'POST') {

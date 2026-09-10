@@ -202,6 +202,31 @@ async function handleSquareWebhook(request, env) {
   ).bind(eventId, event.type || null, invoiceId, raw.slice(0, 8000)).run();
 
   if (invoiceId) {
+    /* An extension has its own invoice, so a payment can belong to either. Check
+       extensions first: their ids are distinct, and a rental's own invoice will
+       simply not match here. */
+    const ext = await env.DB.prepare(
+      'SELECT id, rental_id, paid_at FROM rental_extensions WHERE square_invoice_id = ?1',
+    ).bind(invoiceId).first();
+
+    if (ext) {
+      const sqStatus = invoice.status || null;
+      const paidAt = sqStatus === 'PAID'
+        ? (ext.paid_at || new Date().toISOString().replace(/\.\d+/, ''))
+        : ext.paid_at;
+      await env.DB.prepare(
+        'UPDATE rental_extensions SET square_status = ?1, paid_at = ?2 WHERE id = ?3',
+      ).bind(sqStatus, paidAt, ext.id).run();
+      await env.DB.prepare(
+        'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
+      ).bind('square-webhook', `square.extension.${event.type || 'event'}`, 'rental',
+             String(ext.rental_id), sqStatus).run();
+
+      await env.DB.prepare('UPDATE square_events SET handled = 1 WHERE event_id = ?1')
+        .bind(eventId).run();
+      return new Response('ok', { status: 200 });
+    }
+
     const rental = await env.DB.prepare(
       `SELECT id, status, agreement_signed_at, paid_at, delivered_at, returned_at
        FROM rentals WHERE square_invoice_id = ?1`,

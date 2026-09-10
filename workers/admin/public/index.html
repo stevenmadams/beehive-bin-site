@@ -197,6 +197,23 @@ tr.late td{background:rgba(163,44,44,.05)}
 .step.photorow .addr .shown .val{flex:1;font-weight:600;font-size:14px;padding-top:1px}
 .step.photorow .addr .shown .val.empty{font-weight:400;color:var(--muted)}
 .step.photorow .addr .edit[hidden]{display:none}
+.exts{margin-bottom:18px}
+.exts .fl{margin-bottom:7px}
+.ext{background:var(--white);border:1px solid var(--line);border-radius:10px;
+  padding:10px 13px;margin-bottom:7px;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.ext .w{font-weight:600}
+.ext .meta{font-size:12px;color:var(--muted)}
+.ext .st{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase}
+.ext .st.paid{color:var(--ok)}
+.ext .st.due{color:var(--warn)}
+.extform{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:14px}
+.weekpick{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px}
+.weekpick button{border:1px solid var(--line);background:var(--white);border-radius:8px;
+  padding:7px 12px;font-weight:600;font-size:13px;cursor:pointer}
+.weekpick button[aria-pressed="true"]{background:var(--yellow);border-color:var(--yellow-deep)}
+.extquote{font-family:var(--font-display);font-size:22px;margin:2px 0 12px}
+.extquote small{font-family:var(--font-body);font-size:12.5px;color:var(--muted);font-weight:400}
 .holdline{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;
   color:var(--muted);margin:-8px 0 20px 2px}
 .holdline input{width:16px;height:16px;flex:none;margin-top:1px}
@@ -535,6 +552,99 @@ function historyPanel(container, entity, id) {
       <ol>${rows}</ol>
     </details>`));
   }).catch(() => container.replaceChildren());
+}
+
+/* ---------- extensions ----------
+   Extra weeks on a rental in progress, priced from the same source as the
+   booking form and invoiced separately. */
+
+function extensionsPanel(container, rentalId, r) {
+  // Nothing to extend before the rental is real or after the bins are back.
+  const canExtend = r.status !== 'cancelled' && !r.returned_at
+    && r.agreement_signed_at && r.paid_at;
+
+  const render = exts => {
+    const rows = exts.map(e => `
+      <div class="ext">
+        <span class="w">${e.weeks === 1 ? '1 extra week' : `${e.weeks} extra weeks`}</span>
+        <span class="meta">${esc(money(e.amount_cents))} · back ${esc(niceDate(e.new_due_date))}
+          · ${esc((e.created_by || '').split('@')[0])} ${esc(ago(e.created_at))}</span>
+        ${e.square_invoice_url
+          ? `<a class="btn sm" href="${esc(e.square_invoice_url)}" target="_blank" rel="noopener">Invoice</a>` : ''}
+        <span class="st ${e.paid_at ? 'paid' : 'due'}">${e.paid_at ? 'paid' : (e.square_status || 'unpaid')}</span>
+      </div>`).join('');
+
+    container.replaceChildren($(`<div class="exts">
+      ${exts.length ? `<label class="fl">Extensions</label>${rows}` : ''}
+      <div id="ext-slot"></div>
+    </div>`));
+
+    const slot = container.querySelector('#ext-slot');
+    if (!canExtend) {
+      if (!exts.length) container.replaceChildren();
+      return;
+    }
+
+    const showButton = () => {
+      slot.replaceChildren($(`<button class="btn sm">${exts.length ? 'Extend again' : 'Extend this rental'}</button>`));
+      slot.querySelector('button').addEventListener('click', showForm);
+    };
+
+    const showForm = () => {
+      slot.replaceChildren($(`<div class="extform">
+        <label class="fl">How many extra weeks?</label>
+        <div class="weekpick">${[1,2,3,4,5,6].map(w =>
+          `<button type="button" data-w="${w}" aria-pressed="${w === 1}">${w}</button>`).join('')}</div>
+        <div class="extquote" id="ext-quote"></div>
+        <label class="fl" for="ext-why">Why <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+        <input id="ext-why" placeholder="Closing delayed, still packing…">
+        <div class="actions" style="margin-top:10px">
+          <button class="btn sm primary" id="ext-go">Create extension invoice</button>
+          <button class="btn sm" id="ext-cancel">Cancel</button>
+        </div>
+        <div id="ext-msg"></div>
+      </div>`));
+
+      let weeks = 1;
+      const quote = slot.querySelector('#ext-quote');
+      const sync = () => {
+        const per = EXTRA[r.bins];
+        const back = new Date(`${r.due_date}T12:00:00`);
+        back.setDate(back.getDate() + 7 * weeks);
+        quote.innerHTML = per == null
+          ? `<small>No extra-week rate on file for ${r.bins} bins.</small>`
+          : `$${per * weeks} <small>+ tax · back ${back.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })}</small>`;
+      };
+      slot.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => {
+        weeks = +b.dataset.w;
+        slot.querySelectorAll('[data-w]').forEach(x => x.setAttribute('aria-pressed', String(+x.dataset.w === weeks)));
+        sync();
+      }));
+      sync();
+
+      slot.querySelector('#ext-cancel').addEventListener('click', showButton);
+      slot.querySelector('#ext-go').addEventListener('click', async e => {
+        e.target.disabled = true;
+        e.target.textContent = 'Creating…';
+        try {
+          await api(`/rentals/${rentalId}/extensions`, {
+            method: 'POST',
+            body: JSON.stringify({ weeks, reason: slot.querySelector('#ext-why').value }),
+          });
+          openRental(rentalId);
+        } catch (err) {
+          slot.querySelector('#ext-msg').replaceChildren(banner(err.message));
+          e.target.disabled = false;
+          e.target.textContent = 'Create extension invoice';
+        }
+      });
+    };
+    showButton();
+  };
+
+  api(`/rentals/${rentalId}/extensions`)
+    .then(({ extensions }) => render(extensions))
+    .catch(() => container.replaceChildren());
 }
 
 /* ---------- internal notes ----------
@@ -1156,6 +1266,7 @@ async function openRental(id) {
         <input type="checkbox" id="ph-hold"${r.photo_hold ? ' checked' : ''}>
         <span>Keep photos past the 90-day limit &mdash; there&rsquo;s a dispute open</span>
       </label>` : ''}
+      <div id="rent-exts"></div>
       <div id="rent-notes"></div>
       <div id="rent-history" style="margin-top:6px"></div>
 
@@ -1263,6 +1374,7 @@ async function openRental(id) {
     }
   });
 
+  extensionsPanel(drawer.querySelector('#rent-exts'), id, r);
   notesPanel(drawer.querySelector('#rent-notes'), 'rentals', id);
   historyPanel(drawer.querySelector('#rent-history'), 'rentals', id);
 

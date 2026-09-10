@@ -93,8 +93,8 @@ const money = cents => ({ amount: Math.round(cents), currency: 'USD' });
    therefore uses October's rate. This is the defensible reading rather than a
    settled one — it is on the list to confirm with the Tax Commission, and it is
    a one-line change if they say otherwise. */
-function taxesFor(rental) {
-  const { rate } = rateFor(rental.delivery_city, rental.start_date);
+function taxesFor(rental, onDate) {
+  const { rate } = rateFor(rental.delivery_city, onDate || rental.start_date);
   return {
     taxes: [{
       name: 'Utah sales tax',
@@ -110,10 +110,11 @@ function taxesFor(rental) {
 /* Creates customer -> order -> invoice, then publishes it, which is what
    actually emails the customer a payment link. Returns the ids to store on the
    rental so the webhook can find its way back here. */
-export async function createInvoice(env, rental) {
+export async function createInvoice(env, rental, override) {
   const call = client(env);
-  if (!rental.total_cents || rental.total_cents <= 0) {
-    throw new SquareError('This rental has no total to invoice.', 400);
+  const amountCents = override?.amountCents ?? rental.total_cents;
+  if (!amountCents || amountCents <= 0) {
+    throw new SquareError('There is no amount to invoice.', 400);
   }
   if (!rental.email) {
     throw new SquareError('Square needs an email address for the customer record.', 400);
@@ -122,7 +123,7 @@ export async function createInvoice(env, rental) {
   // Refuse rather than invoice untaxed: an unknown jurisdiction is a question
   // for a human, and undercollecting is the expensive direction to be wrong in.
   try {
-    rateFor(rental.delivery_city, rental.start_date);
+    rateFor(rental.delivery_city, override?.serviceDate || rental.start_date);
   } catch (err) {
     if (err instanceof TaxError) throw new SquareError(err.message, 400);
     throw err;
@@ -138,12 +139,12 @@ export async function createInvoice(env, rental) {
       customer_id: customerId,
       reference_id: `rental-${rental.id}`,
       line_items: [{
-        name: `${rental.bins} moving bins — ${weeks}`,
+        name: override?.lineName || `${rental.bins} moving bins — ${weeks}`,
         quantity: '1',
-        base_price_money: money(rental.total_cents),
-        note: `Delivered ${rental.start_date}, back by ${rental.due_date}`,
+        base_price_money: money(amountCents),
+        note: override?.lineNote || `Delivered ${rental.start_date}, back by ${rental.due_date}`,
       }],
-      ...taxesFor(rental),
+      ...taxesFor(rental, override?.serviceDate),
     },
   });
 
@@ -153,10 +154,11 @@ export async function createInvoice(env, rental) {
       location_id: env.SQUARE_LOCATION_ID,
       order_id: order.id,
       primary_recipient: { customer_id: customerId },
-      // Due on the delivery date: the bins should not leave unpaid.
+      // Due on the delivery date: the bins should not leave unpaid. An extension
+      // is already under way, so it is due now.
       payment_requests: [{
         request_type: 'BALANCE',
-        due_date: rental.start_date,
+        due_date: override?.dueDate || rental.start_date,
         automatic_payment_source: 'NONE',
       }],
       // We send the customer one link — our own confirmation page — and it
@@ -164,9 +166,9 @@ export async function createInvoice(env, rental) {
       // would put two competing "pay now" messages in the same inbox.
       delivery_method: 'SHARE_MANUALLY',
       accepted_payment_methods: { card: true, bank_account: false },
-      title: `Bin rental — ${rental.bins} bins, ${weeks}`,
-      description: `Delivery ${rental.start_date} · pickup ${rental.due_date}.`,
-      sale_or_service_date: rental.start_date,
+      title: override?.title || `Bin rental — ${rental.bins} bins, ${weeks}`,
+      description: override?.description || `Delivery ${rental.start_date} · pickup ${rental.due_date}.`,
+      sale_or_service_date: override?.serviceDate || rental.start_date,
     },
   });
 
