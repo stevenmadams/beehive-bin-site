@@ -57,6 +57,18 @@ h1{font-size:clamp(28px,5vw,38px);margin-bottom:8px}
 .stepnum{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;
   background:var(--yellow);color:var(--ink);font-size:13px;font-weight:700;margin-right:9px;
   font-family:var(--font-body);vertical-align:2px}
+.progress{display:flex;gap:8px;margin:0 0 24px;list-style:none;padding:0}
+.progress li{flex:1;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);padding-top:9px;border-top:3px solid var(--line)}
+.progress li[data-state="now"]{color:var(--ink);border-top-color:var(--yellow)}
+.progress li[data-state="done"]{color:var(--ok);border-top-color:var(--ok)}
+.backlink{display:inline-block;font-size:13.5px;color:var(--muted);margin-top:14px}
+.recap{background:#FBFAF6;border:1px solid var(--line);border-radius:10px;padding:13px 15px;
+  margin-bottom:18px;font-size:14.5px}
+.recap strong{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:5px;font-weight:700}
+.same{display:flex;gap:10px;align-items:center;margin:16px 0 4px;font-size:15px}
+.same input{width:19px;height:19px;flex:none}
 dl{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;margin:0}
 dt{color:var(--muted);font-size:14px}
 dd{margin:0;font-weight:600}
@@ -192,31 +204,27 @@ Beehive Bin Co. · ${INBOX}`;
   });
 }
 
-export async function handleConfirm(request, env, url) {
-  const token = url.pathname.split('/').filter(Boolean)[0] || '';
-  if (!/^[a-f0-9-]{20,60}$/i.test(token)) return notFound();
+const STEPS = [['address', 'Where'], ['agreement', 'Agreement'], ['pay', 'Payment']];
 
-  const r = await env.DB.prepare(
-    `SELECT id, status, first_name, last_name, email, phone, bins, weeks,
-            start_date, due_date, total_cents, delivery_city, pickup_city,
-            delivery_address, pickup_address, notes,
-            agreement_signed_at, agreement_name, paid_at,
-            square_invoice_url, square_status
-     FROM rentals WHERE confirm_token = ?1`,
-  ).bind(token).first();
+/* Which step someone is on is derived from what has actually been saved, never
+   from a URL or a hidden field. Refresh, close the tab, come back tomorrow from
+   the same link — it resumes where they left off, and a half-finished form
+   cannot claim to be further along than it is. */
+const stepFor = r => {
+  if (r.agreement_signed_at && r.paid_at) return 'done';
+  if (r.agreement_signed_at) return 'pay';
+  if (r.delivery_address) return 'agreement';
+  return 'address';
+};
 
-  if (!r) return notFound();
-  if (r.status === 'cancelled') return notFound();
-
-  if (request.method === 'POST') return accept(request, env, r, token);
-
-  if (r.agreement_signed_at && r.paid_at) return allDone(r);
-
-  // Signed but unpaid: skip straight to the money, don't make them sign twice.
-  if (r.agreement_signed_at) return payStep(r);
-
-  return formStep(r);
-}
+const progress = current => {
+  const order = STEPS.map(([id]) => id);
+  const i = order.indexOf(current);
+  return `<ol class="progress">${STEPS.map(([id, label], n) => {
+    const state = n < i ? 'done' : n === i ? 'now' : 'todo';
+    return `<li data-state="${state}">${n + 1}. ${label}</li>`;
+  }).join('')}</ol>`;
+};
 
 const details = r => `
   <div class="card">
@@ -232,28 +240,78 @@ const details = r => `
     <a href="mailto:support@beehivebin.co">Tell us</a> before you sign.</p>
   </div>`;
 
-const formStep = r => page('Confirm your rental', `
+/* Step 1 — where the bins go, and where they come back from. These are two
+   different visits: dropped at a house, collected from a storage unit across
+   town is entirely normal, and one set of instructions made the second visit
+   guess. */
+const addressStep = r => page('Where are we going?', `
   <h1>Confirm your rental</h1>
   <p class="sub">Three quick steps and you&rsquo;re booked, ${esc(r.first_name || 'there')}.</p>
+  ${progress('address')}
   ${details(r)}
-  <form method="POST" id="f">
+  <form method="POST">
+    <input type="hidden" name="step" value="address">
     <div class="card">
-      <h2><span class="stepnum">1</span>Where are we going?</h2>
-      <label class="fl" for="daddr">Delivery address &mdash; ${esc(r.delivery_city || '')}</label>
+      <h2><span class="stepnum">1</span>Delivery</h2>
+      <label class="fl" for="daddr">Address${r.delivery_city ? ` &mdash; ${esc(r.delivery_city)}` : ''}</label>
       <input id="daddr" name="delivery_address" required autocomplete="street-address"
-        placeholder="Street address, apartment or unit"
-        value="${esc(r.delivery_address || '')}">
-      <label class="fl" for="paddr">Pickup address</label>
-      <input id="paddr" name="pickup_address" autocomplete="street-address"
-        placeholder="Leave blank if it&rsquo;s the same address"
-        value="${esc(r.pickup_address || '')}">
-      <label class="fl" for="notes">Anything we should know?</label>
-      <textarea id="notes" name="notes" placeholder="Stairs, gate codes, parking, where to leave them&hellip;">${esc(r.notes || '')}</textarea>
+        placeholder="Street address, apartment or unit" value="${esc(r.delivery_address || '')}">
+      <label class="fl" for="dnotes">Anything we should know?</label>
+      <textarea id="dnotes" name="delivery_notes"
+        placeholder="Stairs, gate code, parking, where to leave them&hellip;">${esc(r.delivery_notes || '')}</textarea>
       <span class="help">Gate codes and stair counts save everyone a phone call on the day.</span>
     </div>
 
     <div class="card">
-      <h2><span class="stepnum">2</span>Rental agreement</h2>
+      <h2><span class="stepnum">2</span>Pickup</h2>
+      <label class="same">
+        <input type="checkbox" name="same" value="yes" id="same"
+          ${!r.pickup_address || r.pickup_address === r.delivery_address ? 'checked' : ''}>
+        <span>Pick up from the same address</span>
+      </label>
+      <div id="pickupfields">
+        <label class="fl" for="paddr">Pickup address</label>
+        <input id="paddr" name="pickup_address" autocomplete="street-address"
+          placeholder="Where should we collect them?" value="${esc(r.pickup_address || '')}">
+        <label class="fl" for="pnotes">Anything different about the pickup?</label>
+        <textarea id="pnotes" name="pickup_notes"
+          placeholder="Different gate code, storage unit number, a different contact&hellip;">${esc(r.pickup_notes || '')}</textarea>
+      </div>
+      <span class="help">Moving out of one place and into another? Tell us both.</span>
+    </div>
+
+    <button class="btn" type="submit">Continue to the agreement</button>
+  </form>
+  <script>
+  // Hiding the pickup block is a convenience; the server treats a ticked box as
+  // "same address" regardless, so this failing changes nothing.
+  (() => {
+    const same = document.getElementById('same');
+    const box = document.getElementById('pickupfields');
+    const sync = () => { box.hidden = same.checked; };
+    same.addEventListener('change', sync); sync();
+  })();
+  </script>`);
+
+const addressRecap = r => `
+  <div class="recap">
+    <strong>Delivering to</strong>
+    ${esc(r.delivery_address)}${r.delivery_notes ? `<br><span style="color:var(--muted)">${esc(r.delivery_notes)}</span>` : ''}
+    ${r.pickup_address && r.pickup_address !== r.delivery_address
+      ? `<div style="margin-top:10px"><strong>Collecting from</strong>${esc(r.pickup_address)}${
+          r.pickup_notes ? `<br><span style="color:var(--muted)">${esc(r.pickup_notes)}</span>` : ''}</div>`
+      : ''}
+    <a class="backlink" href="?step=address">Change this</a>
+  </div>`;
+
+const agreementStep = r => page('Rental agreement', `
+  <h1>Rental agreement</h1>
+  <p class="sub">Have a read, then sign at the bottom.</p>
+  ${progress('agreement')}
+  ${addressRecap(r)}
+  <form method="POST">
+    <input type="hidden" name="step" value="agreement">
+    <div class="card">
       <div class="agreement">${AGREEMENT_HTML}</div>
       <label class="fl" for="signature">Type your full name to sign</label>
       <input id="signature" name="agreement_name" required autocomplete="name"
@@ -263,25 +321,16 @@ const formStep = r => page('Confirm your rental', `
         <span>I&rsquo;ve read and agree to the rental agreement above, including keeping a
         card on file and the charges described in Section 4.</span>
       </label>
+      <p class="help" style="margin-top:14px">We&rsquo;ll email you a copy of this
+      agreement as soon as you sign.</p>
     </div>
-
-    <div class="card">
-      <h2><span class="stepnum">3</span>Payment</h2>
-      <p style="margin-top:0;color:var(--muted)">Sign above and we&rsquo;ll take you
-      straight to secure payment through Square. ${esc(money(r.total_cents))} plus tax.</p>
-      <button class="btn" type="submit" id="go">Sign and continue to payment</button>
-    </div>
-  </form>
-  <script>
-  document.getElementById('f').addEventListener('submit', () => {
-    const b = document.getElementById('go');
-    b.disabled = true; b.textContent = 'One moment\\u2026';
-  });
-  </script>`);
+    <button class="btn" type="submit">Sign and continue to payment</button>
+  </form>`);
 
 const payStep = r => page('Payment', `
   <h1>One step left</h1>
   <p class="sub">Signed and saved, ${esc(r.first_name || 'there')} &mdash; just payment now.</p>
+  ${progress('pay')}
   ${details(r)}
   <div class="card">
     <h2><span class="stepnum">3</span>Payment</h2>
@@ -290,81 +339,117 @@ const payStep = r => page('Payment', `
          <a class="btn" href="${esc(r.square_invoice_url)}">Pay ${esc(money(r.total_cents))} plus tax</a>`
       : `<div class="banner err">Your invoice isn&rsquo;t ready yet. We&rsquo;ll email it
          shortly &mdash; nothing else is needed from you right now.</div>`}
-  </div>`);
+  </div>
+  ${addressRecap(r)}`);
 
-async function accept(request, env, r, token) {
-  const form = await request.formData().catch(() => null);
-  if (!form) return page('Something went wrong', '<div class="banner err">We couldn&rsquo;t read that form. Please try again.</div>');
+const COLUMNS = `id, confirm_token, status, first_name, last_name, email, phone, bins, weeks,
+  start_date, due_date, total_cents, delivery_city, pickup_city,
+  delivery_address, pickup_address, delivery_notes, pickup_notes,
+  agreement_signed_at, agreement_name, paid_at, square_invoice_url, square_status`;
 
-  const name = String(form.get('agreement_name') || '').trim().slice(0, 120);
-  const daddr = String(form.get('delivery_address') || '').trim().slice(0, 300);
+const load = (env, token) => env.DB.prepare(
+  `SELECT ${COLUMNS} FROM rentals WHERE confirm_token = ?1`).bind(token).first();
 
-  if (!form.get('accept') || !name || !daddr) {
-    return page('Confirm your rental', `
-      <div class="banner err">Please add a delivery address, type your name, and tick the box to agree.</div>
-      <p><a href="/${esc(token)}">Go back</a></p>`);
+export async function handleConfirm(request, env, url) {
+  const token = url.pathname.split('/').filter(Boolean)[0] || '';
+  if (!/^[a-f0-9-]{20,60}$/i.test(token)) return notFound();
+
+  let r = await load(env, token);
+  if (!r || r.status === 'cancelled') return notFound();
+
+  if (request.method === 'POST') {
+    const form = await request.formData().catch(() => null);
+    if (!form) return notFound();
+
+    const step = String(form.get('step') || '');
+    const problem = step === 'address' ? await saveAddress(env, r, form)
+      : step === 'agreement' ? await saveSignature(request, env, r, form)
+      : 'Something went wrong. Please try again.';
+
+    if (problem) return retry(r, step, problem);
+
+    // Redirect after a write: a refresh should never re-submit a signature, and
+    // the step to show is derived from what was just saved anyway.
+    return new Response(null, { status: 303, headers: { Location: `/${token}` } });
   }
 
-  // Signing is once and for all: if a second submission arrives (a double-tap,
-  // a stale tab, a forwarded link), keep the original signature record.
-  if (!r.agreement_signed_at) {
-    await env.DB.prepare(
-      `UPDATE rentals SET delivery_address=?1, pickup_address=?2, notes=?3,
-         agreement_signed_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'),
-         agreement_name=?4, agreement_ip=?5, agreement_ua=?6, agreement_version=?7,
-         status = CASE WHEN paid_at IS NOT NULL THEN 'confirmed' ELSE status END
-       WHERE id=?8 AND agreement_signed_at IS NULL`,
-    ).bind(
-      daddr,
-      String(form.get('pickup_address') || '').trim().slice(0, 300) || null,
-      String(form.get('notes') || '').trim().slice(0, 2000) || null,
-      name,
-      request.headers.get('cf-connecting-ip') || null,
-      (request.headers.get('user-agent') || '').slice(0, 400) || null,
-      AGREEMENT_VERSION,
-      r.id,
-    ).run();
+  const at = stepFor(r);
+  if (at === 'done') return allDone(r);
 
+  // Going back to fix an address is allowed; skipping ahead is not.
+  if (url.searchParams.get('step') === 'address' && at !== 'done') return addressStep(r);
+
+  return at === 'address' ? addressStep(r) : at === 'agreement' ? agreementStep(r) : payStep(r);
+}
+
+const retry = (r, step, problem) => page('Check that again', `
+  <h1>Almost there</h1>
+  <div class="banner err">${esc(problem)}</div>
+  <p class="sub">Nothing was lost &mdash; go back and it will still be filled in.</p>
+  <p><a class="btn" href="/${esc(r.confirm_token)}${step === 'address' ? '?step=address' : ''}">Go back</a></p>`);
+
+async function saveAddress(env, r, form) {
+  const daddr = String(form.get('delivery_address') || '').trim().slice(0, 300);
+  if (!daddr) return 'Please add the delivery address.';
+
+  const same = !!form.get('same');
+  const paddr = same ? daddr : String(form.get('pickup_address') || '').trim().slice(0, 300) || daddr;
+
+  await env.DB.prepare(
+    `UPDATE rentals SET delivery_address=?1, pickup_address=?2,
+       delivery_notes=?3, pickup_notes=?4 WHERE id=?5`,
+  ).bind(
+    daddr, paddr,
+    String(form.get('delivery_notes') || '').trim().slice(0, 2000) || null,
+    same ? null : String(form.get('pickup_notes') || '').trim().slice(0, 2000) || null,
+    r.id,
+  ).run();
+
+  // Worth a line once they have signed: an address that moves the day before
+  // delivery silently invalidates the run sheet, and nobody would otherwise know.
+  if (r.agreement_signed_at && daddr !== (r.delivery_address || '')) {
     await env.DB.prepare(
       'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
-    ).bind(r.email || 'customer', 'rental.agreement_signed', 'rental', String(r.id),
-           `${name} · ${AGREEMENT_VERSION}`).run();
-
-    // Their copy. A failure here must not block them reaching payment — the
-    // signature is already recorded — but it is logged so it can be resent.
-    if (r.email) {
-      const sent = await emailSignedCopy(env, r, name, new Date().toISOString())
-        .catch(err => ({ ok: false, error: err.message }));
-      await env.DB.prepare(
-        'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
-      ).bind('system', sent.ok ? 'rental.signed_copy_sent' : 'rental.signed_copy_failed',
-             'rental', String(r.id), sent.ok ? r.email : (sent.error || 'unknown')).run();
-    }
-  } else {
-    // Already signed, but let them correct where the bins go. Worth recording:
-    // an address that changes the day before delivery makes the run sheet wrong,
-    // and nobody would otherwise know it moved.
-    const moved = daddr && daddr !== (r.delivery_address || '');
-    await env.DB.prepare(
-      'UPDATE rentals SET delivery_address=?1, pickup_address=?2, notes=?3 WHERE id=?4',
-    ).bind(daddr,
-      String(form.get('pickup_address') || '').trim().slice(0, 300) || null,
-      String(form.get('notes') || '').trim().slice(0, 2000) || null, r.id).run();
-
-    if (moved) {
-      await env.DB.prepare(
-        'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
-      ).bind(r.email || 'customer', 'rental.address_changed', 'rental', String(r.id),
-             `${r.delivery_address || '(blank)'} → ${daddr}`).run();
-    }
+    ).bind(r.email || 'customer', 'rental.address_changed', 'rental', String(r.id),
+           `${r.delivery_address || '(blank)'} → ${daddr}`).run();
   }
-
-  const fresh = await env.DB.prepare(
-    `SELECT id, first_name, bins, weeks, start_date, due_date, total_cents,
-            square_invoice_url, agreement_signed_at, paid_at
-     FROM rentals WHERE id = ?1`,
-  ).bind(r.id).first();
-
-  if (fresh.paid_at) return allDone(fresh);
-  return payStep(fresh);
+  return null;
 }
+
+async function saveSignature(request, env, r, form) {
+  const name = String(form.get('agreement_name') || '').trim().slice(0, 120);
+  if (!form.get('accept') || !name) return 'Please type your name and tick the box to agree.';
+
+  // Signing happens once. A stale tab, a double-tap or a forwarded link must not
+  // overwrite who signed or when.
+  if (r.agreement_signed_at) return null;
+
+  await env.DB.prepare(
+    `UPDATE rentals SET agreement_signed_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'),
+       agreement_name=?1, agreement_ip=?2, agreement_ua=?3, agreement_version=?4,
+       status = CASE WHEN paid_at IS NOT NULL THEN 'confirmed' ELSE status END
+     WHERE id=?5 AND agreement_signed_at IS NULL`,
+  ).bind(
+    name,
+    request.headers.get('cf-connecting-ip') || null,
+    (request.headers.get('user-agent') || '').slice(0, 400) || null,
+    AGREEMENT_VERSION,
+    r.id,
+  ).run();
+
+  await env.DB.prepare(
+    'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
+  ).bind(r.email || 'customer', 'rental.agreement_signed', 'rental', String(r.id),
+         `${name} · ${AGREEMENT_VERSION}`).run();
+
+  if (r.email) {
+    const sent = await emailSignedCopy(env, r, name, new Date().toISOString())
+      .catch(err => ({ ok: false, error: err.message }));
+    await env.DB.prepare(
+      'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
+    ).bind('system', sent.ok ? 'rental.signed_copy_sent' : 'rental.signed_copy_failed',
+           'rental', String(r.id), sent.ok ? r.email : (sent.error || 'unknown')).run();
+  }
+  return null;
+}
+

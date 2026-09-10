@@ -821,12 +821,14 @@ async function openRental(id) {
 
       <label class="fl" for="r-daddr">Delivery address — ${esc(r.delivery_city || 'city not set')}</label>
       <input id="r-daddr" value="${esc(r.delivery_address || '')}" placeholder="Street address, unit, gate code">
-      <div style="height:12px"></div>
+      ${r.delivery_notes ? `<div class="note" style="margin:8px 0 0"><h4>From the customer</h4>${esc(r.delivery_notes)}</div>` : ''}
+      <div style="height:14px"></div>
       <label class="fl" for="r-paddr">Pickup address — ${esc(r.pickup_city || 'same')}</label>
       <input id="r-paddr" value="${esc(r.pickup_address || '')}" placeholder="If different from delivery">
-      <div style="height:12px"></div>
-      <label class="fl" for="r-notes">Notes</label>
-      <textarea id="r-notes" placeholder="Anything the driver needs to know.">${esc(r.notes || '')}</textarea>
+      ${r.pickup_notes ? `<div class="note" style="margin:8px 0 0"><h4>From the customer</h4>${esc(r.pickup_notes)}</div>` : ''}
+      <div style="height:14px"></div>
+      <label class="fl" for="r-notes">Internal notes</label>
+      <textarea id="r-notes" placeholder="Staff only — the customer never sees this.">${esc(r.notes || '')}</textarea>
       <div class="actions">
         <button class="btn sm" id="r-save">Save details</button>
         <span id="r-state" style="align-self:center;color:var(--muted);font-size:12.5px"></span>

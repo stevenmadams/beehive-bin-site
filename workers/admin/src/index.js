@@ -319,7 +319,7 @@ const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
   first_name, last_name, email, phone, contact_pref,
   bins, weeks, start_date, due_date, total_cents,
-  delivery_city, delivery_address, pickup_city, pickup_address,
+  delivery_city, delivery_address, delivery_notes, pickup_city, pickup_address, pickup_notes,
   agreement_signed_at, paid_at, delivered_at, returned_at, notes`;
 
 const RENTAL_STATUSES = ['pending', 'confirmed', 'out', 'returned', 'cancelled'];
