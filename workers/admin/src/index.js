@@ -230,11 +230,20 @@ async function decideRequest(env, user, id, body) {
   const action = body.action;
   if (!['approve', 'decline', 'reopen'].includes(action)) throw new HttpError(400, 'unknown action');
 
-  const existing = await env.DB.prepare('SELECT id, status FROM requests WHERE id = ?1')
+  const existing = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS} FROM requests WHERE id = ?1`)
     .bind(id).first();
   if (!existing) throw new HttpError(404, 'no such request');
 
-  const status = action === 'approve' ? 'approved' : action === 'decline' ? 'declined' : 'new';
+  // Approving is the moment the job becomes real, so it produces the rental
+  // record the schedule and run sheet are built from.
+  let rentalId = null;
+  if (action === 'approve') {
+    const already = await env.DB.prepare('SELECT id FROM rentals WHERE request_id = ?1')
+      .bind(id).first();
+    rentalId = already ? already.id : await createRentalFromRequest(env, user, existing);
+  }
+
+  const status = action === 'approve' ? 'converted' : action === 'decline' ? 'declined' : 'new';
   const reason = action === 'decline' ? String(body.reason || '').trim().slice(0, 500) || null : null;
   const decidedAt = action === 'reopen' ? null : new Date().toISOString().replace(/\.\d+/, '');
   const decidedBy = action === 'reopen' ? null : user.email;
@@ -244,7 +253,9 @@ async function decideRequest(env, user, id, body) {
   ).bind(status, decidedAt, decidedBy, reason, id).run();
   await audit(env, user.email, `request.${action}`, 'request', id, reason);
 
-  return env.DB.prepare(`SELECT ${REQUEST_COLUMNS} FROM requests WHERE id = ?1`).bind(id).first();
+  const request = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS} FROM requests WHERE id = ?1`)
+    .bind(id).first();
+  return { request, rental_id: rentalId };
 }
 
 async function addEmployee(env, user, body) {
@@ -300,6 +311,129 @@ async function updateEmployee(env, user, id, body) {
     .bind(id).first();
 }
 
+/* ---------- rentals ---------- */
+
+const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
+  first_name, last_name, email, phone, contact_pref,
+  bins, weeks, start_date, due_date, total_cents,
+  delivery_city, delivery_address, pickup_city, pickup_address,
+  agreement_signed_at, paid_at, delivered_at, returned_at, notes`;
+
+const RENTAL_STATUSES = ['pending', 'confirmed', 'out', 'returned', 'cancelled'];
+const now = () => new Date().toISOString().replace(/\.\d+/, '');
+
+/* Status is derived from the milestone timestamps so the two can never
+   disagree — except `cancelled`, which is a decision rather than an event and
+   therefore sticks until someone un-cancels. */
+function statusFrom(r) {
+  if (r.status === 'cancelled') return 'cancelled';
+  if (r.returned_at) return 'returned';
+  if (r.delivered_at) return 'out';
+  if (r.agreement_signed_at && r.paid_at) return 'confirmed';
+  return 'pending';
+}
+
+/* Turning a request into a rental copies the agreed terms across. If the
+   request never had a start date or package (a contact-form enquiry), there is
+   nothing to schedule and it should not become a rental. */
+async function createRentalFromRequest(env, user, req) {
+  if (req.kind !== 'reserve') {
+    throw new HttpError(400, 'Only a reservation can become a rental. Take the details first with + New request.');
+  }
+  if (!req.bins || !req.weeks || !req.start_date) {
+    throw new HttpError(400, 'This request is missing a package, length or start date.');
+  }
+
+  const due = addWeeks(req.start_date, req.weeks);
+  const res = await env.DB.prepare(
+    `INSERT INTO rentals (request_id, created_by, first_name, last_name, email, phone,
+       contact_pref, bins, weeks, start_date, due_date, total_cents,
+       delivery_city, pickup_city)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)`,
+  ).bind(
+    req.id, user.email, req.first_name, req.last_name, req.email, req.phone,
+    req.contact_pref, req.bins, req.weeks, req.start_date, due, req.quoted_total_cents,
+    req.delivery_city, req.pickup_city || req.delivery_city,
+  ).run();
+
+  const id = res.meta.last_row_id;
+  await audit(env, user.email, 'rental.create', 'rental', id, `from request ${req.id}`);
+  return id;
+}
+
+async function listRentals(env, url) {
+  const status = url.searchParams.get('status') || 'active';
+  const binds = [];
+  let where = '';
+
+  if (status === 'active') {
+    // What someone actually needs on a Monday: everything not finished.
+    where = "WHERE status IN ('pending','confirmed','out')";
+  } else if (status !== 'all') {
+    if (!RENTAL_STATUSES.includes(status)) throw new HttpError(400, 'unknown status');
+    binds.push(status);
+    where = 'WHERE status = ?1';
+  }
+
+  const { results } = await env.DB.prepare(
+    `SELECT ${RENTAL_COLUMNS} FROM rentals ${where}
+     ORDER BY start_date, id LIMIT 300`,
+  ).bind(...binds).all();
+  return results;
+}
+
+const MILESTONES = {
+  agreement: 'agreement_signed_at',
+  paid: 'paid_at',
+  delivered: 'delivered_at',
+  returned: 'returned_at',
+};
+
+/* Milestones toggle rather than only set, because the commonest correction is
+   marking the wrong rental delivered and needing to undo it immediately. */
+async function updateRental(env, user, id, body) {
+  const row = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+    .bind(id).first();
+  if (!row) throw new HttpError(404, 'no such rental');
+
+  const patch = { ...row };
+
+  if (body.milestone) {
+    const col = MILESTONES[body.milestone];
+    if (!col) throw new HttpError(400, 'unknown milestone');
+    patch[col] = body.done === false ? null : now();
+    if (body.milestone === 'delivered' && patch.delivered_at && !patch.paid_at) {
+      // Not fatal — sometimes you deliver on trust — but it should be deliberate.
+      if (!body.force) throw new HttpError(409, 'This rental is not paid yet. Mark it delivered anyway?');
+    }
+  }
+
+  for (const f of ['delivery_address', 'pickup_address', 'delivery_city', 'pickup_city', 'notes']) {
+    if (f in body) patch[f] = clean(body[f], 500);
+  }
+  if ('status' in body) {
+    if (!RENTAL_STATUSES.includes(body.status)) throw new HttpError(400, 'unknown status');
+    patch.status = body.status;
+  }
+
+  patch.status = statusFrom(patch);
+
+  await env.DB.prepare(
+    `UPDATE rentals SET status=?1, agreement_signed_at=?2, paid_at=?3, delivered_at=?4,
+       returned_at=?5, delivery_address=?6, pickup_address=?7, delivery_city=?8,
+       pickup_city=?9, notes=?10 WHERE id=?11`,
+  ).bind(
+    patch.status, patch.agreement_signed_at, patch.paid_at, patch.delivered_at,
+    patch.returned_at, patch.delivery_address, patch.pickup_address,
+    patch.delivery_city, patch.pickup_city, patch.notes, id,
+  ).run();
+
+  await audit(env, user.email, body.milestone ? `rental.${body.milestone}` : 'rental.update',
+    'rental', id, body.milestone ? `done=${body.done !== false}` : null);
+
+  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+}
+
 /* ---------- router ---------- */
 
 async function api(request, env, url) {
@@ -321,7 +455,15 @@ async function api(request, env, url) {
     ).all();
     const counts = Object.fromEntries(STATUSES.map(s => [s, 0]));
     for (const r of results) counts[r.status] = r.count;
-    return json({ counts });
+
+    const { count: activeRentals } = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM rentals WHERE status IN ('pending','confirmed','out')",
+    ).first();
+    const { count: overdue } = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM rentals WHERE status = 'out' AND due_date < date('now')",
+    ).first();
+
+    return json({ counts, rentals: { active: activeRentals, overdue } });
   }
 
   if (path === '/requests') {
@@ -348,7 +490,22 @@ async function api(request, env, url) {
   }
 
   if ((m = match(/^\/requests\/(\d+)\/decision$/)) && method === 'POST') {
-    return json({ request: await decideRequest(env, user, Number(m[1]), body) });
+    return json(await decideRequest(env, user, Number(m[1]), body));
+  }
+
+  if (path === '/rentals' && method === 'GET') {
+    return json({ rentals: await listRentals(env, url) });
+  }
+
+  if ((m = match(/^\/rentals\/(\d+)$/))) {
+    const rid = Number(m[1]);
+    if (method === 'GET') {
+      const row = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+        .bind(rid).first();
+      if (!row) throw new HttpError(404, 'no such rental');
+      return json({ rental: row });
+    }
+    if (method === 'PATCH') return json({ rental: await updateRental(env, user, rid, body) });
   }
 
   if (path === '/employees') {

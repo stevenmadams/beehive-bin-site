@@ -24,9 +24,21 @@ reserve/contact form ──POST──▶ beehive-forms ──┬─▶ D1 `reque
 - **`workers/admin/`** — the panel. `src/auth.js` verifies the Access JWT,
   `src/index.js` is the API, `public/index.html` is the whole UI.
 
-**Requests is the only tab that works.** Rentals, Schedule, Inventory,
-Customers and Settings render a description of what will live there. That is
-deliberate — see "What's next".
+**Requests and Rentals work.** Schedule, Inventory, Customers and Settings
+render a description of what will live there.
+
+Approving a reservation creates a **rental** — a separate record, because the
+two have different lifecycles: a request is answered once, a rental is worked
+for weeks. Customer and terms are copied onto the rental rather than joined, so
+a later edit to the request cannot silently rewrite what a driver is delivering
+tomorrow. A contact-form enquiry cannot be approved into a rental; it has no
+package or dates, and the panel says so.
+
+Rental status is **derived from its milestone timestamps** — agreement signed,
+paid, delivered, returned — so status and history can never disagree. The one
+exception is `cancelled`, which is a decision rather than an event and sticks
+until someone reinstates it. Milestones toggle both ways: the commonest
+correction is marking the wrong rental delivered and needing to undo it.
 
 ## Who can sign in
 
@@ -164,9 +176,17 @@ still fails closed.
 
 In the order that pays off soonest:
 
-1. **Rentals** — approving a request should create a rental. Until that exists,
-   the Schedule and Inventory tabs have nothing real to show.
-2. **Availability** — with 3–4 bin sets, check sets-booked against sets-owned
+1. **Square** — the owner confirmed an account exists (2026-09-10). Customers
+   API on approval, then Invoices against the rental's total, then a webhook on
+   `invoice.payment_made` to tick the Paid milestone by itself. That removes the
+   two steps most likely to be forgotten.
+2. **Schedule** — today and this week's deliveries and pickups, from
+   `rentals.start_date` / `due_date`, plus a printable run sheet. The rental
+   already carries the street address the run sheet needs.
+3. **Availability** — with 3–4 bin sets, check sets-booked against sets-owned
    for the requested dates and flag conflicts before anyone approves.
-3. **Square** — Customers API on approval, then Invoices. Stage 2's plan holds.
-4. **E-sign** — the one step Square genuinely cannot automate.
+4. **Settings** — pricing currently lives in both `reserve.html` and the admin
+   Worker's `PRICES`/`EXTRA`. Change one without the other and the panel quotes
+   differently than the website.
+5. **E-sign** — per this repo's Stage 2 research, Square Contracts has no public
+   API, so this stays manual unless that has changed.

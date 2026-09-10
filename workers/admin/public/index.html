@@ -107,7 +107,24 @@ tbody tr.clickable:hover{background:rgba(255,196,0,.09)}
 .pill.new{background:rgba(255,196,0,.25);color:#7A5B00}
 .pill.approved{background:rgba(31,122,76,.14);color:var(--ok)}
 .pill.declined{background:rgba(163,44,44,.12);color:var(--bad)}
-.pill.converted{background:rgba(21,19,15,.1);color:var(--char)}
+.pill.converted{background:rgba(31,122,76,.14);color:var(--ok)}
+.pill.pending{background:rgba(255,196,0,.25);color:#7A5B00}
+.pill.confirmed{background:rgba(31,122,76,.14);color:var(--ok)}
+.pill.out{background:rgba(21,19,15,.85);color:var(--yellow)}
+.pill.returned{background:rgba(21,19,15,.1);color:var(--char)}
+.pill.cancelled{background:rgba(163,44,44,.12);color:var(--bad)}
+.pill.overdue{background:var(--bad);color:#fff}
+nav a .badge.overdue{background:var(--bad);color:#fff}
+tr.late td{background:rgba(163,44,44,.05)}
+.steps{display:flex;flex-direction:column;gap:8px;margin:4px 0 20px}
+.step{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);
+  border-radius:10px;background:var(--white);cursor:pointer;text-align:left;width:100%}
+.step:hover{border-color:rgba(21,19,15,.3)}
+.step .tick{width:21px;height:21px;border-radius:50%;border:2px solid var(--line);flex:none;
+  display:grid;place-items:center;font-size:12px;color:transparent}
+.step[data-done="1"] .tick{background:var(--ok);border-color:var(--ok);color:#fff}
+.step .lbl{font-weight:600}
+.step .when{margin-left:auto;font-size:12px;color:var(--muted)}
 .pill.staff{background:rgba(21,19,15,.08);color:var(--char)}
 .pill.owner{background:var(--yellow);color:var(--ink)}
 .pill.off{background:rgba(163,44,44,.12);color:var(--bad)}
@@ -192,6 +209,7 @@ const root = document.getElementById('root');
 
 let me = null;
 let counts = {};
+let rentalCounts = {};
 
 /* ---------- api ---------- */
 async function api(path, opts = {}) {
@@ -228,7 +246,7 @@ const pkg = r => (r.bins ? `${r.bins} bins · ${r.weeks === 1 ? '1 week' : `${r.
 /* ---------- shell ---------- */
 const NAV = [
   { id: 'requests',  label: 'Requests',  ico: '◎', live: true },
-  { id: 'rentals',   label: 'Rentals',   ico: '▦' },
+  { id: 'rentals',   label: 'Rentals',   ico: '▦', live: true },
   { id: 'schedule',  label: 'Schedule',  ico: '◫' },
   { id: 'inventory', label: 'Inventory', ico: '▤' },
   { id: 'customers', label: 'Customers', ico: '☺' },
@@ -238,7 +256,10 @@ const NAV = [
 
 function shell(active) {
   const links = NAV.map(n => {
-    const badge = n.id === 'requests' && counts.new ? `<span class="badge">${counts.new}</span>` : '';
+    let badge = '';
+    if (n.id === 'requests' && counts.new) badge = `<span class="badge">${counts.new}</span>`;
+    // Overdue is the only rental number worth interrupting someone for.
+    if (n.id === 'rentals' && rentalCounts.overdue) badge = `<span class="badge overdue">${rentalCounts.overdue}</span>`;
     if (!n.live) return `<a class="soon" title="Coming next" href="#/${n.id}"><span class="ico">${n.ico}</span>${n.label}</a>`;
     return `<a href="#/${n.id}"${n.id === active ? ' aria-current="page"' : ''}><span class="ico">${n.ico}</span>${n.label}${badge}</a>`;
   }).join('');
@@ -269,7 +290,7 @@ const reqState = { status: 'new', q: '' };
 
 async function viewRequests() {
   const view = $('<div></div>');
-  const filters = ['new', 'approved', 'declined', 'all'];
+  const filters = [['new', 'New'], ['converted', 'Booked'], ['declined', 'Declined'], ['all', 'All']];
   const head = $(`<div>
     <div class="head">
       <h1>Requests</h1><span class="count" id="rcount"></span>
@@ -277,8 +298,8 @@ async function viewRequests() {
     </div>
     <p class="sub">Everything the reserve and contact forms send in, plus anything taken over the phone.</p>
     <div class="toolbar">
-      <div class="seg">${filters.map(f =>
-        `<button data-f="${f}" aria-pressed="${f === reqState.status}">${f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>
+      <div class="seg">${filters.map(([f, label]) =>
+        `<button data-f="${f}" aria-pressed="${f === reqState.status}">${label}</button>`).join('')}</div>
       <input class="search" type="search" placeholder="Name, email, phone, city…" value="${esc(reqState.q)}">
     </div>
   </div>`);
@@ -313,7 +334,7 @@ async function loadList(list, head) {
 
     if (!requests.length) {
       list.replaceChildren($(`<div class="empty"><strong>Nothing here</strong>${
-        reqState.q ? 'No request matches that search.' : `No ${reqState.status === 'all' ? '' : reqState.status + ' '}requests yet.`}</div>`));
+        reqState.q ? 'No request matches that search.' : 'Nothing in this list yet.'}</div>`));
       return;
     }
 
@@ -441,9 +462,12 @@ async function openRequest(id) {
   const act = async (action, extra = {}) => {
     msg.replaceChildren();
     try {
-      await api(`/requests/${id}/decision`, { method: 'POST', body: JSON.stringify({ action, ...extra }) });
+      const res = await api(`/requests/${id}/decision`, { method: 'POST', body: JSON.stringify({ action, ...extra }) });
       await refreshCounts();
       close();
+      // Approving creates a rental; go straight to it, since the next thing
+      // anyone does is fill in the address and chase the agreement.
+      if (res.rental_id) { location.hash = `#/rentals/${res.rental_id}`; return; }
       viewRequests();
     } catch (err) {
       msg.replaceChildren(banner(err.message));
@@ -608,6 +632,202 @@ function openNewRequest() {
   });
 }
 
+/* ---------- rentals ---------- */
+const rentState = { status: 'active' };
+const RENT_FILTERS = [['active','Active'],['pending','Pending'],['out','Out'],['returned','Returned'],['all','All']];
+
+const isLate = r => r.status === 'out' && r.due_date && r.due_date < new Date().toISOString().slice(0, 10);
+
+async function viewRentals() {
+  const view = $(`<div>
+    <div class="head"><h1>Rentals</h1><span class="count" id="ncount"></span></div>
+    <p class="sub">Approved jobs, from agreement through pickup.</p>
+    <div class="toolbar">
+      <div class="seg">${RENT_FILTERS.map(([f, label]) =>
+        `<button data-f="${f}" aria-pressed="${f === rentState.status}">${label}</button>`).join('')}</div>
+    </div>
+    <div class="card" id="nlist"><div class="empty">Loading…</div></div>
+  </div>`);
+  render('rentals', view);
+
+  view.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+    rentState.status = b.dataset.f;
+    viewRentals();
+  }));
+
+  const list = view.querySelector('#nlist');
+  try {
+    const { rentals } = await api(`/rentals?status=${rentState.status}`);
+    view.querySelector('#ncount').textContent = rentals.length || '';
+
+    if (!rentals.length) {
+      list.replaceChildren($(`<div class="empty"><strong>Nothing here</strong>${
+        rentState.status === 'active'
+          ? 'No active rentals. Approve a request to start one.'
+          : 'No rentals in this list.'}</div>`));
+      return;
+    }
+
+    const rows = rentals.map(r => `<tr class="clickable${isLate(r) ? ' late' : ''}" data-id="${r.id}">
+      <td><span class="pill ${r.status}">${r.status}</span>${
+        isLate(r) ? ' <span class="pill overdue">late</span>' : ''}</td>
+      <td><div class="who">${esc(fullName(r))}<small>${esc(r.delivery_city || '—')}</small></div></td>
+      <td class="nowrap">${r.bins} bins · ${r.weeks === 1 ? '1 wk' : r.weeks + ' wks'}</td>
+      <td class="nowrap num">${esc(niceDate(r.start_date))}</td>
+      <td class="nowrap num">${esc(niceDate(r.due_date))}</td>
+      <td class="nowrap num hide-sm">${esc(money(r.total_cents))}</td>
+      <td class="nowrap hide-sm">${[
+        r.agreement_signed_at ? 'signed' : '', r.paid_at ? 'paid' : '',
+      ].filter(Boolean).join(' · ') || '<span style="color:var(--muted)">—</span>'}</td>
+    </tr>`).join('');
+
+    const table = $(`<table><thead><tr>
+      <th>Status</th><th>Who</th><th>Package</th><th>Out</th><th>Back</th>
+      <th class="hide-sm">Total</th><th class="hide-sm">Steps</th>
+    </tr></thead><tbody>${rows}</tbody></table>`);
+    table.querySelectorAll('tbody tr').forEach(tr =>
+      tr.addEventListener('click', () => { location.hash = `#/rentals/${tr.dataset.id}`; }));
+    list.replaceChildren(table);
+  } catch (err) {
+    list.replaceChildren($(`<div class="empty"><strong>Could not load rentals</strong>${esc(err.message)}</div>`));
+  }
+}
+
+const STEPS = [
+  ['agreement', 'agreement_signed_at', 'Agreement signed'],
+  ['paid',      'paid_at',             'Paid'],
+  ['delivered', 'delivered_at',        'Bins delivered'],
+  ['returned',  'returned_at',         'Bins back'],
+];
+
+async function openRental(id) {
+  if (!document.getElementById('app')) await viewRentals();
+  closeAnyDrawer();
+
+  const scrim = $('<div class="scrim"></div>');
+  const drawer = $('<div class="drawer" role="dialog" aria-modal="true"><div class="dbody">Loading…</div></div>');
+  const close = () => { scrim.remove(); drawer.remove(); document.removeEventListener('keydown', onKey);
+    if (location.hash.startsWith('#/rentals/')) location.hash = '#/rentals'; };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  scrim.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.append(scrim, drawer);
+
+  let r;
+  try { ({ rental: r } = await api(`/rentals/${id}`)); }
+  catch (err) {
+    drawer.replaceChildren($(`<div class="dbody"><div class="banner err">${esc(err.message)}</div></div>`));
+    return;
+  }
+
+  const digits = String(r.phone || '').replace(/\D/g, '');
+  const tel = digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits[0] === '1' ? `+${digits}` : digits;
+  const pref = r.contact_pref;
+  const cbtn = (kind, href, label) =>
+    `<a class="btn sm${pref === kind ? ' primary' : ''}" href="${href}">${label}</a>`;
+  const actions = [
+    digits ? cbtn('text', `sms:${tel}`, 'Text') : '',
+    digits ? cbtn('call', `tel:${tel}`, 'Call') : '',
+    r.email ? cbtn('email', `mailto:${esc(r.email)}`, 'Email') : '',
+  ].filter(Boolean).join('');
+
+  drawer.replaceChildren($(`
+    <div class="dhead">
+      <div style="flex:1">
+        <h2>${esc(fullName(r))}</h2>
+        <div class="meta">Rental #${r.id}${r.request_id ? ` · from request #${r.request_id}` : ''}</div>
+      </div>
+      <span class="pill ${r.status}" style="margin-top:3px">${r.status}</span>
+      <button class="x" aria-label="Close">×</button>
+    </div>
+    <div class="dbody">
+      ${actions ? `<div class="contactbar">${actions}${
+        pref ? `<span class="prefnote">prefers ${esc(pref)}</span>` : ''}</div>` : ''}
+
+      ${isLate(r) ? '<div class="banner err">Past its return date and still out.</div>' : ''}
+
+      <div class="steps">${STEPS.map(([key, col, label]) => `
+        <button class="step" data-step="${key}" data-done="${r[col] ? 1 : 0}">
+          <span class="tick">✓</span><span class="lbl">${label}</span>
+          <span class="when">${r[col] ? esc(ago(r[col])) : ''}</span>
+        </button>`).join('')}</div>
+
+      <dl class="kv">
+        <dt>Package</dt><dd>${r.bins} bins · ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'}</dd>
+        <dt>Total</dt><dd>${esc(money(r.total_cents))} <span style="color:var(--muted);font-weight:400">before tax</span></dd>
+        <dt>Delivered</dt><dd>${esc(niceDate(r.start_date))}</dd>
+        <dt>Back by</dt><dd>${esc(niceDate(r.due_date))}</dd>
+        <dt>Phone</dt><dd>${esc(r.phone || '—')}</dd>
+        <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
+      </dl>
+
+      <label class="fl" for="r-daddr">Delivery address — ${esc(r.delivery_city || 'city not set')}</label>
+      <input id="r-daddr" value="${esc(r.delivery_address || '')}" placeholder="Street address, unit, gate code">
+      <div style="height:12px"></div>
+      <label class="fl" for="r-paddr">Pickup address — ${esc(r.pickup_city || 'same')}</label>
+      <input id="r-paddr" value="${esc(r.pickup_address || '')}" placeholder="If different from delivery">
+      <div style="height:12px"></div>
+      <label class="fl" for="r-notes">Notes</label>
+      <textarea id="r-notes" placeholder="Anything the driver needs to know.">${esc(r.notes || '')}</textarea>
+      <div class="actions">
+        <button class="btn sm" id="r-save">Save details</button>
+        <span id="r-state" style="align-self:center;color:var(--muted);font-size:12.5px"></span>
+      </div>
+
+      <div id="r-msg" style="margin-top:14px"></div>
+      <div class="actions" style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
+        ${r.status === 'cancelled'
+          ? '<button class="btn" data-status="pending">Reinstate</button>'
+          : '<button class="btn danger" data-status="cancelled">Cancel rental</button>'}
+      </div>
+    </div>`));
+
+  drawer.querySelector('.x').addEventListener('click', close);
+  const msg = drawer.querySelector('#r-msg');
+
+  const patch = async (body) => {
+    msg.replaceChildren();
+    const res = await api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+    await refreshCounts();
+    return res;
+  };
+
+  drawer.querySelectorAll('.step').forEach(b => b.addEventListener('click', async () => {
+    const done = b.dataset.done === '1';
+    try {
+      await patch({ milestone: b.dataset.step, done: !done });
+      openRental(id);
+    } catch (err) {
+      // Delivering something unpaid is allowed, but only on purpose.
+      if (/not paid yet/i.test(err.message) && confirm(`${err.message}`)) {
+        try { await patch({ milestone: b.dataset.step, done: true, force: true }); openRental(id); }
+        catch (e2) { msg.replaceChildren(banner(e2.message)); }
+        return;
+      }
+      msg.replaceChildren(banner(err.message));
+    }
+  }));
+
+  drawer.querySelector('#r-save').addEventListener('click', async e => {
+    const state = drawer.querySelector('#r-state');
+    e.target.disabled = true; state.textContent = 'Saving…';
+    try {
+      await patch({
+        delivery_address: drawer.querySelector('#r-daddr').value,
+        pickup_address: drawer.querySelector('#r-paddr').value,
+        notes: drawer.querySelector('#r-notes').value,
+      });
+      state.textContent = 'Saved';
+    } catch (err) { state.textContent = ''; msg.replaceChildren(banner(err.message)); }
+    e.target.disabled = false;
+  });
+
+  drawer.querySelectorAll('[data-status]').forEach(b => b.addEventListener('click', async () => {
+    try { await patch({ status: b.dataset.status }); openRental(id); }
+    catch (err) { msg.replaceChildren(banner(err.message)); }
+  }));
+}
+
 /* ---------- employees ---------- */
 async function viewEmployees() {
   const view = $(`<div>
@@ -686,7 +906,6 @@ async function viewEmployees() {
 
 /* ---------- stubs ---------- */
 const SOON = {
-  rentals:   ['Approved requests that became real rentals', 'What is out right now, where, and when it is due back', 'Extensions and overdue flags'],
   schedule:  ['Today and this week: deliveries and pickups', 'A printable run sheet with addresses and gate codes', 'Conflicts when two jobs need the same bin set'],
   inventory: ['Bin sets and dollies, with condition notes', 'Which set is at which address', 'What is available for a given date range'],
   customers: ['One record per renter, merged across requests', 'Rental history and repeat business', 'Notes that outlive a single rental'],
@@ -708,13 +927,18 @@ function viewSoon(id) {
 
 /* ---------- boot + routing ---------- */
 async function refreshCounts() {
-  try { ({ counts } = await api('/stats')); } catch { counts = {}; }
+  try {
+    const stats = await api('/stats');
+    counts = stats.counts || {};
+    rentalCounts = stats.rentals || {};
+  } catch { counts = {}; rentalCounts = {}; }
 }
 
 function route() {
   const hash = location.hash.replace(/^#\/?/, '') || 'requests';
   const [tab, id] = hash.split('/');
   if (tab === 'employees') return viewEmployees();
+  if (tab === 'rentals') return id ? openRental(id) : viewRentals();
   if (tab === 'requests' && id) return openRequest(id);
   if (SOON[tab]) return viewSoon(tab);
   return viewRequests();
