@@ -403,6 +403,12 @@ async function updateRental(env, user, id, body) {
   if (body.milestone) {
     const col = MILESTONES[body.milestone];
     if (!col) throw new HttpError(400, 'unknown milestone');
+    // Square is the authority on money. Once it reports the invoice paid, the
+    // panel cannot contradict it — a UI that hides the button is not enough,
+    // since anything can call this endpoint.
+    if (body.milestone === 'paid' && body.done === false && row.square_status === 'PAID') {
+      throw new HttpError(409, 'Square has this invoice as paid. Refund it in Square if that is wrong.');
+    }
     patch[col] = body.done === false ? null : now();
     if (body.milestone === 'delivered' && patch.delivered_at && !patch.paid_at) {
       // Not fatal — sometimes you deliver on trust — but it should be deliberate.
