@@ -75,6 +75,41 @@ async function findOrCreateCustomer(call, env, rental) {
 
 const money = cents => ({ amount: Math.round(cents), currency: 'USD' });
 
+/* Sales tax.
+
+   Square does NOT apply a location's tax settings to orders created through the
+   API — an order without a tax on it is simply untaxed, however the dashboard is
+   configured. The rate has to be attached here.
+
+   Preferred form is a Tax object created in the Square dashboard, referenced by
+   id: the rate then lives where the business's accounting already is, changes
+   without a deploy, and shows up correctly in Square's tax reporting. A plain
+   percentage is supported as a fallback for getting started.
+
+   If neither is configured no tax is added, which is the honest behaviour —
+   inventing a rate would be worse than charging none. `ping` reports which of
+   the two is in force so this cannot be silently wrong. */
+function taxesFor(env) {
+  const catalogId = (env.SQUARE_TAX_CATALOG_ID || '').trim();
+  if (catalogId) {
+    return { taxes: [{ catalog_object_id: catalogId, scope: 'ORDER' }] };
+  }
+
+  const pct = (env.SQUARE_TAX_PERCENTAGE || '').trim();
+  if (pct) {
+    return {
+      taxes: [{
+        name: env.SQUARE_TAX_NAME || 'Sales tax',
+        percentage: pct,          // Square wants a string, e.g. "7.25"
+        scope: 'ORDER',
+        type: 'ADDITIVE',         // added on top, not carved out of the price
+      }],
+    };
+  }
+  return {};
+}
+
+
 /* Creates customer -> order -> invoice, then publishes it, which is what
    actually emails the customer a payment link. Returns the ids to store on the
    rental so the webhook can find its way back here. */
@@ -102,6 +137,7 @@ export async function createInvoice(env, rental) {
         base_price_money: money(rental.total_cents),
         note: `Delivered ${rental.start_date}, back by ${rental.due_date}`,
       }],
+      ...taxesFor(env),
     },
   });
 
@@ -123,7 +159,7 @@ export async function createInvoice(env, rental) {
       delivery_method: 'SHARE_MANUALLY',
       accepted_payment_methods: { card: true, bank_account: false },
       title: `Bin rental — ${rental.bins} bins, ${weeks}`,
-      description: `Delivery ${rental.start_date} · pickup ${rental.due_date}. Taxes applied at checkout where required.`,
+      description: `Delivery ${rental.start_date} · pickup ${rental.due_date}.`,
       sale_or_service_date: rental.start_date,
     },
   });
@@ -157,8 +193,13 @@ export async function ping(env) {
   const call = client(env);
   const { locations = [] } = await call('GET', '/v2/locations');
   const match = locations.find(l => l.id === env.SQUARE_LOCATION_ID);
+  const tax = env.SQUARE_TAX_CATALOG_ID ? `catalog ${env.SQUARE_TAX_CATALOG_ID}`
+    : env.SQUARE_TAX_PERCENTAGE ? `${env.SQUARE_TAX_PERCENTAGE}% (inline)`
+    : 'NOT CONFIGURED — invoices will be raised with no sales tax';
+
   return {
     env: env.SQUARE_ENV || 'sandbox',
+    tax,
     location_id: env.SQUARE_LOCATION_ID,
     location_found: !!match,
     location_name: match?.name || null,

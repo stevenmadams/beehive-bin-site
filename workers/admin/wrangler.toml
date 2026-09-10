@@ -48,6 +48,18 @@ ALLOWED_EMAIL_DOMAIN = "beehivebin.co"
 BOOKING_HOST = "book.beehivebin.co"
 SQUARE_ENV = "sandbox"
 SQUARE_LOCATION_ID = "LJR9D95SRQSN7"
+
+# Sales tax. Square does NOT apply a location's tax settings to orders created
+# through the API, so the rate has to be named here or invoices go out untaxed.
+#
+# Preferred: create a Tax in the Square dashboard (Items & services → Taxes) and
+# put its id here — the rate then lives with the accounting and changes without
+# a deploy. Otherwise set SQUARE_TAX_PERCENTAGE to a string like "7.25".
+#
+# /api/square/ping reports which is in force, and says so loudly when neither is.
+SQUARE_TAX_CATALOG_ID = ""
+SQUARE_TAX_PERCENTAGE = ""
+SQUARE_TAX_NAME = "Utah sales tax"
 # SQUARE_ACCESS_TOKEN is a secret, set with:
 #   npx wrangler secret put SQUARE_ACCESS_TOKEN -c workers/admin/wrangler.toml
 
