@@ -1073,8 +1073,16 @@ async function openRental(id) {
                   <button class="btn sm" data-editaddr="${id}">${val ? 'Edit' : 'Add'}</button>
                 </div>
                 <div class="edit" hidden>
-                  <input id="${id}" value="${esc(val)}"
-                    placeholder="${kind === 'delivery' ? 'Street address, unit, gate code' : 'If different from delivery'}">
+                  <input data-part="${kind}_street" value="${esc(r[kind + '_street'] || '')}"
+                    placeholder="Street address">
+                  <input data-part="${kind}_unit" value="${esc(r[kind + '_unit'] || '')}"
+                    placeholder="Apartment or unit (optional)" style="margin-top:7px">
+                  <div style="display:flex;gap:7px;margin-top:7px">
+                    <input data-part="${kind}_city" value="${esc((kind === 'delivery' ? r.delivery_city : r.pickup_city) || '')}"
+                      placeholder="City" style="flex:1">
+                    <input data-part="${kind}_zip" value="${esc(r[kind + '_zip'] || '')}"
+                      placeholder="ZIP" maxlength="5" style="width:80px">
+                  </div>
                   <div class="saverow">
                     <button class="btn sm primary" data-saveaddr="1">Save</button>
                     <button class="btn sm" data-canceladdr="1">Cancel</button>
@@ -1293,10 +1301,9 @@ async function openRental(id) {
     const state = b.parentElement.querySelector('[data-savedmsg]');
     b.disabled = true; state.textContent = 'Saving…';
     try {
-      await patch({
-        delivery_address: drawer.querySelector('#r-daddr')?.value ?? r.delivery_address,
-        pickup_address: drawer.querySelector('#r-paddr')?.value ?? r.pickup_address,
-      });
+      const parts = {};
+      drawer.querySelectorAll('[data-part]').forEach(i => { parts[i.dataset.part] = i.value; });
+      await patch(parts);
       openRental(id);
       return;
     } catch (err) { state.textContent = ''; msg.replaceChildren(banner(err.message)); }

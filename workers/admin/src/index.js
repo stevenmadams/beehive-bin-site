@@ -315,7 +315,8 @@ const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
   first_name, last_name, email, phone, contact_pref,
   bins, weeks, start_date, due_date, total_cents,
-  delivery_city, delivery_address, delivery_notes, pickup_city, pickup_address, pickup_notes,
+  delivery_city, delivery_address, delivery_notes, delivery_street, delivery_unit, delivery_zip,
+  pickup_city, pickup_address, pickup_notes, pickup_street, pickup_unit, pickup_zip,
   agreement_signed_at, paid_at, delivered_at, returned_at, notes`;
 
 const RENTAL_STATUSES = ['pending', 'confirmed', 'out', 'returned', 'cancelled'];
@@ -449,8 +450,20 @@ async function updateRental(env, user, id, body) {
     }
   }
 
-  for (const f of ['delivery_address', 'pickup_address', 'delivery_city', 'pickup_city']) {
-    if (f in body) patch[f] = clean(body[f], 500);
+  const ADDRESS_PARTS = ['delivery_street', 'delivery_unit', 'delivery_city', 'delivery_zip',
+    'pickup_street', 'pickup_unit', 'pickup_city', 'pickup_zip'];
+  let addressChanged = false;
+  for (const f of ADDRESS_PARTS) {
+    if (f in body) { patch[f] = clean(body[f], 200); addressChanged = true; }
+  }
+  // Keep the one-line form in step with the parts, since the run sheet and the
+  // customer's recap read it.
+  if (addressChanged) {
+    const line = k => [patch[`${k}_street`], patch[`${k}_unit`],
+      [patch[`${k}_city`], 'UT', patch[`${k}_zip`]].filter(Boolean).join(' ')]
+      .filter(Boolean).join(', ');
+    patch.delivery_address = line('delivery') || patch.delivery_address;
+    patch.pickup_address = line('pickup') || patch.pickup_address;
   }
   if ('status' in body) {
     if (!RENTAL_STATUSES.includes(body.status)) throw new HttpError(400, 'unknown status');
@@ -463,12 +476,17 @@ async function updateRental(env, user, id, body) {
     `UPDATE rentals SET status=?1, agreement_signed_at=?2, paid_at=?3, delivered_at=?4,
        returned_at=?5, delivery_address=?6, pickup_address=?7, delivery_city=?8,
        pickup_city=?9, notes=?10, agreement_manual=?11, agreement_manual_by=?12,
-       agreement_manual_reason=?13 WHERE id=?14`,
+       agreement_manual_reason=?13,
+       delivery_street=?14, delivery_unit=?15, delivery_zip=?16,
+       pickup_street=?17, pickup_unit=?18, pickup_zip=?19
+     WHERE id=?20`,
   ).bind(
     patch.status, patch.agreement_signed_at, patch.paid_at, patch.delivered_at,
     patch.returned_at, patch.delivery_address, patch.pickup_address,
     patch.delivery_city, patch.pickup_city, patch.notes,
     patch.agreement_manual ? 1 : 0, patch.agreement_manual_by, patch.agreement_manual_reason,
+    patch.delivery_street, patch.delivery_unit, patch.delivery_zip,
+    patch.pickup_street, patch.pickup_unit, patch.pickup_zip,
     id,
   ).run();
 

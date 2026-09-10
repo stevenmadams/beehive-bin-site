@@ -101,6 +101,8 @@ h1{font-size:clamp(28px,5vw,38px);margin-bottom:8px}
   margin-bottom:18px;font-size:14.5px}
 .recap strong{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
   color:var(--muted);margin-bottom:5px;font-weight:700}
+.frow2{display:grid;grid-template-columns:1fr 110px;gap:12px}
+@media (max-width:420px){.frow2{grid-template-columns:1fr}}
 .same{display:flex;gap:10px;align-items:center;margin:16px 0 4px;font-size:15px}
 .same input{width:19px;height:19px;flex:none}
 dl{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;margin:0}
@@ -278,6 +280,39 @@ const details = r => `
     <a href="mailto:support@beehivebin.co">Tell us</a> before you sign.</p>
   </div>`;
 
+/* One line is not enough. A free-text address could contradict the city the
+   booking was taken for — Bountiful selected, an Ogden street typed — and the
+   invoice would be taxed at the wrong rate. It also cannot be formatted for a
+   run sheet or sorted by area. State is omitted: everywhere we serve is Utah. */
+const addressFields = (kind, r) => {
+  const v = f => esc(r[`${kind}_${f}`] || '');
+  const city = kind === 'delivery' ? r.delivery_city : r.pickup_city;
+  return `
+    <label class="fl" for="${kind}-street">Street address</label>
+    <input id="${kind}-street" name="${kind}_street" required autocomplete="address-line1"
+      placeholder="e.g. 412 N Sycamore Ave" value="${v('street')}">
+
+    <label class="fl" for="${kind}-unit">Apartment or unit <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+    <input id="${kind}-unit" name="${kind}_unit" autocomplete="address-line2"
+      placeholder="Apt 3B, Unit 214&hellip;" value="${v('unit')}">
+
+    <div class="frow2">
+      <div>
+        <label class="fl" for="${kind}-city">City</label>
+        <select id="${kind}-city" name="${kind}_city" required>
+          <option value="">Choose&hellip;</option>
+          ${SERVICE_CITIES.map(c => `<option value="${esc(c)}"${
+            city === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="fl" for="${kind}-zip">ZIP</label>
+        <input id="${kind}-zip" name="${kind}_zip" required inputmode="numeric"
+          pattern="[0-9]{5}" maxlength="5" placeholder="84037" value="${v('zip')}">
+      </div>
+    </div>`;
+};
+
 /* Step 1 — check we got it right before anything is asked of them. Cheaper to
    fix a wrong date here than after a signature, and it is the moment they agree
    these are the terms being signed for. */
@@ -302,10 +337,8 @@ const addressStep = r => page('Where are we going?', `
   <form method="POST">
     <input type="hidden" name="step" value="address">
     <div class="card">
-      <h2><span class="stepnum">2</span>Delivery</h2>
-      <label class="fl" for="daddr">Address${r.delivery_city ? ` &mdash; ${esc(r.delivery_city)}` : ''}</label>
-      <input id="daddr" name="delivery_address" required autocomplete="street-address"
-        placeholder="Street address, apartment or unit" value="${esc(r.delivery_address || '')}">
+      <h2>Delivery</h2>
+      ${addressFields('delivery', r)}
       <label class="fl" for="dnotes">Anything we should know?</label>
       <textarea id="dnotes" name="delivery_notes"
         placeholder="Stairs, gate code, parking, where to leave them&hellip;">${esc(r.delivery_notes || '')}</textarea>
@@ -313,24 +346,17 @@ const addressStep = r => page('Where are we going?', `
     </div>
 
     <div class="card">
-      <h2><span class="stepnum">2</span>Pickup</h2>
+      <h2>Pickup</h2>
       <label class="same">
         <input type="checkbox" name="same" value="yes" id="same"
           ${!r.pickup_address || r.pickup_address === r.delivery_address ? 'checked' : ''}>
         <span>Pick up from the same address</span>
       </label>
+      <span class="help" style="margin:0 0 4px 30px">Untick this if we&rsquo;re collecting from somewhere else.</span>
       <div id="pickupfields">
-        <label class="fl" for="pcity">Pickup city</label>
-        <select id="pcity" name="pickup_city">
-          <option value="">Choose a city&hellip;</option>
-          ${SERVICE_CITIES.map(c => `<option value="${esc(c)}"${
-            r.pickup_city === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}
-        </select>
-        <span class="help">Not listed? We can&rsquo;t collect from there &mdash;
+        ${addressFields('pickup', r)}
+        <span class="help">City not listed? We can&rsquo;t collect from there &mdash;
         <a href="mailto:support@beehivebin.co">email us</a> and we&rsquo;ll sort something out.</span>
-        <label class="fl" for="paddr">Pickup address</label>
-        <input id="paddr" name="pickup_address" autocomplete="street-address"
-          placeholder="Where should we collect them?" value="${esc(r.pickup_address || '')}">
         <label class="fl" for="pnotes">Anything different about the pickup?</label>
         <textarea id="pnotes" name="pickup_notes"
           placeholder="Different gate code, storage unit number, a different contact&hellip;">${esc(r.pickup_notes || '')}</textarea>
@@ -354,7 +380,7 @@ const addressStep = r => page('Where are we going?', `
 const addressRecap = r => `
   <div class="recap">
     <strong>Delivering to</strong>
-    ${esc(r.delivery_address)}${r.delivery_notes ? `<br><span style="color:var(--muted)">${esc(r.delivery_notes)}</span>` : ''}
+    ${esc(r.delivery_address || '')}${r.delivery_notes ? `<br><span style="color:var(--muted)">${esc(r.delivery_notes)}</span>` : ''}
     ${r.pickup_address && r.pickup_address !== r.delivery_address
       ? `<div style="margin-top:10px"><strong>Collecting from</strong>${esc(r.pickup_address)}${
           r.pickup_notes ? `<br><span style="color:var(--muted)">${esc(r.pickup_notes)}</span>` : ''}</div>`
@@ -401,7 +427,7 @@ const payStep = r => page('Payment', `
   ${progress('pay')}
   ${details(r)}
   <div class="card">
-    <h2><span class="stepnum">4</span>Payment</h2>
+    <h2>Payment</h2>
     ${r.square_invoice_url
       ? `<p style="margin-top:0;color:var(--muted)">Secure payment is handled by Square.</p>
          <a class="btn" href="${esc(r.square_invoice_url)}">Pay ${esc(money(r.total_cents))} plus tax</a>`
@@ -410,7 +436,8 @@ const payStep = r => page('Payment', `
   </div>
   ${addressRecap(r)}`);
 
-const COLUMNS = `id, confirm_token, status, details_confirmed_at, signed_on_behalf, first_name, last_name, email, phone, bins, weeks,
+const COLUMNS = `id, confirm_token, status, details_confirmed_at, signed_on_behalf,
+  delivery_street, delivery_unit, delivery_zip, pickup_street, pickup_unit, pickup_zip, first_name, last_name, email, phone, bins, weeks,
   start_date, due_date, total_cents, delivery_city, pickup_city,
   delivery_address, pickup_address, delivery_notes, pickup_notes,
   agreement_signed_at, agreement_name, paid_at, square_invoice_url, square_status`;
@@ -473,31 +500,54 @@ async function confirmDetails(env, r) {
   return null;
 }
 
+/* Compose the one-line form the panel and run sheet display, from the parts. */
+const composeAddress = a =>
+  [a.street, a.unit, `${a.city} UT ${a.zip}`.trim()].filter(Boolean).join(', ');
+
+function readAddress(form, kind) {
+  const t = (f, n) => String(form.get(`${kind}_${f}`) || '').trim().slice(0, n);
+  return {
+    street: t('street', 200),
+    unit: t('unit', 60) || null,
+    city: canonicalCity(form.get(`${kind}_city`)),
+    zip: t('zip', 10),
+  };
+}
+
+const addressProblem = (a, label) => {
+  if (!a.street) return `Please add the ${label} street address.`;
+  if (!a.city) return `Please choose a ${label} city from the list. If yours is not there, email support@beehivebin.co and we will sort something out.`;
+  if (!/^\d{5}$/.test(a.zip)) return `Please add a five-digit ${label} ZIP code.`;
+  return null;
+};
+
 async function saveAddress(env, r, form) {
-  const daddr = String(form.get('delivery_address') || '').trim().slice(0, 300);
-  if (!daddr) return 'Please add the delivery address.';
+  const d = readAddress(form, 'delivery');
+  const dProblem = addressProblem(d, 'delivery');
+  if (dProblem) return dProblem;
 
   const same = !!form.get('same');
-  const paddr = same ? daddr : String(form.get('pickup_address') || '').trim().slice(0, 300);
-  const pcity = same ? r.delivery_city : (canonicalCity(form.get('pickup_city')) || String(form.get('pickup_city') || '').trim());
-
+  const p = same ? { ...d } : readAddress(form, 'pickup');
   if (!same) {
-    if (!paddr) return 'Please add the pickup address, or tick that it is the same.';
-    // The dropdown is a convenience; this is the rule.
-    if (!canonicalCity(pcity)) {
-      return 'We can only collect from the cities listed. Email support@beehivebin.co if yours is not there and we will sort something out.';
-    }
+    const pProblem = addressProblem(p, 'pickup');
+    if (pProblem) return pProblem;
   }
 
   await env.DB.prepare(
-    `UPDATE rentals SET delivery_address=?1, pickup_address=?2, pickup_city=?3,
-       delivery_notes=?4, pickup_notes=?5 WHERE id=?6`,
+    `UPDATE rentals SET
+       delivery_street=?1, delivery_unit=?2, delivery_city=?3, delivery_zip=?4, delivery_address=?5,
+       pickup_street=?6,  pickup_unit=?7,  pickup_city=?8,  pickup_zip=?9,  pickup_address=?10,
+       delivery_notes=?11, pickup_notes=?12
+     WHERE id=?13`,
   ).bind(
-    daddr, paddr || daddr, pcity || r.delivery_city,
+    d.street, d.unit, d.city, d.zip, composeAddress(d),
+    p.street, p.unit, p.city, p.zip, composeAddress(p),
     String(form.get('delivery_notes') || '').trim().slice(0, 2000) || null,
     same ? null : String(form.get('pickup_notes') || '').trim().slice(0, 2000) || null,
     r.id,
   ).run();
+
+  const daddr = composeAddress(d);
 
   // Worth a line once they have signed: an address that moves the day before
   // delivery silently invalidates the run sheet, and nobody would otherwise know.
