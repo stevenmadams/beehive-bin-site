@@ -250,6 +250,11 @@ img,svg{display:block;max-width:100%}
   z-index:3;max-width:580px;pointer-events:none;
 }
 .hero .copy a{pointer-events:auto}
+/* Faint white scrim behind the copy so text stays legible over the 3D scene. */
+.hero .copy::before{
+  content:"";position:absolute;inset:-56px -72px;z-index:-1;
+  background:radial-gradient(ellipse at 42% 50%,rgba(255,255,255,.7) 0%,rgba(255,255,255,.42) 52%,rgba(255,255,255,0) 76%);
+}
 /* The sub sits over the 3D lid on small screens — full ink for contrast. */
 .hero .sub{color:var(--ink);font-weight:600}
 @media (max-height:720px){
