@@ -4,7 +4,7 @@
    API, so e-signature stays a manual step in the Square dashboard — see
    docs/stage2-square-automation.md. Only the invoice is automated here. */
 
-import { rateFor, TaxError, TAX_TABLE_VERIFIED } from './tax.js';
+import { rateFor, TaxError, TAX_TABLE_VERIFIED, TAX_TABLE_SOURCE } from './tax.js';
 
 const HOSTS = {
   sandbox: 'https://connect.squareupsandbox.com',
@@ -199,7 +199,7 @@ export async function ping(env) {
   const call = client(env);
   const { locations = [] } = await call('GET', '/v2/locations');
   const match = locations.find(l => l.id === env.SQUARE_LOCATION_ID);
-  const tax = `per-city table, verified ${TAX_TABLE_VERIFIED} — re-check each quarter`;
+  const tax = `${TAX_TABLE_SOURCE}; verified ${TAX_TABLE_VERIFIED} — re-check each quarter at tax.utah.gov/sales/ratechanges`;
 
   return {
     env: env.SQUARE_ENV || 'sandbox',
