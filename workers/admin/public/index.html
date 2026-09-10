@@ -158,6 +158,17 @@ tr.late td{background:rgba(163,44,44,.05)}
 .notes .meta button:hover{color:var(--ink)}
 .notes .pin{margin-left:auto}
 .notes .empty-n{color:var(--muted);font-size:13.5px;padding:2px 0 10px}
+.history summary{cursor:pointer;font-size:12px;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted);padding:6px 0}
+.history summary:hover{color:var(--ink)}
+.history ol{list-style:none;margin:8px 0 0;padding:0;border-left:2px solid var(--line)}
+.history li{padding:5px 0 5px 14px;font-size:13px;position:relative}
+.history li::before{content:"";position:absolute;left:-5px;top:11px;width:8px;height:8px;
+  border-radius:50%;background:var(--line)}
+.history li.bysystem::before{background:var(--yellow-deep)}
+.history .what{font-weight:600}
+.history .who{color:var(--muted)}
+.history .when{color:var(--muted);font-size:12px}
 .pill.staff{background:rgba(21,19,15,.08);color:var(--char)}
 .pill.owner{background:var(--yellow);color:var(--ink)}
 .pill.off{background:rgba(163,44,44,.12);color:var(--bad)}
@@ -400,6 +411,56 @@ async function loadList(list, head) {
   }
 }
 
+/* ---------- history ----------
+   Everything that mutates already writes to audit_log; this is the first thing
+   that reads it back. Collapsed by default — it answers "who did this and
+   when", which is asked occasionally and urgently, not continuously. */
+
+const ACTION_LABELS = {
+  'request.create': 'Request entered by hand',
+  'request.approve': 'Approved',
+  'request.decline': 'Declined',
+  'request.reopen': 'Moved back to new',
+  'request.note': 'Note added',
+  'rental.create': 'Rental created',
+  'rental.agreement': 'Agreement marked signed',
+  'rental.paid': 'Marked paid',
+  'rental.delivered': 'Marked delivered',
+  'rental.returned': 'Marked returned',
+  'rental.update': 'Details updated',
+  'rental.invoice': 'Invoice created',
+  'rental.confirm_sent': 'Confirmation link emailed',
+  'rental.sync': 'Checked Square for payment',
+  'rental.agreement_signed': 'Signed by the customer',
+  'rental.address_changed': 'Customer changed the address',
+  'rental.signed_copy_sent': 'Signed copy emailed',
+  'rental.signed_copy_failed': 'Signed copy failed to send',
+  'note.add': 'Note added',
+  'note.delete': 'Note deleted',
+  'note.restore': 'Note restored',
+  'square.invoice.payment_made': 'Square recorded payment',
+  'square.invoice.updated': 'Square updated the invoice',
+};
+
+const SYSTEM_ACTORS = ['square-webhook', 'system', 'auto-enrolled'];
+
+function historyPanel(container, entity, id) {
+  api(`/${entity}/${id}/history`).then(({ history }) => {
+    if (!history.length) { container.replaceChildren(); return; }
+    const rows = history.map(h => `
+      <li class="${SYSTEM_ACTORS.includes(h.actor_email) ? 'bysystem' : ''}">
+        <span class="what">${esc(ACTION_LABELS[h.action] || h.action)}</span>
+        <span class="who">— ${esc(h.actor_email)}</span>
+        <div class="when" title="${esc(h.at)}">${esc(ago(h.at))}${
+          h.detail ? ` · ${esc(String(h.detail).slice(0, 80))}` : ''}</div>
+      </li>`).join('');
+    container.replaceChildren($(`<details class="history">
+      <summary>History (${history.length})</summary>
+      <ol>${rows}</ol>
+    </details>`));
+  }).catch(() => container.replaceChildren());
+}
+
 /* ---------- internal notes ----------
    Attributed and append-only, so the input only appears when someone is
    actually writing — a permanently open box invites overwriting a colleague's
@@ -561,6 +622,7 @@ async function openRequest(id) {
       ${r.decline_reason ? `<div class="note"><h4>Why it was declined</h4>${esc(r.decline_reason)}</div>` : ''}
 
       <div id="req-notes"></div>
+      <div id="req-history" style="margin-top:6px"></div>
 
       <div class="actions" style="margin-top:22px;border-top:1px solid var(--line);padding-top:18px">
         ${r.status === 'new' ? `
@@ -590,6 +652,7 @@ async function openRequest(id) {
   };
 
   notesPanel(drawer.querySelector('#req-notes'), 'requests', id);
+  historyPanel(drawer.querySelector('#req-history'), 'requests', id);
   drawer.querySelector('[data-act="approve"]')?.addEventListener('click', () => act('approve'));
   drawer.querySelector('[data-act="reopen"]')?.addEventListener('click', () => act('reopen'));
   drawer.querySelector('[data-act="decline"]')?.addEventListener('click', () => {
@@ -918,6 +981,7 @@ async function openRental(id) {
 
       <div style="height:20px"></div>
       <div id="rent-notes"></div>
+      <div id="rent-history" style="margin-top:6px"></div>
 
       <div id="r-msg" style="margin-top:14px"></div>
       <div class="actions" style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
@@ -958,6 +1022,7 @@ async function openRental(id) {
   }));
 
   notesPanel(drawer.querySelector('#rent-notes'), 'rentals', id);
+  historyPanel(drawer.querySelector('#rent-history'), 'rentals', id);
 
   drawer.querySelector('#r-send')?.addEventListener('click', async e => {
     const was = e.target.textContent;
@@ -1037,6 +1102,10 @@ async function viewEmployees() {
     <div id="emsg"></div>
     <div id="emform"></div>
     <div class="card" id="emlist"><div class="empty">Loading…</div></div>
+
+    <div class="head" style="margin-top:34px"><h1 style="font-size:22px">Recent activity</h1></div>
+    <p class="sub">Everything anyone has done, newest first.</p>
+    <div class="card" id="activity"><div class="empty">Loading…</div></div>
   </div>`);
   render('employees', view);
 
@@ -1088,6 +1157,7 @@ async function viewEmployees() {
       const table = $(`<table><thead><tr>
         <th>Person</th><th>Role</th><th>Access</th><th class="hide-sm">Last seen</th><th></th>
       </tr></thead><tbody>${rows}</tbody></table>`);
+      loadActivity(view.querySelector('#activity'));
 
       table.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', async () => {
         msg.replaceChildren();
@@ -1103,6 +1173,31 @@ async function viewEmployees() {
     }
   };
   reload();
+}
+
+/* The same log the per-item history reads, unfiltered — "who is doing what"
+   across the business rather than within one rental. */
+async function loadActivity(container) {
+  if (!container) return;
+  try {
+    const { entries } = await api('/audit');
+    if (!entries.length) {
+      container.replaceChildren($('<div class="empty">Nothing yet.</div>'));
+      return;
+    }
+    const rows = entries.map(e => `<tr>
+      <td class="nowrap" style="color:var(--muted)" title="${esc(e.at)}">${esc(ago(e.at))}</td>
+      <td><span class="who">${esc(ACTION_LABELS[e.action] || e.action)}</span></td>
+      <td class="nowrap">${esc(e.actor_email)}</td>
+      <td class="nowrap hide-sm">${e.entity ? `${esc(e.entity)} #${esc(e.entity_id)}` : '—'}</td>
+      <td class="hide-sm" style="color:var(--muted)">${esc(String(e.detail || '').slice(0, 60))}</td>
+    </tr>`).join('');
+    container.replaceChildren($(`<table><thead><tr>
+      <th>When</th><th>What</th><th>Who</th><th class="hide-sm">Item</th><th class="hide-sm">Detail</th>
+    </tr></thead><tbody>${rows}</tbody></table>`));
+  } catch (err) {
+    container.replaceChildren($(`<div class="empty">${esc(err.message)}</div>`));
+  }
 }
 
 /* ---------- stubs ---------- */

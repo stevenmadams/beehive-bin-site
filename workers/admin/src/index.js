@@ -728,6 +728,15 @@ async function api(request, env, url) {
     return json({ notes: await updateNote(env, user, Number(m[1]), body) });
   }
 
+  if ((m = match(/^\/(requests|rentals)\/(\d+)\/history$/)) && method === 'GET') {
+    const entity = m[1] === 'requests' ? 'request' : 'rental';
+    const { results } = await env.DB.prepare(
+      `SELECT at, actor_email, action, detail FROM audit_log
+       WHERE entity = ?1 AND entity_id = ?2 ORDER BY at DESC, id DESC LIMIT 100`,
+    ).bind(entity, m[2]).all();
+    return json({ history: results });
+  }
+
   if (path === '/audit' && method === 'GET') {
     const { results } = await env.DB.prepare(
       'SELECT at, actor_email, action, entity, entity_id, detail FROM audit_log ORDER BY at DESC LIMIT 100',
