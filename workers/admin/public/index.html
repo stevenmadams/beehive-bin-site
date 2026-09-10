@@ -143,6 +143,11 @@ tr.late td{background:rgba(163,44,44,.05)}
 .step.payrow .lbl{flex:none}
 .step.payrow:hover{border-color:var(--line)}
 .step.payrow .tick{cursor:pointer;background:none;padding:0}
+/* These rows use a <button> for the tick, and the class-heavy selectors above
+   outrank the generic done-state rule — so the fill has to be restated or the
+   row shows a green outline with a white tick on a transparent background. */
+.step.payrow[data-done="1"] .tick,
+.step.photorow[data-done="1"] .tick{background:var(--ok);border-color:var(--ok);color:#fff}
 .step.payrow[data-locked="1"] .tick{cursor:default}
 /* Actions sit right; if the row ever does wrap they stay together and stay
    right-aligned rather than scattering. */
