@@ -24,14 +24,21 @@ class HttpError extends Error {
 
 /* Local development only. Running the panel on your laptop means there is no
    Access proxy to mint a JWT, so `wrangler dev --var ACCESS_DEV_EMAIL:you@beehivebin.co`
-   stands in for one. Double-locked: the var must be set *and* the request must
-   arrive on a loopback host. admin.beehivebin.co is never loopback, so even a
-   var accidentally left in wrangler.toml cannot open a hole in production. */
+   stands in for one.
+
+   Double-locked: the var must be set *and* the request must not have come
+   through Cloudflare's edge. Every request that reaches the deployed Worker
+   carries a `cf-ray` header set by the edge itself, and admin.beehivebin.co is
+   reachable no other way (workers_dev is off), so a copy of the var left in
+   wrangler.toml by accident still cannot open a hole in production.
+
+   Hostname is deliberately not the signal here: `wrangler dev` reports the
+   configured custom domain as the request host, so a loopback check fails
+   locally for a reason that has nothing to do with security. */
 function devEmail(request, env) {
   if (!env.ACCESS_DEV_EMAIL) return null;
-  const host = new URL(request.url).hostname;
-  if (!['localhost', '127.0.0.1', '::1', '[::1]'].includes(host)) {
-    console.log('ACCESS_DEV_EMAIL ignored on non-loopback host', host);
+  if (request.headers.get('cf-ray')) {
+    console.log('ACCESS_DEV_EMAIL ignored: request came through the Cloudflare edge');
     return null;
   }
   return String(env.ACCESS_DEV_EMAIL).trim().toLowerCase();
@@ -103,7 +110,7 @@ const audit = (env, actor, action, entity, entityId, detail = null) =>
 
 /* ---------- request handlers ---------- */
 
-const REQUEST_COLUMNS = `id, created_at, kind, status, first_name, last_name, email, phone,
+const REQUEST_COLUMNS = `id, created_at, kind, source, status, first_name, last_name, email, phone,
   bins, weeks, start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
   customer_notes, message, internal_notes, decided_at, decided_by, decline_reason`;
 
@@ -134,6 +141,88 @@ async function listRequests(env, url) {
     ORDER BY created_at DESC LIMIT 200`;
   const { results } = await env.DB.prepare(sql).bind(...binds).all();
   return results;
+}
+
+/* Package pricing, in cents. Must stay in sync with the PRICES/EXTRA tables in
+   reserve.html until the Settings tab owns pricing for both. */
+const PRICES = { 10: 3900, 20: 7900, 40: 12900, 60: 17900 };
+const EXTRA  = { 10: 2500, 20: 4000, 40: 6500, 60: 9000 };
+const quoteCents = (bins, weeks) =>
+  PRICES[bins] == null ? null : PRICES[bins] + (weeks - 1) * EXTRA[bins];
+
+const isoDate = v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '').trim()) ? String(v).trim() : null);
+const addWeeks = (iso, weeks) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 7 * weeks);
+  return d.toISOString().slice(0, 10);
+};
+const clean = (v, max) => {
+  const t = String(v ?? '').trim();
+  return t ? t.slice(0, max) : null;
+};
+
+/* A request typed in by staff — someone who phoned instead of using the site.
+   Same shape as a web submission so every downstream view treats them alike;
+   `source` is what tells them apart. The quote is computed here rather than
+   accepted from the client, so a stale or edited panel cannot invent a price. */
+async function createRequest(env, user, body) {
+  const kind = body.kind === 'contact' ? 'contact' : 'reserve';
+  const first = clean(body.first_name, 100);
+  const phone = clean(body.phone, 40);
+  const email = clean(body.email, 200);
+
+  if (!first) throw new HttpError(400, 'A first name is required.');
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    throw new HttpError(400, 'That email address looks wrong.');
+  }
+
+  let bins = null, weeks = null, start = null, returnDate = null, quoted = null, dcity = null;
+
+  if (kind === 'reserve') {
+    bins = parseInt(body.bins, 10);
+    weeks = parseInt(body.weeks, 10);
+    start = isoDate(body.start_date);
+    dcity = clean(body.delivery_city, 120);
+
+    if (!PRICES[bins]) throw new HttpError(400, 'Pick a package: 10, 20, 40 or 60 bins.');
+    if (!Number.isFinite(weeks) || weeks < 1 || weeks > 26) throw new HttpError(400, 'Weeks must be between 1 and 26.');
+    if (!start) throw new HttpError(400, 'A start date is required.');
+    if (!dcity) throw new HttpError(400, 'A delivery city is required.');
+    if (!phone && !email) throw new HttpError(400, 'A phone number or email is required.');
+
+    returnDate = addWeeks(start, weeks);
+    // An override exists because phone-in customers are exactly where custom
+    // pricing happens; blank means use the standard package rate.
+    const override = String(body.quoted_total ?? '').trim();
+    if (override) {
+      const m = /([\d,]+(?:\.\d{1,2})?)/.exec(override);
+      if (!m) throw new HttpError(400, 'That quoted total is not a number.');
+      quoted = Math.round(parseFloat(m[1].replace(/,/g, '')) * 100);
+    } else {
+      quoted = quoteCents(bins, weeks);
+    }
+  } else {
+    start = isoDate(body.start_date);
+    dcity = clean(body.delivery_city, 120);
+    if (!phone && !email) throw new HttpError(400, 'A phone number or email is required.');
+  }
+
+  const res = await env.DB.prepare(
+    `INSERT INTO requests (kind, source, first_name, last_name, email, phone, bins, weeks,
+       start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
+       customer_notes, message, internal_notes, raw_json)
+     VALUES (?1,'manual',?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)`,
+  ).bind(
+    kind, first, clean(body.last_name, 100), email, phone, bins, weeks,
+    start, returnDate, quoted, dcity, clean(body.pickup_city, 120),
+    clean(body.customer_notes, 4000), clean(body.message, 4000),
+    clean(body.internal_notes, 4000),
+    JSON.stringify({ entered_by: user.email }),
+  ).run();
+
+  const id = res.meta.last_row_id;
+  await audit(env, user.email, 'request.create', 'request', id, `source=manual kind=${kind}`);
+  return env.DB.prepare(`SELECT ${REQUEST_COLUMNS} FROM requests WHERE id = ?1`).bind(id).first();
 }
 
 async function decideRequest(env, user, id, body) {
@@ -234,7 +323,10 @@ async function api(request, env, url) {
     return json({ counts });
   }
 
-  if (path === '/requests' && method === 'GET') return json({ requests: await listRequests(env, url) });
+  if (path === '/requests') {
+    if (method === 'GET') return json({ requests: await listRequests(env, url) });
+    if (method === 'POST') return json({ request: await createRequest(env, user, body) }, 201);
+  }
 
   if ((m = match(/^\/requests\/(\d+)$/))) {
     const id = Number(m[1]);

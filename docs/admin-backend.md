@@ -134,11 +134,16 @@ npx wrangler dev -c workers/admin/wrangler.toml --port 8788 --var ACCESS_DEV_EMA
 ```
 
 There is no Access proxy in front of localhost, so `ACCESS_DEV_EMAIL` stands in
-for the JWT. It is double-locked — it is honoured only when the var is set *and*
-the request arrives on a loopback hostname — so a copy left in `wrangler.toml`
-by accident cannot open a hole on `admin.beehivebin.co`. The `admin-noauth`
-launch config runs the same Worker without it, which is how you re-check that
-the panel still fails closed.
+for the JWT. It is double-locked — honoured only when the var is set *and* the
+request did **not** arrive through Cloudflare's edge, which is detected by the
+absence of a `cf-ray` header. So a copy left in `wrangler.toml` by accident
+cannot open a hole on `admin.beehivebin.co`. The `admin-noauth` launch config
+runs the same Worker without the var, which is how you re-check that the panel
+still fails closed.
+
+> The check deliberately does not look at the hostname. `wrangler dev` reports
+> the configured custom domain as the request host, so a loopback test fails
+> locally for reasons that have nothing to do with security.
 
 ## Operating notes
 

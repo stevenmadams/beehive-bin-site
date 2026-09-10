@@ -52,6 +52,16 @@ main{padding:26px 30px 60px;max-width:1160px}
 .head{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
 .head h1{font-size:30px}
 .head .count{color:var(--muted);font-weight:600}
+.head .newreq{margin-left:auto;align-self:center}
+.pill.manual{background:rgba(21,19,15,.08);color:var(--muted);font-weight:600}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.frow.one{grid-template-columns:1fr}
+.dbody input,.dbody select{width:100%;padding:9px 11px;border:1px solid var(--line);
+  border-radius:9px;background:var(--white)}
+.quote{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:11px 14px;
+  margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+.quote strong{font-family:var(--font-display);font-size:21px}
+.quote small{color:var(--muted)}
 .sub{color:var(--muted);margin:0 0 20px}
 
 /* ---- controls ---- */
@@ -257,8 +267,11 @@ async function viewRequests() {
   const view = $('<div></div>');
   const filters = ['new', 'approved', 'declined', 'all'];
   const head = $(`<div>
-    <div class="head"><h1>Requests</h1><span class="count" id="rcount"></span></div>
-    <p class="sub">Everything the reserve and contact forms send in. Approve one to move it toward a rental.</p>
+    <div class="head">
+      <h1>Requests</h1><span class="count" id="rcount"></span>
+      <button class="btn primary newreq" id="newreq">+ New request</button>
+    </div>
+    <p class="sub">Everything the reserve and contact forms send in, plus anything taken over the phone.</p>
     <div class="toolbar">
       <div class="seg">${filters.map(f =>
         `<button data-f="${f}" aria-pressed="${f === reqState.status}">${f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>
@@ -268,6 +281,8 @@ async function viewRequests() {
   const list = $('<div class="card"><div class="empty">Loading…</div></div>');
   view.append(head, list);
   render('requests', view);
+
+  head.querySelector('#newreq').addEventListener('click', openNewRequest);
 
   head.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
     reqState.status = b.dataset.f;
@@ -299,7 +314,8 @@ async function loadList(list, head) {
     }
 
     const rows = requests.map(r => `<tr class="clickable" data-id="${r.id}">
-      <td><span class="pill ${r.status}">${r.status}</span></td>
+      <td><span class="pill ${r.status}">${r.status}</span>${
+        r.source === 'manual' ? ' <span class="pill manual" title="Taken by phone">phone</span>' : ''}</td>
       <td><div class="who">${esc(fullName(r))}<small>${esc(r.email || r.phone || '—')}</small></div></td>
       <td class="nowrap">${r.kind === 'contact' ? '<em style="color:var(--muted)">Question</em>' : esc(pkg(r))}</td>
       <td class="nowrap num">${esc(niceDate(r.start_date))}</td>
@@ -419,6 +435,136 @@ async function openRequest(id) {
     const reason = prompt('Why is this being declined? (optional — the customer never sees it)');
     if (reason === null) return;
     act('decline', { reason });
+  });
+}
+
+/* ---------- new request (phone-in) ---------- */
+const PRICES = { 10: 39, 20: 79, 40: 129, 60: 179 };
+const EXTRA  = { 10: 25, 20: 40, 40: 65,  60: 90  };
+
+function openNewRequest() {
+  const scrim = $('<div class="scrim"></div>');
+  const drawer = $('<div class="drawer" role="dialog" aria-modal="true"></div>');
+  const close = () => { scrim.remove(); drawer.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  scrim.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  drawer.append($(`
+    <div class="dhead">
+      <div style="flex:1"><h2>New request</h2>
+        <div class="meta">Taken by phone or in person</div></div>
+      <button class="x" aria-label="Close">\u00D7</button>
+    </div>`), $(`
+    <div class="dbody">
+      <div class="frow one">
+        <div><label class="fl" for="n-kind">Type</label>
+          <select id="n-kind">
+            <option value="reserve">Reservation</option>
+            <option value="contact">Question / enquiry</option>
+          </select></div>
+      </div>
+      <div class="frow">
+        <div><label class="fl" for="n-first">First name</label><input id="n-first" required></div>
+        <div><label class="fl" for="n-last">Last name</label><input id="n-last"></div>
+      </div>
+      <div class="frow">
+        <div><label class="fl" for="n-phone">Phone</label><input id="n-phone" type="tel"></div>
+        <div><label class="fl" for="n-email">Email</label><input id="n-email" type="email"></div>
+      </div>
+
+      <div id="n-reserve">
+        <div class="frow">
+          <div><label class="fl" for="n-bins">Package</label>
+            <select id="n-bins">
+              <option value="10">10 bins</option><option value="20">20 bins</option>
+              <option value="40" selected>40 bins</option><option value="60">60 bins</option>
+            </select></div>
+          <div><label class="fl" for="n-weeks">Weeks</label>
+            <input id="n-weeks" type="number" min="1" max="26" value="1"></div>
+        </div>
+        <div class="quote">
+          <span>Standard rate <small id="n-back"></small></span>
+          <strong id="n-quote">\u2014</strong>
+        </div>
+        <div class="frow">
+          <div><label class="fl" for="n-start">Start date</label>
+            <input id="n-start" type="date" min="${today}"></div>
+          <div><label class="fl" for="n-override">Custom price</label>
+            <input id="n-override" placeholder="Leave blank for standard"></div>
+        </div>
+      </div>
+
+      <div class="frow">
+        <div><label class="fl" for="n-dcity">Delivery city</label><input id="n-dcity"></div>
+        <div><label class="fl" for="n-pcity">Pickup city</label><input id="n-pcity" placeholder="If different"></div>
+      </div>
+
+      <label class="fl" for="n-notes">Notes from the customer</label>
+      <textarea id="n-notes" placeholder="Stairs, gate codes, custom quantities\u2026"></textarea>
+
+      <div style="height:12px"></div>
+      <label class="fl" for="n-internal">Internal notes</label>
+      <textarea id="n-internal" placeholder="Only staff see this."></textarea>
+
+      <div id="n-msg" style="margin-top:14px"></div>
+      <div class="actions" style="margin-top:16px;border-top:1px solid var(--line);padding-top:18px">
+        <button class="btn primary" id="n-save">Create request</button>
+        <button class="btn" id="n-cancel">Cancel</button>
+      </div>
+    </div>`));
+
+  document.body.append(scrim, drawer);
+  const q = id => drawer.querySelector('#' + id);
+
+  // Mirror the site's quote so a phoned-in customer hears the same number the
+  // website would have shown them.
+  const sync = () => {
+    const bins = +q('n-bins').value;
+    const weeks = Math.max(1, +q('n-weeks').value || 1);
+    q('n-quote').textContent = '$' + (PRICES[bins] + (weeks - 1) * EXTRA[bins]);
+    const start = q('n-start').value;
+    if (start) {
+      const d = new Date(start + 'T12:00:00');
+      d.setDate(d.getDate() + 7 * weeks);
+      q('n-back').textContent = '\u00B7 back ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } else q('n-back').textContent = '';
+  };
+  ['n-bins', 'n-weeks', 'n-start'].forEach(id => q(id).addEventListener('input', sync));
+  sync();
+
+  const isReserve = () => q('n-kind').value === 'reserve';
+  q('n-kind').addEventListener('change', () => { q('n-reserve').hidden = !isReserve(); });
+
+  drawer.querySelector('.x').addEventListener('click', close);
+  q('n-cancel').addEventListener('click', close);
+
+  q('n-save').addEventListener('click', async () => {
+    const btn = q('n-save');
+    btn.disabled = true;
+    q('n-msg').replaceChildren();
+    try {
+      const { request } = await api('/requests', { method: 'POST', body: JSON.stringify({
+        kind: q('n-kind').value,
+        first_name: q('n-first').value, last_name: q('n-last').value,
+        phone: q('n-phone').value, email: q('n-email').value,
+        bins: q('n-bins').value, weeks: q('n-weeks').value,
+        start_date: q('n-start').value, delivery_city: q('n-dcity').value,
+        pickup_city: q('n-pcity').value, quoted_total: q('n-override').value,
+        customer_notes: isReserve() ? q('n-notes').value : '',
+        message: isReserve() ? '' : q('n-notes').value,
+        internal_notes: q('n-internal').value,
+      })});
+      close();
+      await refreshCounts();
+      await viewRequests();
+      location.hash = `#/requests/${request.id}`;
+    } catch (err) {
+      q('n-msg').replaceChildren(banner(err.message));
+      btn.disabled = false;
+    }
   });
 }
 
