@@ -8,5 +8,5 @@ compatibility_date = "2026-09-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "beehive"
-database_id = "REPLACE-ME"       # same id as workers/admin/wrangler.toml
+database_id = "4dfd9b23-a6a4-40ba-87ee-0e9abc57d828"       # same id as workers/admin/wrangler.toml
 migrations_dir = "../migrations"

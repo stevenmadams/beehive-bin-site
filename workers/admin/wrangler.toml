@@ -2,6 +2,12 @@ name = "beehive-admin"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
 
+# The panel must be reachable ONLY at admin.beehivebin.co, which is the hostname
+# Cloudflare Access guards. Left on, beehive-admin.<subdomain>.workers.dev would
+# serve the same Worker with no Access in front of it — the JWT check would
+# reject every request, but a backstop is not a front door.
+workers_dev = false
+
 # Custom domain admin.beehivebin.co is attached via the account-level Workers
 # Domains API, the same way api.beehivebin.co is on beehive-forms.
 #
@@ -29,5 +35,5 @@ ALLOWED_EMAIL_DOMAIN = "beehivebin.co"
 [[d1_databases]]
 binding = "DB"
 database_name = "beehive"
-database_id = "REPLACE-ME"       # `wrangler d1 create beehive` prints this
+database_id = "4dfd9b23-a6a4-40ba-87ee-0e9abc57d828"       # `wrangler d1 create beehive` prints this
 migrations_dir = "../migrations"
