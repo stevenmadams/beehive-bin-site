@@ -4,6 +4,8 @@
    API, so e-signature stays a manual step in the Square dashboard — see
    docs/stage2-square-automation.md. Only the invoice is automated here. */
 
+import { rateFor, TaxError, TAX_TABLE_VERIFIED } from './tax.js';
+
 const HOSTS = {
   sandbox: 'https://connect.squareupsandbox.com',
   production: 'https://connect.squareup.com',
@@ -77,37 +79,32 @@ const money = cents => ({ amount: Math.round(cents), currency: 'USD' });
 
 /* Sales tax.
 
-   Square does NOT apply a location's tax settings to orders created through the
-   API — an order without a tax on it is simply untaxed, however the dashboard is
-   configured. The rate has to be attached here.
+   Square does NOT apply a location's tax settings to an order built from an
+   ad-hoc line item, so the rate is attached here explicitly.
 
-   Preferred form is a Tax object created in the Square dashboard, referenced by
-   id: the rate then lives where the business's accounting already is, changes
-   without a deploy, and shows up correctly in Square's tax reporting. A plain
-   percentage is supported as a fallback for getting started.
+   Utah sources a rental to where the customer receives the property, so the
+   rate comes from the delivery city rather than from ours — and the cities we
+   serve do not all charge the same. The rate is looked up per rental in
+   tax.js.
 
-   If neither is configured no tax is added, which is the honest behaviour —
-   inventing a rate would be worse than charging none. `ping` reports which of
-   the two is in force so this cannot be silently wrong. */
-function taxesFor(env) {
-  const catalogId = (env.SQUARE_TAX_CATALOG_ID || '').trim();
-  if (catalogId) {
-    return { taxes: [{ catalog_object_id: catalogId, scope: 'ORDER' }] };
-  }
-
-  const pct = (env.SQUARE_TAX_PERCENTAGE || '').trim();
-  if (pct) {
-    return {
-      taxes: [{
-        name: env.SQUARE_TAX_NAME || 'Sales tax',
-        percentage: pct,          // Square wants a string, e.g. "7.25"
-        scope: 'ORDER',
-        type: 'ADDITIVE',         // added on top, not carved out of the price
-      }],
-    };
-  }
-  return {};
+   The date used is the DELIVERY date, on the reasoning that the lease begins
+   when the customer receives the bins, which is the same event that decides the
+   jurisdiction. An invoice raised in September for an October delivery
+   therefore uses October's rate. This is the defensible reading rather than a
+   settled one — it is on the list to confirm with the Tax Commission, and it is
+   a one-line change if they say otherwise. */
+function taxesFor(rental) {
+  const { rate } = rateFor(rental.delivery_city, rental.start_date);
+  return {
+    taxes: [{
+      name: 'Utah sales tax',
+      percentage: rate,
+      scope: 'ORDER',
+      type: 'ADDITIVE',   // added on top, matching "plus tax" everywhere else
+    }],
+  };
 }
+
 
 
 /* Creates customer -> order -> invoice, then publishes it, which is what
@@ -120,6 +117,15 @@ export async function createInvoice(env, rental) {
   }
   if (!rental.email) {
     throw new SquareError('Square needs an email address for the customer record.', 400);
+  }
+
+  // Refuse rather than invoice untaxed: an unknown jurisdiction is a question
+  // for a human, and undercollecting is the expensive direction to be wrong in.
+  try {
+    rateFor(rental.delivery_city, rental.start_date);
+  } catch (err) {
+    if (err instanceof TaxError) throw new SquareError(err.message, 400);
+    throw err;
   }
 
   const customerId = await findOrCreateCustomer(call, env, rental);
@@ -137,7 +143,7 @@ export async function createInvoice(env, rental) {
         base_price_money: money(rental.total_cents),
         note: `Delivered ${rental.start_date}, back by ${rental.due_date}`,
       }],
-      ...taxesFor(env),
+      ...taxesFor(rental),
     },
   });
 
@@ -193,9 +199,7 @@ export async function ping(env) {
   const call = client(env);
   const { locations = [] } = await call('GET', '/v2/locations');
   const match = locations.find(l => l.id === env.SQUARE_LOCATION_ID);
-  const tax = env.SQUARE_TAX_CATALOG_ID ? `catalog ${env.SQUARE_TAX_CATALOG_ID}`
-    : env.SQUARE_TAX_PERCENTAGE ? `${env.SQUARE_TAX_PERCENTAGE}% (inline)`
-    : 'NOT CONFIGURED — invoices will be raised with no sales tax';
+  const tax = `per-city table, verified ${TAX_TABLE_VERIFIED} — re-check each quarter`;
 
   return {
     env: env.SQUARE_ENV || 'sandbox',
