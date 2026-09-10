@@ -35,10 +35,8 @@ to the terms below for the rental of reusable moving bins and lids
 
 ### 3. What we require
 
-- A valid government-issued photo ID, presented by the person signing this
-  Agreement.
 - A valid credit or debit card kept on file with us (through Square) for the
-  duration of the rental.
+  duration of the rental, in the name of the person signing this Agreement.
 - **No security deposit is collected.**
 
 ### 4. Card on file authorization
