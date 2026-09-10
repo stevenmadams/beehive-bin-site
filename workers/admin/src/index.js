@@ -6,6 +6,7 @@
 
 import { verifyAccessJwt } from './auth.js';
 import { createInvoice, fetchInvoice, ping as squarePing, SquareError } from './square.js';
+import { PRICES, quoteCents } from './pricing.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -144,12 +145,6 @@ async function listRequests(env, url) {
   return results;
 }
 
-/* Package pricing, in cents. Must stay in sync with the PRICES/EXTRA tables in
-   reserve.html until the Settings tab owns pricing for both. */
-const PRICES = { 10: 3900, 20: 7900, 40: 12900, 60: 17900 };
-const EXTRA  = { 10: 2500, 20: 4000, 40: 6500, 60: 9000 };
-const quoteCents = (bins, weeks) =>
-  PRICES[bins] == null ? null : PRICES[bins] + (weeks - 1) * EXTRA[bins];
 
 const isoDate = v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '').trim()) ? String(v).trim() : null);
 const addWeeks = (iso, weeks) => {

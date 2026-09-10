@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "Package pricing, in whole dollars, before tax. The single source for the",
+    "reserve form's quote, the admin panel's quote preview, and the price the",
+    "invoice is raised at. Run scripts/build-pricing.py after editing and commit",
+    "the generated files.",
+    "",
+    "Prose on the website and in the rental agreement is NOT rewritten",
+    "automatically — the script checks it instead and reports anything stale, so",
+    "a human decides how a price change is worded."
+  ],
+  "currency": "USD",
+  "delivery_included": true,
+  "packages": [
+    { "bins": 10, "first_week": 39,  "extra_week": 25 },
+    { "bins": 20, "first_week": 79,  "extra_week": 40 },
+    { "bins": 40, "first_week": 129, "extra_week": 65 },
+    { "bins": 60, "first_week": 179, "extra_week": 90 }
+  ],
+  "other_charges": {
+    "replacement_per_bin": 15
+  }
+}

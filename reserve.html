@@ -401,8 +401,10 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
 <script>
 /* Form logic (no 3D dependency). */
 (() => {
-  const PRICES = {10: 39, 20: 79, 40: 129, 60: 179};   // per week, delivery included
-  const EXTRA  = {10: 25, 20: 40, 40: 65,  60: 90};    // each additional week
+// PRICING:start
+  const PRICES = { 10: 39, 20: 79, 40: 129, 60: 179 };   // per week, delivery included
+  const EXTRA  = { 10: 25, 20: 40, 40: 65, 60: 90 };   // each additional week
+// PRICING:end
   const form = document.getElementById('reserve-form');
   const sumBins = document.getElementById('sum-bins');
   const sumLength = document.getElementById('sum-length');

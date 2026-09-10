@@ -198,6 +198,26 @@ webhook subscriptions and signature keys. To flip:
 > Sandbox invoices **do** email real addresses. Use your own for tests, never a
 > customer's.
 
+## Pricing
+
+`data/pricing.json` is the single source. Run `python3 scripts/build-pricing.py`
+after editing and commit what it generates:
+
+| Generated | Used for |
+|---|---|
+| the `PRICING` block in `reserve.html` | the public form's live quote |
+| the `PRICING` block in `workers/admin/public/index.html` | the panel's quote preview on a phone-in |
+| `workers/admin/src/pricing.js` | the amount the invoice is actually raised at |
+
+**Prose is checked, not rewritten.** The script scans the website and the rental
+agreement for prices that are not in the source and names the files. How a price
+change is worded — especially in the agreement — is a human decision, but
+forgetting a page is not. It understands multi-week totals as derived (a two-week
+20-bin rental is $79 + $40 = $119) rather than flagging them.
+
+Quoting one price on the site and charging another is the kind of mistake that
+costs a customer's trust once and an accountant's afternoon afterwards.
+
 ## Service area and sales tax
 
 `data/service-area.json` is the single source for where we deliver and what tax
@@ -253,9 +273,8 @@ In the order that pays off soonest:
    already carries the street address the run sheet needs.
 3. **Availability** — with 3–4 bin sets, check sets-booked against sets-owned
    for the requested dates and flag conflicts before anyone approves.
-4. **Settings** — pricing still lives in both `reserve.html` and the admin
-   Worker's `PRICES`/`EXTRA`. Change one without the other and the panel quotes
-   differently than the website. (The service area no longer has this problem —
-   see below.)
+4. **Settings** — a panel for the owner to change things without a deploy.
+   Pricing and the service area are no longer duplicated (both are generated
+   from `data/`), so this is now a convenience rather than a correctness fix.
 5. **E-sign** — per this repo's Stage 2 research, Square Contracts has no public
    API, so this stays manual unless that has changed.

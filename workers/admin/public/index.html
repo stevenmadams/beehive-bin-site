@@ -778,8 +778,10 @@ async function openRequest(id) {
 }
 
 /* ---------- new request (phone-in) ---------- */
+// PRICING:start
 const PRICES = { 10: 39, 20: 79, 40: 129, 60: 179 };
-const EXTRA  = { 10: 25, 20: 40, 40: 65,  60: 90  };
+const EXTRA  = { 10: 25, 20: 40, 40: 65, 60: 90 };
+// PRICING:end
 
 function openNewRequest() {
   closeAnyDrawer();
