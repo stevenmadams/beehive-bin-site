@@ -10,3 +10,11 @@ binding = "DB"
 database_name = "beehive"
 database_id = "4dfd9b23-a6a4-40ba-87ee-0e9abc57d828"       # same id as workers/admin/wrangler.toml
 migrations_dir = "../migrations"
+
+[vars]
+# Square signs (this exact URL + the raw body). It must match the endpoint
+# registered in the Square dashboard byte for byte, which is why it is
+# configured rather than derived from the incoming request.
+SQUARE_WEBHOOK_URL = "https://api.beehivebin.co/square/webhook"
+# SQUARE_WEBHOOK_SIGNATURE_KEY is a secret, set with:
+#   npx wrangler secret put SQUARE_WEBHOOK_SIGNATURE_KEY -c workers/form-handler/wrangler.toml

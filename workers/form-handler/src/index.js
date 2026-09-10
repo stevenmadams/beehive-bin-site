@@ -128,10 +128,116 @@ async function storeRequest(env, data) {
   return res.meta.last_row_id;
 }
 
+/* ---------- Square webhooks ----------
+
+   This lives on the public api.beehivebin.co Worker, not the admin panel,
+   because Cloudflare Access guards admin.beehivebin.co and would answer Square's
+   server with a login redirect. Square has no browser and no session; the
+   notification would be lost. Both Workers share the same D1 database, so the
+   panel sees the result either way.
+
+   Nothing here trusts the request until the signature checks out. */
+
+const enc = new TextEncoder();
+
+/* Square signs (notification_url + raw body) with the webhook signature key.
+   The url must be byte-identical to what is configured in the Square dashboard,
+   which is why it is a var rather than derived from the request. */
+async function verifySquareSignature(env, rawBody, signature) {
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(env.SQUARE_WEBHOOK_SIGNATURE_KEY),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, enc.encode(env.SQUARE_WEBHOOK_URL + rawBody));
+  const expected = btoa(String.fromCharCode(...new Uint8Array(mac)));
+
+  // Constant-time-ish compare: never bail early on the first differing byte.
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  return diff === 0;
+}
+
+const statusFrom = r => {
+  if (r.status === 'cancelled') return 'cancelled';
+  if (r.returned_at) return 'returned';
+  if (r.delivered_at) return 'out';
+  if (r.agreement_signed_at && r.paid_at) return 'confirmed';
+  return 'pending';
+};
+
+async function handleSquareWebhook(request, env) {
+  if (!env.SQUARE_WEBHOOK_SIGNATURE_KEY || !env.SQUARE_WEBHOOK_URL) {
+    console.log('square webhook not configured');
+    return new Response('not configured', { status: 503 });
+  }
+
+  const raw = await request.text();
+  const signature = request.headers.get('x-square-hmacsha256-signature') || '';
+  if (!signature || !(await verifySquareSignature(env, raw, signature))) {
+    console.log('square webhook: bad signature');
+    return new Response('bad signature', { status: 401 });
+  }
+
+  let event;
+  try { event = JSON.parse(raw); } catch { return new Response('bad json', { status: 400 }); }
+
+  const invoice = event?.data?.object?.invoice;
+  const invoiceId = invoice?.id || null;
+  const eventId = event?.event_id;
+  if (!eventId) return new Response('no event id', { status: 400 });
+
+  // Square retries on any non-2xx, so the same notification can arrive several
+  // times. Recording it first makes a replay a no-op rather than a second write.
+  const seen = await env.DB.prepare('SELECT handled FROM square_events WHERE event_id = ?1')
+    .bind(eventId).first();
+  if (seen) return new Response('already handled', { status: 200 });
+
+  await env.DB.prepare(
+    'INSERT INTO square_events (event_id, type, invoice_id, body) VALUES (?1,?2,?3,?4)',
+  ).bind(eventId, event.type || null, invoiceId, raw.slice(0, 8000)).run();
+
+  if (invoiceId) {
+    const rental = await env.DB.prepare(
+      `SELECT id, status, agreement_signed_at, paid_at, delivered_at, returned_at
+       FROM rentals WHERE square_invoice_id = ?1`,
+    ).bind(invoiceId).first();
+
+    if (rental) {
+      const sqStatus = invoice.status || null;
+      // Square is the authority on whether money arrived. Only ever set paid_at
+      // from a PAID invoice; never clear a payment someone recorded by hand.
+      const paidAt = sqStatus === 'PAID'
+        ? (rental.paid_at || new Date().toISOString().replace(/\.\d+/, ''))
+        : rental.paid_at;
+      const next = statusFrom({ ...rental, paid_at: paidAt });
+
+      await env.DB.prepare(
+        'UPDATE rentals SET square_status = ?1, paid_at = ?2, status = ?3 WHERE id = ?4',
+      ).bind(sqStatus, paidAt, next, rental.id).run();
+
+      await env.DB.prepare(
+        'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
+      ).bind('square-webhook', `square.${event.type || 'event'}`, 'rental',
+             String(rental.id), sqStatus).run();
+    } else {
+      console.log('square webhook: no rental for invoice', invoiceId);
+    }
+  }
+
+  await env.DB.prepare('UPDATE square_events SET handled = 1 WHERE event_id = ?1')
+    .bind(eventId).run();
+  return new Response('ok', { status: 200 });
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
     const url = new URL(request.url);
+
+    if (request.method === 'POST' && url.pathname === '/square/webhook') {
+      return handleSquareWebhook(request, env);
+    }
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origin) });
     if (request.method === 'GET') return new Response('beehive-forms ok', { status: 200 });

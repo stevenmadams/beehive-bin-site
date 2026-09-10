@@ -5,6 +5,7 @@
    under /api is handled here. */
 
 import { verifyAccessJwt } from './auth.js';
+import { createInvoice, fetchInvoice, ping as squarePing, SquareError } from './square.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -314,6 +315,7 @@ async function updateEmployee(env, user, id, body) {
 /* ---------- rentals ---------- */
 
 const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
+  square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
   first_name, last_name, email, phone, contact_pref,
   bins, weeks, start_date, due_date, total_cents,
   delivery_city, delivery_address, pickup_city, pickup_address,
@@ -434,15 +436,78 @@ async function updateRental(env, user, id, body) {
   return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
 }
 
+/* Raising the invoice is explicit rather than automatic on approval: the owner
+   may want to adjust the address or the price first, and an invoice already
+   emailed to a customer is awkward to retract. */
+async function invoiceRental(env, user, id) {
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+    .bind(id).first();
+  if (!rental) throw new HttpError(404, 'no such rental');
+  if (rental.square_invoice_id) {
+    throw new HttpError(409, 'This rental already has an invoice.');
+  }
+  if (rental.status === 'cancelled') throw new HttpError(400, 'This rental is cancelled.');
+
+  let sq;
+  try {
+    sq = await createInvoice(env, rental);
+  } catch (err) {
+    if (err instanceof SquareError) throw new HttpError(err.status === 503 ? 503 : 400, err.message);
+    throw err;
+  }
+
+  await env.DB.prepare(
+    `UPDATE rentals SET square_customer_id=?1, square_order_id=?2, square_invoice_id=?3,
+       square_invoice_url=?4, square_status=?5 WHERE id=?6`,
+  ).bind(sq.square_customer_id, sq.square_order_id, sq.square_invoice_id,
+         sq.square_invoice_url, sq.square_status, id).run();
+
+  await audit(env, user.email, 'rental.invoice', 'rental', id, sq.square_invoice_id);
+  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+}
+
+/* Manual reconciliation for when a webhook was missed — Square is the source of
+   truth for whether money arrived, never the panel. */
+async function syncRental(env, user, id) {
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+    .bind(id).first();
+  if (!rental) throw new HttpError(404, 'no such rental');
+  if (!rental.square_invoice_id) throw new HttpError(400, 'This rental has no Square invoice.');
+
+  let invoice;
+  try {
+    invoice = await fetchInvoice(env, rental.square_invoice_id);
+  } catch (err) {
+    if (err instanceof SquareError) throw new HttpError(err.status === 503 ? 503 : 400, err.message);
+    throw err;
+  }
+
+  const paidAt = invoice.status === 'PAID' ? (rental.paid_at || now()) : rental.paid_at;
+  await env.DB.prepare('UPDATE rentals SET square_status=?1, paid_at=?2 WHERE id=?3')
+    .bind(invoice.status, paidAt, id).run();
+  await env.DB.prepare('UPDATE rentals SET status=?1 WHERE id=?2')
+    .bind(statusFrom({ ...rental, paid_at: paidAt }), id).run();
+
+  await audit(env, user.email, 'rental.sync', 'rental', id, invoice.status);
+  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+}
+
 /* ---------- router ---------- */
 
 async function api(request, env, url) {
   const user = await authenticate(request, env);
   const path = url.pathname.replace(/^\/api/, '');
   const method = request.method;
-  const body = ['POST', 'PATCH', 'PUT'].includes(method)
-    ? await request.json().catch(() => { throw new HttpError(400, 'bad JSON body'); })
-    : {};
+  // Some POSTs are pure commands with nothing to send (invoice, sync), so an
+  // empty body is valid — only malformed JSON is an error.
+  let body = {};
+  if (['POST', 'PATCH', 'PUT'].includes(method)) {
+    const raw = await request.text();
+    if (raw.trim()) {
+      try { body = JSON.parse(raw); }
+      catch { throw new HttpError(400, 'bad JSON body'); }
+    }
+  }
 
   const match = re => re.exec(path);
   let m;
@@ -493,6 +558,15 @@ async function api(request, env, url) {
     return json(await decideRequest(env, user, Number(m[1]), body));
   }
 
+  if (path === '/square/ping' && method === 'GET') {
+    try {
+      return json(await squarePing(env));
+    } catch (err) {
+      if (err instanceof SquareError) return json({ error: err.message, detail: err.detail }, err.status === 503 ? 503 : 400);
+      throw err;
+    }
+  }
+
   if (path === '/rentals' && method === 'GET') {
     return json({ rentals: await listRentals(env, url) });
   }
@@ -506,6 +580,13 @@ async function api(request, env, url) {
       return json({ rental: row });
     }
     if (method === 'PATCH') return json({ rental: await updateRental(env, user, rid, body) });
+  }
+
+  if ((m = match(/^\/rentals\/(\d+)\/invoice$/)) && method === 'POST') {
+    return json({ rental: await invoiceRental(env, user, Number(m[1])) });
+  }
+  if ((m = match(/^\/rentals\/(\d+)\/sync$/)) && method === 'POST') {
+    return json({ rental: await syncRental(env, user, Number(m[1])) });
   }
 
   if (path === '/employees') {

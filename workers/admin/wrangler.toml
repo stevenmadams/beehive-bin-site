@@ -35,6 +35,15 @@ ACCESS_TEAM_DOMAIN = "beehivebin.cloudflareaccess.com"
 ACCESS_AUD = "d3430bffb95667e30bcafcd5788b23f3f2306b8a4dd4865bc4abb09cffda5816"
 ALLOWED_EMAIL_DOMAIN = "beehivebin.co"
 
+# Square. Flip SQUARE_ENV to "production" and swap in the production location id
+# below when the sandbox run-through looks right — and remember the access token
+# is a different secret in each environment.
+#   production location: LEN3W9Q3WM2N8
+SQUARE_ENV = "sandbox"
+SQUARE_LOCATION_ID = "LJR9D95SRQSN7"
+# SQUARE_ACCESS_TOKEN is a secret, set with:
+#   npx wrangler secret put SQUARE_ACCESS_TOKEN -c workers/admin/wrangler.toml
+
 [[d1_databases]]
 binding = "DB"
 database_name = "beehive"

@@ -125,6 +125,11 @@ tr.late td{background:rgba(163,44,44,.05)}
 .step[data-done="1"] .tick{background:var(--ok);border-color:var(--ok);color:#fff}
 .step .lbl{font-weight:600}
 .step .when{margin-left:auto;font-size:12px;color:var(--muted)}
+.sqbox{background:var(--white);border:1px solid var(--line);border-radius:10px;
+  padding:13px 15px;margin-bottom:18px}
+.sqbox h4{margin:0 0 8px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.sqbox .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sqbox .sqstatus{font-weight:700;font-size:13px}
 .pill.staff{background:rgba(21,19,15,.08);color:var(--char)}
 .pill.owner{background:var(--yellow);color:var(--ink)}
 .pill.off{background:rgba(163,44,44,.12);color:var(--bad)}
@@ -761,6 +766,21 @@ async function openRental(id) {
         <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
       </dl>
 
+      <div class="sqbox">
+        <h4>Square</h4>
+        ${r.square_invoice_id ? `
+          <div class="row">
+            <span class="sqstatus">${esc(r.square_status || 'sent')}</span>
+            ${r.square_invoice_url ? `<a class="btn sm" href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">Open invoice</a>` : ''}
+            <button class="btn sm" id="r-sync">Check for payment</button>
+          </div>`
+        : `
+          <div class="row">
+            <button class="btn sm primary" id="r-invoice">Create &amp; send invoice</button>
+            <span style="color:var(--muted);font-size:12.5px">${esc(money(r.total_cents))} to ${esc(r.email || 'no email on file')}</span>
+          </div>`}
+      </div>
+
       <label class="fl" for="r-daddr">Delivery address — ${esc(r.delivery_city || 'city not set')}</label>
       <input id="r-daddr" value="${esc(r.delivery_address || '')}" placeholder="Street address, unit, gate code">
       <div style="height:12px"></div>
@@ -807,6 +827,36 @@ async function openRental(id) {
       msg.replaceChildren(banner(err.message));
     }
   }));
+
+  drawer.querySelector('#r-invoice')?.addEventListener('click', async e => {
+    e.target.disabled = true;
+    e.target.textContent = 'Sending…';
+    msg.replaceChildren();
+    try {
+      await api(`/rentals/${id}/invoice`, { method: 'POST' });
+      await refreshCounts();
+      openRental(id);
+    } catch (err) {
+      msg.replaceChildren(banner(err.message));
+      e.target.disabled = false;
+      e.target.textContent = 'Create & send invoice';
+    }
+  });
+
+  drawer.querySelector('#r-sync')?.addEventListener('click', async e => {
+    e.target.disabled = true;
+    e.target.textContent = 'Checking…';
+    msg.replaceChildren();
+    try {
+      await api(`/rentals/${id}/sync`, { method: 'POST' });
+      await refreshCounts();
+      openRental(id);
+    } catch (err) {
+      msg.replaceChildren(banner(err.message));
+      e.target.disabled = false;
+      e.target.textContent = 'Check for payment';
+    }
+  });
 
   drawer.querySelector('#r-save').addEventListener('click', async e => {
     const state = drawer.querySelector('#r-state');
