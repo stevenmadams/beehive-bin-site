@@ -157,6 +157,47 @@ still fails closed.
 > the configured custom domain as the request host, so a loopback test fails
 > locally for reasons that have nothing to do with security.
 
+## Square
+
+Wired and verified end to end in **sandbox** on 2026-09-10: invoice created from
+the panel, paid with a test card, rental ticked itself to `confirmed` with no
+one touching the panel.
+
+| Piece | Where |
+|---|---|
+| Invoice creation | `workers/admin/src/square.js`, button in the rental drawer |
+| Webhook receiver | `workers/form-handler/src/index.js`, `POST /square/webhook` |
+| Connection check | `GET /api/square/ping` — read-only, safe any time |
+
+**The webhook is on the public Worker on purpose.** Cloudflare Access guards
+`admin.beehivebin.co` and answers unauthenticated callers with a login redirect.
+Square has no browser and no session, so a webhook pointed at the panel would be
+silently lost. Both Workers share the D1 database, so the panel still sees it.
+
+Square is treated as the authority on payment: the webhook only ever *sets*
+`paid_at` from a `PAID` invoice and never clears one recorded by hand. Every
+event is written to `square_events` keyed by Square's delivery id before being
+acted on, because Square retries any non-2xx and a replayed payment must not
+tick anything twice.
+
+### Going to production
+
+Sandbox and production are separate in Square — different tokens, locations,
+webhook subscriptions and signature keys. To flip:
+
+1. Add the webhook subscription under the **Production** toggle in the Square
+   developer dashboard, same URL and the same two events.
+2. In `workers/admin/wrangler.toml`, set `SQUARE_ENV = "production"` and
+   `SQUARE_LOCATION_ID = "LEN3W9Q3WM2N8"`.
+3. Re-run both secrets with the production values:
+   `wrangler secret put SQUARE_ACCESS_TOKEN -c workers/admin/wrangler.toml` and
+   `wrangler secret put SQUARE_WEBHOOK_SIGNATURE_KEY -c workers/form-handler/wrangler.toml`.
+4. Deploy both Workers, then check `/api/square/ping` reports
+   `"env":"production"` and `"location_found":true` **before** invoicing anyone.
+
+> Sandbox invoices **do** email real addresses. Use your own for tests, never a
+> customer's.
+
 ## Operating notes
 
 - **`audit_log` is append-only.** Nothing in the app updates or deletes it. It
@@ -176,11 +217,7 @@ still fails closed.
 
 In the order that pays off soonest:
 
-1. **Square** — the owner confirmed an account exists (2026-09-10). Customers
-   API on approval, then Invoices against the rental's total, then a webhook on
-   `invoice.payment_made` to tick the Paid milestone by itself. That removes the
-   two steps most likely to be forgotten.
-2. **Schedule** — today and this week's deliveries and pickups, from
+1. **Schedule** — today and this week's deliveries and pickups, from
    `rentals.start_date` / `due_date`, plus a printable run sheet. The rental
    already carries the street address the run sheet needs.
 3. **Availability** — with 3–4 bin sets, check sets-booked against sets-owned
