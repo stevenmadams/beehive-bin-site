@@ -300,6 +300,9 @@ function shell(active) {
 function render(active, node) {
   root.replaceChildren(shell(active));
   document.getElementById('view').replaceChildren(node);
+  // The shell was built from whatever counts we had; re-check in the background
+  // so moving between tabs never shows a number from ten minutes ago.
+  refreshCounts().then(updateBadges);
 }
 
 const banner = (msg, kind = 'err') => $(`<div class="banner ${kind}">${esc(msg)}</div>`);
@@ -765,6 +768,37 @@ async function openRental(id) {
 
       ${isLate(r) ? '<div class="banner err">Past its return date and still out.</div>' : ''}
 
+      ${r.confirm_token ? `<div class="linkbox">
+          <h4>Confirmation link${r.confirm_sent_at
+            ? ` — emailed to ${esc(r.email)} ${esc(ago(r.confirm_sent_at))}`
+            : ' — not sent yet'}</h4>
+          <code>${esc(`https://${bookingHost}/${r.confirm_token}`)}</code>
+          <div class="row">
+            <button class="btn sm${r.confirm_sent_at ? '' : ' primary'}" id="r-send">${
+              r.confirm_sent_at ? 'Resend email' : 'Email it to them'}</button>
+            <button class="btn sm" id="r-copy">Copy link</button>
+            <a class="btn sm" href="${esc(`https://${bookingHost}/${r.confirm_token}`)}" target="_blank" rel="noopener">Preview</a>
+          </div>
+        </div>` : ''}
+
+      ${r.signed_at ? `<p class="signed">Signed by <strong>${esc(r.agreement_name || '—')}</strong>
+        ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}</p>` : ''}
+
+      <div class="sqbox">
+        <h4>${r.square_invoice_id ? 'Payment' : 'Next step'}</h4>
+        ${r.square_invoice_id ? `
+          <div class="row">
+            <span class="sqstatus">${esc(r.square_status || 'sent')}</span>
+            ${r.square_invoice_url ? `<a class="btn sm" href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">Open invoice</a>` : ''}
+            ${r.square_status === 'PAID' ? '' : '<button class="btn sm" id="r-sync">Check for payment</button>'}
+          </div>`
+        : `
+          <div class="row">
+            <button class="btn sm primary" id="r-invoice">Create invoice &amp; email the customer</button>
+            <span style="color:var(--muted);font-size:12.5px">${esc(money(r.total_cents))} · ${esc(r.email || 'no email on file')}</span>
+          </div>`}
+      </div>
+
       <div class="steps">${STEPS.map(([key, col, label]) => {
         // Paid is Square's to state once it has reported the invoice paid.
         const locked = key === 'paid' && r.square_status === 'PAID';
@@ -784,37 +818,6 @@ async function openRental(id) {
         <dt>Phone</dt><dd>${esc(r.phone || '—')}</dd>
         <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
       </dl>
-
-      ${r.confirm_token ? `<div class="linkbox">
-          <h4>Confirmation link${r.confirm_sent_at
-            ? ` — emailed to ${esc(r.email)} ${esc(ago(r.confirm_sent_at))}`
-            : ' — not sent yet'}</h4>
-          <code>${esc(`https://${bookingHost}/${r.confirm_token}`)}</code>
-          <div class="row">
-            <button class="btn sm${r.confirm_sent_at ? '' : ' primary'}" id="r-send">${
-              r.confirm_sent_at ? 'Resend email' : 'Email it to them'}</button>
-            <button class="btn sm" id="r-copy">Copy link</button>
-            <a class="btn sm" href="${esc(`https://${bookingHost}/${r.confirm_token}`)}" target="_blank" rel="noopener">Preview</a>
-          </div>
-        </div>` : ''}
-
-      ${r.signed_at ? `<p class="signed">Signed by <strong>${esc(r.agreement_name || '—')}</strong>
-        ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}</p>` : ''}
-
-      <div class="sqbox">
-        <h4>Square</h4>
-        ${r.square_invoice_id ? `
-          <div class="row">
-            <span class="sqstatus">${esc(r.square_status || 'sent')}</span>
-            ${r.square_invoice_url ? `<a class="btn sm" href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">Open invoice</a>` : ''}
-            ${r.square_status === 'PAID' ? '' : '<button class="btn sm" id="r-sync">Check for payment</button>'}
-          </div>`
-        : `
-          <div class="row">
-            <button class="btn sm primary" id="r-invoice">Create invoice &amp; email the customer</button>
-            <span style="color:var(--muted);font-size:12.5px">${esc(money(r.total_cents))} · ${esc(r.email || 'no email on file')}</span>
-          </div>`}
-      </div>
 
       <label class="fl" for="r-daddr">Delivery address — ${esc(r.delivery_city || 'city not set')}</label>
       <input id="r-daddr" value="${esc(r.delivery_address || '')}" placeholder="Street address, unit, gate code">
@@ -1036,6 +1039,59 @@ function viewSoon(id) {
 }
 
 /* ---------- boot + routing ---------- */
+/* ---------- staying current ----------
+
+   Requests arrive from the website while the panel is open, so a number that
+   was fetched at boot is wrong within minutes. Badges are patched in place
+   rather than re-rendered, because a full redraw while someone is mid-search or
+   mid-typing is worse than a stale number. */
+
+function updateBadges() {
+  const setBadge = (href, value, cls = '') => {
+    const link = document.querySelector(`nav a[href="${href}"]`);
+    if (!link) return;
+    let el = link.querySelector('.badge');
+    if (!value) { el?.remove(); return; }
+    if (!el) {
+      el = document.createElement('span');
+      el.className = `badge ${cls}`.trim();
+      link.append(el);
+    }
+    el.className = `badge ${cls}`.trim();
+    el.textContent = value;
+  };
+  setBadge('#/requests', counts.new || 0);
+  setBadge('#/rentals', rentalCounts.overdue || 0, 'overdue');
+}
+
+let pollTimer = null;
+
+/* Only redraw when something actually changed, and never over a drawer or an
+   in-progress search — the cost of interrupting real work is higher than the
+   cost of a list being a few seconds behind. */
+async function poll() {
+  if (document.visibilityState !== 'visible') return;
+  const before = JSON.stringify([counts, rentalCounts]);
+  await refreshCounts();
+  updateBadges();
+  if (JSON.stringify([counts, rentalCounts]) === before) return;
+
+  if (document.querySelector('.drawer')) return;
+  const search = document.querySelector('.search');
+  if (search && search.value.trim()) return;
+  route();
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(poll, 30000);
+  // Coming back to the tab is exactly when someone expects to see what changed.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') poll();
+  });
+}
+
+
 async function refreshCounts() {
   try {
     const stats = await api('/stats');
@@ -1070,6 +1126,7 @@ function route() {
   await refreshCounts();
   window.addEventListener('hashchange', route);
   route();
+  startPolling();
 })();
 </script>
 </body>
