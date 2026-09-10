@@ -417,7 +417,7 @@ async function updateRental(env, user, id, body) {
     }
   }
 
-  for (const f of ['delivery_address', 'pickup_address', 'delivery_city', 'pickup_city', 'notes']) {
+  for (const f of ['delivery_address', 'pickup_address', 'delivery_city', 'pickup_city']) {
     if (f in body) patch[f] = clean(body[f], 500);
   }
   if ('status' in body) {
@@ -532,6 +532,68 @@ async function syncRental(env, user, id) {
 
   await audit(env, user.email, 'rental.sync', 'rental', id, invoice.status);
   return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+}
+
+/* ---------- internal notes ----------
+
+   Append-only, attributed, and never shown to a customer — the public Worker
+   does not read this table at all. */
+
+const ENTITIES = ['request', 'rental'];
+
+async function listNotes(env, entity, entityId) {
+  if (!ENTITIES.includes(entity)) throw new HttpError(400, 'unknown entity');
+  const { results } = await env.DB.prepare(
+    `SELECT id, body, author, created_at, pinned, deleted_at, deleted_by
+     FROM internal_notes WHERE entity = ?1 AND entity_id = ?2
+     ORDER BY pinned DESC, created_at DESC LIMIT 200`,
+  ).bind(entity, entityId).all();
+  return results;
+}
+
+async function addNote(env, user, entity, entityId, body) {
+  if (!ENTITIES.includes(entity)) throw new HttpError(400, 'unknown entity');
+  const text = String(body.body ?? '').trim().slice(0, 4000);
+  if (!text) throw new HttpError(400, 'A note needs something in it.');
+
+  const table = entity === 'request' ? 'requests' : 'rentals';
+  const exists = await env.DB.prepare(`SELECT id FROM ${table} WHERE id = ?1`)
+    .bind(entityId).first();
+  if (!exists) throw new HttpError(404, `no such ${entity}`);
+
+  await env.DB.prepare(
+    'INSERT INTO internal_notes (entity, entity_id, body, author, pinned) VALUES (?1,?2,?3,?4,?5)',
+  ).bind(entity, entityId, text, user.email, body.pinned ? 1 : 0).run();
+  await audit(env, user.email, 'note.add', entity, entityId);
+  return listNotes(env, entity, entityId);
+}
+
+/* Deleting marks rather than removes, and only your own — the point of an
+   attributed log is that it cannot be quietly tidied. Pinning is not restricted
+   the same way: it changes prominence, not the record. */
+async function updateNote(env, user, id, body) {
+  const note = await env.DB.prepare(
+    'SELECT id, entity, entity_id, author, deleted_at FROM internal_notes WHERE id = ?1',
+  ).bind(id).first();
+  if (!note) throw new HttpError(404, 'no such note');
+
+  if ('deleted' in body) {
+    if (note.author !== user.email && user.role !== 'owner') {
+      throw new HttpError(403, 'You can only delete your own notes.');
+    }
+    await env.DB.prepare(
+      `UPDATE internal_notes SET deleted_at = ?1, deleted_by = ?2 WHERE id = ?3`,
+    ).bind(body.deleted ? now() : null, body.deleted ? user.email : null, id).run();
+    await audit(env, user.email, body.deleted ? 'note.delete' : 'note.restore',
+      note.entity, note.entity_id);
+  }
+
+  if ('pinned' in body) {
+    await env.DB.prepare('UPDATE internal_notes SET pinned = ?1 WHERE id = ?2')
+      .bind(body.pinned ? 1 : 0, id).run();
+  }
+
+  return listNotes(env, note.entity, note.entity_id);
 }
 
 /* ---------- router ---------- */
@@ -653,6 +715,17 @@ async function api(request, env, url) {
   if ((m = match(/^\/employees\/(\d+)$/)) && method === 'PATCH') {
     requireOwner(user);
     return json({ employee: await updateEmployee(env, user, Number(m[1]), body) });
+  }
+
+  if ((m = match(/^\/(requests|rentals)\/(\d+)\/notes$/))) {
+    const entity = m[1] === 'requests' ? 'request' : 'rental';
+    const eid = Number(m[2]);
+    if (method === 'GET') return json({ notes: await listNotes(env, entity, eid) });
+    if (method === 'POST') return json({ notes: await addNote(env, user, entity, eid, body) }, 201);
+  }
+
+  if ((m = match(/^\/notes\/(\d+)$/)) && method === 'PATCH') {
+    return json({ notes: await updateNote(env, user, Number(m[1]), body) });
   }
 
   if (path === '/audit' && method === 'GET') {

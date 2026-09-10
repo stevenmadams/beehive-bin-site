@@ -143,6 +143,21 @@ tr.late td{background:rgba(163,44,44,.05)}
 .linkbox .btn:hover{background:rgba(255,255,255,.22)}
 .linkbox .btn.primary{background:var(--yellow);border-color:var(--yellow);color:var(--ink)}
 .signed{font-size:12.5px;color:var(--muted);margin:-12px 0 18px}
+.notes{margin-bottom:18px}
+.notes .n{background:var(--white);border:1px solid var(--line);border-radius:10px;
+  padding:11px 13px;margin-bottom:8px}
+.notes .n[data-pinned="1"]{border-color:var(--yellow-deep);background:rgba(255,196,0,.09)}
+.notes .n[data-deleted="1"]{opacity:.55}
+.notes .n[data-deleted="1"] .body{text-decoration:line-through}
+.notes .body{white-space:pre-wrap;font-size:14px}
+.notes .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  font-size:11.5px;color:var(--muted);margin-top:7px}
+.notes .meta .who{font-weight:600;color:var(--char)}
+.notes .meta button{border:0;background:none;padding:0;color:var(--muted);
+  font:inherit;font-size:11.5px;cursor:pointer;text-decoration:underline}
+.notes .meta button:hover{color:var(--ink)}
+.notes .pin{margin-left:auto}
+.notes .empty-n{color:var(--muted);font-size:13.5px;padding:2px 0 10px}
 .pill.staff{background:rgba(21,19,15,.08);color:var(--char)}
 .pill.owner{background:var(--yellow);color:var(--ink)}
 .pill.off{background:rgba(163,44,44,.12);color:var(--bad)}
@@ -385,6 +400,89 @@ async function loadList(list, head) {
   }
 }
 
+/* ---------- internal notes ----------
+   Attributed and append-only, so the input only appears when someone is
+   actually writing — a permanently open box invites overwriting a colleague's
+   note, which is the habit this replaces. */
+
+function notesPanel(container, entity, id) {
+  const render = notes => {
+    const rows = notes.map(n => `
+      <div class="n" data-pinned="${n.pinned}" data-deleted="${n.deleted_at ? 1 : 0}">
+        <div class="body">${esc(n.body)}</div>
+        <div class="meta">
+          <span class="who">${esc(n.author)}</span>
+          <span title="${esc(n.created_at)}">${esc(ago(n.created_at))}</span>
+          ${n.deleted_at ? `<span>· deleted by ${esc(n.deleted_by || '—')}</span>` : `
+            <button data-pin="${n.id}" data-to="${n.pinned ? 0 : 1}" class="pin">${
+              n.pinned ? 'Unpin' : 'Pin'}</button>
+            <button data-del="${n.id}">Delete</button>`}
+        </div>
+      </div>`).join('');
+
+    container.replaceChildren($(`<div>
+      <label class="fl">Internal notes <span style="font-weight:400;text-transform:none;letter-spacing:0">— staff only, never shown to the customer</span></label>
+      <div class="notes">
+        ${rows || '<div class="empty-n">No notes yet.</div>'}
+      </div>
+      <div id="n-add"></div>
+    </div>`));
+
+    const addBox = container.querySelector('#n-add');
+    const showButton = () => {
+      addBox.replaceChildren($('<button class="btn sm">Add a note</button>'));
+      addBox.querySelector('button').addEventListener('click', showForm);
+    };
+    const showForm = () => {
+      addBox.replaceChildren($(`<div>
+        <textarea id="n-body" placeholder="What happened, or what the next person needs to know."></textarea>
+        <div class="actions" style="margin-top:8px">
+          <button class="btn sm primary" id="n-save">Save note</button>
+          <button class="btn sm" id="n-cancel">Cancel</button>
+          <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)">
+            <input type="checkbox" id="n-pin"> Pin it
+          </label>
+        </div>
+        <div id="n-msg"></div>
+      </div>`));
+      const ta = addBox.querySelector('#n-body');
+      ta.focus();
+      addBox.querySelector('#n-cancel').addEventListener('click', showButton);
+      addBox.querySelector('#n-save').addEventListener('click', async e => {
+        const text = ta.value.trim();
+        if (!text) { ta.focus(); return; }
+        e.target.disabled = true;
+        try {
+          const { notes: fresh } = await api(`/${entity}/${id}/notes`, {
+            method: 'POST',
+            body: JSON.stringify({ body: text, pinned: addBox.querySelector('#n-pin').checked }),
+          });
+          render(fresh);
+        } catch (err) {
+          addBox.querySelector('#n-msg').replaceChildren(banner(err.message));
+          e.target.disabled = false;
+        }
+      });
+    };
+    showButton();
+
+    container.querySelectorAll('[data-pin]').forEach(b => b.addEventListener('click', async () => {
+      try { render((await api(`/notes/${b.dataset.pin}`, { method: 'PATCH', body: JSON.stringify({ pinned: b.dataset.to === '1' }) })).notes); }
+      catch (err) { container.prepend(banner(err.message)); }
+    }));
+    container.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Delete this note? It stays in the record, marked deleted.')) return;
+      try { render((await api(`/notes/${b.dataset.del}`, { method: 'PATCH', body: JSON.stringify({ deleted: true }) })).notes); }
+      catch (err) { container.prepend(banner(err.message)); }
+    }));
+  };
+
+  container.replaceChildren($('<div class="empty-n">Loading notes…</div>'));
+  api(`/${entity}/${id}/notes`)
+    .then(({ notes }) => render(notes))
+    .catch(err => container.replaceChildren(banner(err.message)));
+}
+
 /* ---------- request drawer ---------- */
 /* Only ever one drawer. Hash navigation (browser back/forward, or a link
    straight to another request) otherwise stacks a second one on top of the
@@ -462,12 +560,7 @@ async function openRequest(id) {
       ${r.customer_notes ? `<div class="note"><h4>Notes from the customer</h4>${esc(r.customer_notes)}</div>` : ''}
       ${r.decline_reason ? `<div class="note"><h4>Why it was declined</h4>${esc(r.decline_reason)}</div>` : ''}
 
-      <label class="fl" for="inotes">Internal notes</label>
-      <textarea id="inotes" placeholder="Only staff see this.">${esc(r.internal_notes || '')}</textarea>
-      <div class="actions">
-        <button class="btn sm" data-act="savenote">Save note</button>
-        <span id="notestate" style="align-self:center;color:var(--muted);font-size:12.5px"></span>
-      </div>
+      <div id="req-notes"></div>
 
       <div class="actions" style="margin-top:22px;border-top:1px solid var(--line);padding-top:18px">
         ${r.status === 'new' ? `
@@ -496,15 +589,7 @@ async function openRequest(id) {
     }
   };
 
-  drawer.querySelector('[data-act="savenote"]')?.addEventListener('click', async e => {
-    const state = drawer.querySelector('#notestate');
-    e.target.disabled = true; state.textContent = 'Saving…';
-    try {
-      await api(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ internal_notes: drawer.querySelector('#inotes').value }) });
-      state.textContent = 'Saved';
-    } catch (err) { state.textContent = err.message; }
-    e.target.disabled = false;
-  });
+  notesPanel(drawer.querySelector('#req-notes'), 'requests', id);
   drawer.querySelector('[data-act="approve"]')?.addEventListener('click', () => act('approve'));
   drawer.querySelector('[data-act="reopen"]')?.addEventListener('click', () => act('reopen'));
   drawer.querySelector('[data-act="decline"]')?.addEventListener('click', () => {
@@ -826,13 +911,13 @@ async function openRental(id) {
       <label class="fl" for="r-paddr">Pickup address — ${esc(r.pickup_city || 'same')}</label>
       <input id="r-paddr" value="${esc(r.pickup_address || '')}" placeholder="If different from delivery">
       ${r.pickup_notes ? `<div class="note" style="margin:8px 0 0"><h4>From the customer</h4>${esc(r.pickup_notes)}</div>` : ''}
-      <div style="height:14px"></div>
-      <label class="fl" for="r-notes">Internal notes</label>
-      <textarea id="r-notes" placeholder="Staff only — the customer never sees this.">${esc(r.notes || '')}</textarea>
-      <div class="actions">
-        <button class="btn sm" id="r-save">Save details</button>
+      <div class="actions" style="margin-top:14px">
+        <button class="btn sm" id="r-save">Save addresses</button>
         <span id="r-state" style="align-self:center;color:var(--muted);font-size:12.5px"></span>
       </div>
+
+      <div style="height:20px"></div>
+      <div id="rent-notes"></div>
 
       <div id="r-msg" style="margin-top:14px"></div>
       <div class="actions" style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
@@ -871,6 +956,8 @@ async function openRental(id) {
       msg.replaceChildren(banner(err.message));
     }
   }));
+
+  notesPanel(drawer.querySelector('#rent-notes'), 'rentals', id);
 
   drawer.querySelector('#r-send')?.addEventListener('click', async e => {
     const was = e.target.textContent;
@@ -930,7 +1017,6 @@ async function openRental(id) {
       await patch({
         delivery_address: drawer.querySelector('#r-daddr').value,
         pickup_address: drawer.querySelector('#r-paddr').value,
-        notes: drawer.querySelector('#r-notes').value,
       });
       state.textContent = 'Saved';
     } catch (err) { state.textContent = ''; msg.replaceChildren(banner(err.message)); }
