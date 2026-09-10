@@ -151,6 +151,12 @@ still fails closed.
   is how you answer "who approved this, and when" in three months.
 - **`raw_json`** keeps every submitted field verbatim, including any the schema
   does not model. Add a form field without a migration and nothing is lost.
+- **`requests.contact_pref`** is `text` / `call` / `email`, or NULL when it was
+  never asked (anything submitted before 2026-09-10, and contact-form messages
+  where it is inferred from whichever box they filled). The panel's contact
+  buttons fall back to showing all three unhighlighted when it is NULL.
+- **`requests.source`** is `web` or `manual` — the latter for anything staff
+  entered through the panel's **+ New request** button.
 - **Approving does not yet charge or send anything.** It sets a status. The
   contract and invoice are still the manual Square steps from Stage 2.
 

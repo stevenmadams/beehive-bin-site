@@ -33,7 +33,7 @@ const FORMS = {
       ['dcity', 'Delivery city'], ['pcity', 'Pickup city'],
       ['fname', 'First name'], ['lname', 'Last name'],
       ['phone', 'Phone'], ['email', 'Email'],
-      ['notes', 'Customer notes'],
+      ['contact_pref', 'Prefers'], ['notes', 'Customer notes'],
     ],
   },
   contact: {
@@ -59,6 +59,11 @@ const int = v => {
   return Number.isFinite(n) ? n : null;
 };
 const isEmail = s => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(s ?? '').trim());
+const CONTACT_PREFS = ['text', 'call', 'email'];
+const contactPref = v => {
+  const t = String(v ?? '').trim().toLowerCase();
+  return CONTACT_PREFS.includes(t) ? t : null;
+};
 // "$129" / "$1,299.50" -> cents. The form sends a display string, not a number.
 const centsFrom = v => {
   const m = /([\d,]+(?:\.\d{1,2})?)/.exec(String(v ?? ''));
@@ -85,6 +90,7 @@ async function storeRequest(env, data) {
         pickup_city: trim(data.pcity, 120),
         customer_notes: trim(data.notes, 4000),
         message: null,
+        contact_pref: contactPref(data.contact_pref),
       }
     : {
         first_name: trim(data.name, 100),
@@ -102,17 +108,21 @@ async function storeRequest(env, data) {
         pickup_city: null,
         customer_notes: null,
         message: trim(data.message, 4000),
+        // The contact form takes one "phone or email" box, so the preference
+        // is implied by whichever they typed rather than asked for.
+        contact_pref: isEmail(contact) ? 'email' : contact ? 'call' : null,
       };
 
   const res = await env.DB.prepare(
     `INSERT INTO requests (kind, first_name, last_name, email, phone, bins, weeks,
        start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
-       customer_notes, message, raw_json)
-     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)`,
+       customer_notes, message, contact_pref, raw_json)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)`,
   ).bind(
     data.form, row.first_name, row.last_name, row.email, row.phone, row.bins, row.weeks,
     row.start_date, row.return_date, row.quoted_total_cents, row.delivery_city, row.pickup_city,
-    row.customer_notes, row.message, JSON.stringify(data).slice(0, 8000),
+    row.customer_notes, row.message, row.contact_pref,
+    JSON.stringify(data).slice(0, 8000),
   ).run();
 
   return res.meta.last_row_id;

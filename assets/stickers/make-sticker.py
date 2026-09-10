@@ -1,9 +1,25 @@
-import math, re, sys
+"""Generate the round "Property of Beehive Bin Co." bin sticker.
+
+Ring text is emitted as outlined glyph paths (Archivo Black, the site display
+face) so the SVG needs no fonts installed at the print shop. Re-run after any
+copy change:
+
+    python3 assets/stickers/make-sticker.py
+    rsvg-convert -w 1200 -h 1200 assets/stickers/bin-sticker-round.svg \
+        -o assets/stickers/bin-sticker-round-1200.png
+"""
+import math, os, re, urllib.request
 from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
 
-SCRATCH = "/private/tmp/claude-501/-Users-stevenadams-Development-bin-rental/35474d19-c49c-472b-b0fb-bbb8d29ae203/scratchpad"
-REPO = "/Users/stevenadams/Development/bin_rental"
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(HERE))
+FONT = os.path.join(HERE, "ArchivoBlack.ttf")          # OFL, fetched on demand
+FONT_URL = "https://fonts.gstatic.com/s/archivoblack/v23/HTxqL289NzCGg4MzN6KJ7eW6OYs.ttf"
+OUT = os.path.join(HERE, "bin-sticker-round.svg")
+
+if not os.path.exists(FONT):
+    urllib.request.urlretrieve(FONT_URL, FONT)
 
 INK    = "#15130F"
 YELLOW = "#FFC400"
@@ -17,7 +33,7 @@ R_WHITE = 444.0
 TEXT_OUTER = 548.0  # outer edge both text arcs align to
 CAP = 0.73          # cap-height as fraction of em (Archivo Black)
 
-font = TTFont(f"{SCRATCH}/ArchivoBlack.ttf")
+font = TTFont(FONT)
 upem = font["head"].unitsPerEm
 gset = font.getGlyphSet()
 cmap = font.getBestCmap()
@@ -75,7 +91,7 @@ def hexagon(cx, cy, r, fill):
     return f'<polygon points="{" ".join(pts)}" fill="{fill}"/>'
 
 # ---- centre logo: reuse the real stacked lockup ------------------------------
-raw = open(f"{REPO}/assets/logo/beehive-stacked.svg").read()
+raw = open(os.path.join(REPO, "assets", "logo", "beehive-stacked.svg")).read()
 inner = re.sub(r"^.*?<title>.*?</title>", "", raw, flags=re.S).replace("</svg>", "")
 LOGO_W, LOGO_H = 514.0, 355.0
 target_w = 640.0
@@ -117,5 +133,5 @@ svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width=
 {logo}
 </svg>
 '''
-open(f"{SCRATCH}/sticker.svg", "w").write(svg)
-print("wrote sticker.svg", len(svg), "bytes")
+open(OUT, "w").write(svg)
+print("wrote", OUT, len(svg), "bytes")

@@ -110,7 +110,7 @@ const audit = (env, actor, action, entity, entityId, detail = null) =>
 
 /* ---------- request handlers ---------- */
 
-const REQUEST_COLUMNS = `id, created_at, kind, source, status, first_name, last_name, email, phone,
+const REQUEST_COLUMNS = `id, created_at, kind, source, status, contact_pref, first_name, last_name, email, phone,
   bins, weeks, start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
   customer_notes, message, internal_notes, decided_at, decided_by, decline_reason`;
 
@@ -168,6 +168,7 @@ const clean = (v, max) => {
 async function createRequest(env, user, body) {
   const kind = body.kind === 'contact' ? 'contact' : 'reserve';
   const first = clean(body.first_name, 100);
+  const pref = ['text', 'call', 'email'].includes(body.contact_pref) ? body.contact_pref : null;
   const phone = clean(body.phone, 40);
   const email = clean(body.email, 200);
 
@@ -210,13 +211,13 @@ async function createRequest(env, user, body) {
   const res = await env.DB.prepare(
     `INSERT INTO requests (kind, source, first_name, last_name, email, phone, bins, weeks,
        start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
-       customer_notes, message, internal_notes, raw_json)
-     VALUES (?1,'manual',?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)`,
+       customer_notes, message, internal_notes, contact_pref, raw_json)
+     VALUES (?1,'manual',?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)`,
   ).bind(
     kind, first, clean(body.last_name, 100), email, phone, bins, weeks,
     start, returnDate, quoted, dcity, clean(body.pickup_city, 120),
     clean(body.customer_notes, 4000), clean(body.message, 4000),
-    clean(body.internal_notes, 4000),
+    clean(body.internal_notes, 4000), pref,
     JSON.stringify({ entered_by: user.email }),
   ).run();
 

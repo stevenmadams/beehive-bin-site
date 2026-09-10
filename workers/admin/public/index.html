@@ -62,6 +62,10 @@ main{padding:26px 30px 60px;max-width:1160px}
   margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
 .quote strong{font-family:var(--font-display);font-size:21px}
 .quote small{color:var(--muted)}
+a.btn{text-decoration:none;display:inline-flex;align-items:center}
+.contactbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+.contactbar .prefnote{font-size:11px;color:var(--muted);font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em}
 .sub{color:var(--muted);margin:0 0 20px}
 
 /* ---- controls ---- */
@@ -339,8 +343,16 @@ async function loadList(list, head) {
 }
 
 /* ---------- request drawer ---------- */
+/* Only ever one drawer. Hash navigation (browser back/forward, or a link
+   straight to another request) otherwise stacks a second one on top of the
+   first, leaving a stale panel visible over the one you asked for. */
+function closeAnyDrawer() {
+  document.querySelectorAll('.scrim, .drawer').forEach(el => el.remove());
+}
+
 async function openRequest(id) {
   if (!document.getElementById('app')) await viewRequests();
+  closeAnyDrawer();
 
   const scrim = $('<div class="scrim"></div>');
   const drawer = $('<div class="drawer" role="dialog" aria-modal="true"><div class="dbody">Loading…</div></div>');
@@ -359,8 +371,24 @@ async function openRequest(id) {
     return;
   }
 
+  /* tel:/sms: want E.164; the stored string is whatever the customer typed. */
+  const digits = String(r.phone || '').replace(/\D/g, '');
+  const tel = digits.length === 10 ? `+1${digits}`
+    : digits.length === 11 && digits[0] === '1' ? `+${digits}`
+    : digits;
+  const pref = r.contact_pref;
+  // The preferred method is the filled button, so the right move is obvious
+  // before reading anything.
+  const contactBtn = (kind, href, label) =>
+    `<a class="btn sm${pref === kind ? ' primary' : ''}" href="${href}">${label}</a>`;
+  const actions = [
+    r.phone && digits ? contactBtn('text', `sms:${tel}`, 'Text') : '',
+    r.phone && digits ? contactBtn('call', `tel:${tel}`, 'Call') : '',
+    r.email ? contactBtn('email', `mailto:${esc(r.email)}`, 'Email') : '',
+  ].filter(Boolean).join('');
+
   const extras = [];
-  if (r.kind === 'reserve' && r.return_date) extras.push(['Back by', r.return_date]);
+  if (r.kind === 'reserve' && r.return_date) extras.push(['Back by', niceDate(r.return_date)]);
   if (r.pickup_city && r.pickup_city !== r.delivery_city) extras.push(['Pickup city', r.pickup_city]);
 
   drawer.replaceChildren($(`
@@ -373,9 +401,11 @@ async function openRequest(id) {
       <button class="x" aria-label="Close">×</button>
     </div>
     <div class="dbody">
+      ${actions ? `<div class="contactbar">${actions}${
+        pref ? `<span class="prefnote">prefers ${esc(pref)}</span>` : ''}</div>` : ''}
       <dl class="kv">
-        <dt>Phone</dt><dd>${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : '—'}</dd>
-        <dt>Email</dt><dd>${r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : '—'}</dd>
+        <dt>Phone</dt><dd>${esc(r.phone || '—')}</dd>
+        <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
         ${r.kind === 'reserve' ? `
         <dt>Package</dt><dd>${esc(pkg(r))}</dd>
         <dt>Quoted</dt><dd>${esc(money(r.quoted_total_cents))} <span style="color:var(--muted);font-weight:400">before tax</span></dd>` : ''}
@@ -443,6 +473,7 @@ const PRICES = { 10: 39, 20: 79, 40: 129, 60: 179 };
 const EXTRA  = { 10: 25, 20: 40, 40: 65,  60: 90  };
 
 function openNewRequest() {
+  closeAnyDrawer();
   const scrim = $('<div class="scrim"></div>');
   const drawer = $('<div class="drawer" role="dialog" aria-modal="true"></div>');
   const close = () => { scrim.remove(); drawer.remove(); document.removeEventListener('keydown', onKey); };
@@ -473,6 +504,14 @@ function openNewRequest() {
       <div class="frow">
         <div><label class="fl" for="n-phone">Phone</label><input id="n-phone" type="tel"></div>
         <div><label class="fl" for="n-email">Email</label><input id="n-email" type="email"></div>
+      </div>
+      <div class="frow one">
+        <div><label class="fl" for="n-pref">Best way to reach them</label>
+          <select id="n-pref">
+            <option value="text">Text</option>
+            <option value="call" selected>Call</option>
+            <option value="email">Email</option>
+          </select></div>
       </div>
 
       <div id="n-reserve">
@@ -550,6 +589,7 @@ function openNewRequest() {
         kind: q('n-kind').value,
         first_name: q('n-first').value, last_name: q('n-last').value,
         phone: q('n-phone').value, email: q('n-email').value,
+        contact_pref: q('n-pref').value,
         bins: q('n-bins').value, weeks: q('n-weeks').value,
         start_date: q('n-start').value, delivery_city: q('n-dcity').value,
         pickup_city: q('n-pcity').value, quoted_total: q('n-override').value,
