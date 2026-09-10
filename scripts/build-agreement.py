@@ -21,6 +21,21 @@ body = body.split('*Owner checklist before first send:*', 1)[0]
 body = body.split('**Customer signature:**', 1)[0].rstrip()
 body = body.replace('---', '').strip()
 
+# Square Contracts filled these at signing time. We render the agreement
+# ourselves, so they become named tokens substituted per rental — a customer
+# must never be asked to sign a document with blanks in it.
+MERGE = {
+    '[10 / 20 / 40 / 60]': '{{BINS}}',
+    '[START DATE]': '{{START_DATE}}',
+    '[RETURN DATE]': '{{RETURN_DATE}}',
+}
+for placeholder, token in MERGE.items():
+    body = body.replace(placeholder, token)
+
+leftover = re.findall(r'\[[^\]]{1,60}\]', body)
+if leftover:
+    raise SystemExit(f'unsubstituted placeholder(s) still in the agreement: {leftover}')
+
 version = hashlib.sha256(body.encode()).hexdigest()[:12]
 
 esc = lambda t: t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -94,6 +109,19 @@ export const AGREEMENT_SOURCE_SHA = %s;
 export const AGREEMENT_HTML = %s;
 
 export const AGREEMENT_TEXT = %s;
+
+/* Fill the per-rental blanks. Every token must resolve: rendering an agreement
+   with a placeholder still showing would put a blank in front of a customer at
+   the moment they sign. */
+export function renderAgreement(source, values) {
+  return source.replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => {
+    const v = values[key];
+    if (v === undefined || v === null || v === '') {
+      throw new Error(`agreement is missing a value for ${key}`);
+    }
+    return String(v);
+  });
+}
 ''' % (json.dumps(version),
        json.dumps(hashlib.sha256(src.encode()).hexdigest()[:12]),
        json.dumps('\n'.join(html)),

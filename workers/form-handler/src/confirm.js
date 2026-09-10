@@ -6,7 +6,7 @@
    address and agreement — it is generated with crypto.randomUUID and is never
    guessable, but it is also never shown anywhere except the email we send. */
 
-import { AGREEMENT_HTML, AGREEMENT_TEXT, AGREEMENT_VERSION } from './agreement.js';
+import { AGREEMENT_HTML, AGREEMENT_TEXT, AGREEMENT_VERSION, renderAgreement } from './agreement.js';
 import { sendEmail, INBOX } from './mail.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
@@ -21,6 +21,14 @@ const niceDate = iso => {
   return isNaN(d) ? iso : d.toLocaleDateString('en-US',
     { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 };
+
+/* The per-rental values the agreement text needs. Kept in one place so the page
+   and the emailed copy can never show different terms for the same rental. */
+const agreementValues = r => ({
+  BINS: r.bins,
+  START_DATE: niceDate(r.start_date),
+  RETURN_DATE: niceDate(r.due_date),
+});
 
 const page = (title, inner, extraHead = '') => new Response(`<!doctype html>
 <html lang="en"><head>
@@ -79,8 +87,10 @@ input,textarea{width:100%;padding:12px 13px;border:1px solid var(--line);border-
 textarea{min-height:80px;resize:vertical}
 input:focus,textarea:focus{outline:2px solid var(--yellow);outline-offset:1px}
 .help{display:block;color:var(--muted);font-size:13.5px;margin-top:6px}
-.agreement{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:10px;
-  padding:16px 18px;background:#FBFAF6;font-size:14.5px}
+/* Shown in full, never in a scrolling window. Terms someone has to hunt through
+   a 340px box to read are terms they can fairly say they were not shown. */
+.agreement{border:1px solid var(--line);border-radius:10px;
+  padding:20px 22px;background:#FBFAF6;font-size:15px;line-height:1.6}
 .agreement h3{font-family:var(--font-body);font-weight:700;font-size:15px;margin:18px 0 7px}
 .agreement h3:first-child{margin-top:0}
 .agreement ul{padding-left:20px;margin:8px 0}
@@ -166,7 +176,7 @@ Questions about any of it? Just reply to this email.
 RENTAL AGREEMENT (version ${AGREEMENT_VERSION})
 ────────────────────────────────────────
 
-${AGREEMENT_TEXT}
+${renderAgreement(AGREEMENT_TEXT, agreementValues(r))}
 
 ────────────────────────────────────────
 Beehive Bin Co. · ${INBOX}`;
@@ -192,7 +202,7 @@ Beehive Bin Co. · ${INBOX}`;
         <hr style="border:0;border-top:1px solid rgba(21,19,15,.14);margin:26px 0">
         <p style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#6B675C;
           font-weight:700;margin-bottom:14px">Rental agreement &middot; version ${esc(AGREEMENT_VERSION)}</p>
-        <div style="font-size:14px">${AGREEMENT_HTML}</div>
+        <div style="font-size:14px">${renderAgreement(AGREEMENT_HTML, agreementValues(r))}</div>
       </div>
     </div></body></html>`;
 
@@ -312,7 +322,7 @@ const agreementStep = r => page('Rental agreement', `
   <form method="POST">
     <input type="hidden" name="step" value="agreement">
     <div class="card">
-      <div class="agreement">${AGREEMENT_HTML}</div>
+      <div class="agreement">${renderAgreement(AGREEMENT_HTML, agreementValues(r))}</div>
       <label class="fl" for="signature">Type your full name to sign</label>
       <input id="signature" name="agreement_name" required autocomplete="name"
         placeholder="${esc([r.first_name, r.last_name].filter(Boolean).join(' '))}">
