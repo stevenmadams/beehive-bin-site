@@ -33,6 +33,7 @@ const FORMS = {
       ['dcity', 'Delivery city'], ['pcity', 'Pickup city'],
       ['fname', 'First name'], ['lname', 'Last name'],
       ['phone', 'Phone'], ['email', 'Email'],
+      ['notes', 'Customer notes'],
     ],
   },
   contact: {
@@ -43,6 +44,79 @@ const FORMS = {
     ],
   },
 };
+
+/* ---------- D1 persistence ----------
+   Every submission becomes a row in `requests`, which is what the admin panel
+   at admin.beehivebin.co reads. The email is now a notification, not the
+   record of truth. */
+
+const trim = (v, max = 500) => {
+  const s = String(v ?? '').trim();
+  return s ? s.slice(0, max) : null;
+};
+const int = v => {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
+};
+const isEmail = s => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(s ?? '').trim());
+// "$129" / "$1,299.50" -> cents. The form sends a display string, not a number.
+const centsFrom = v => {
+  const m = /([\d,]+(?:\.\d{1,2})?)/.exec(String(v ?? ''));
+  return m ? Math.round(parseFloat(m[1].replace(/,/g, '')) * 100) : null;
+};
+// <input type="date"> gives yyyy-mm-dd; reject anything else rather than
+// storing junk in a column the schedule will later sort on.
+const isoDate = v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '').trim()) ? String(v).trim() : null);
+
+async function storeRequest(env, data) {
+  const contact = trim(data.contact, 200);
+  const row = data.form === 'reserve'
+    ? {
+        first_name: trim(data.fname, 100),
+        last_name: trim(data.lname, 100),
+        email: trim(data.email, 200),
+        phone: trim(data.phone, 40),
+        bins: int(data.bins),
+        weeks: int(data.weeks),
+        start_date: isoDate(data.start),
+        return_date: trim(data.return_date, 60),
+        quoted_total_cents: centsFrom(data.total_before_tax),
+        delivery_city: trim(data.dcity, 120),
+        pickup_city: trim(data.pcity, 120),
+        customer_notes: trim(data.notes, 4000),
+        message: null,
+      }
+    : {
+        first_name: trim(data.name, 100),
+        last_name: null,
+        // The contact form takes one "phone or email" box; sort it here so the
+        // panel can show a usable contact method without guessing.
+        email: isEmail(contact) ? contact : null,
+        phone: isEmail(contact) ? null : contact,
+        bins: null,
+        weeks: null,
+        start_date: isoDate(data.movedate),
+        return_date: null,
+        quoted_total_cents: null,
+        delivery_city: trim(data.city, 120),
+        pickup_city: null,
+        customer_notes: null,
+        message: trim(data.message, 4000),
+      };
+
+  const res = await env.DB.prepare(
+    `INSERT INTO requests (kind, first_name, last_name, email, phone, bins, weeks,
+       start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
+       customer_notes, message, raw_json)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)`,
+  ).bind(
+    data.form, row.first_name, row.last_name, row.email, row.phone, row.bins, row.weeks,
+    row.start_date, row.return_date, row.quoted_total_cents, row.delivery_city, row.pickup_city,
+    row.customer_notes, row.message, JSON.stringify(data).slice(0, 8000),
+  ).run();
+
+  return res.meta.last_row_id;
+}
 
 export default {
   async fetch(request, env) {
@@ -80,22 +154,37 @@ export default {
       ? String(data.email || data.contact).trim()
       : undefined;
 
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: FROM,
-        to: [INBOX],
-        subject,
-        text: `New ${data.form} submission from beehivebin.co\n\n${lines.join('\n')}\n`,
-        ...(replyTo ? { reply_to: replyTo } : {}),
-      }),
-    });
-
-    if (!res.ok) {
-      console.log('resend error', res.status, await res.text());
-      return json({ ok: false, error: 'send failed' }, 502, origin);
+    // Store and notify independently: a Resend outage must not lose the
+    // request, and a D1 hiccup must not stop the owner hearing about it.
+    let requestId = null;
+    try {
+      requestId = await storeRequest(env, data);
+    } catch (err) {
+      console.log('d1 insert failed', err.message);
     }
+
+    let emailed = false;
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: FROM,
+          to: [INBOX],
+          subject,
+          text: `New ${data.form} submission from beehivebin.co\n\n${lines.join('\n')}\n`
+            + (requestId ? `\nOpen in the panel: https://admin.beehivebin.co/#/requests/${requestId}\n` : ''),
+          ...(replyTo ? { reply_to: replyTo } : {}),
+        }),
+      });
+      emailed = res.ok;
+      if (!res.ok) console.log('resend error', res.status, await res.text());
+    } catch (err) {
+      console.log('resend threw', err.message);
+    }
+
+    // Only tell the customer we failed if the submission reached nowhere at all.
+    if (!requestId && !emailed) return json({ ok: false, error: 'send failed' }, 502, origin);
     return json({ ok: true }, 200, origin);
   },
 };

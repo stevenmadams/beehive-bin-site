@@ -3,3 +3,10 @@ main = "src/index.js"
 compatibility_date = "2026-09-01"
 # Custom domain api.beehivebin.co is attached via the account-level Workers
 # Domains API (not here) — the deploy token lacks zone Workers Routes access.
+
+# Shared with beehive-admin: this Worker writes requests, the panel reads them.
+[[d1_databases]]
+binding = "DB"
+database_name = "beehive"
+database_id = "REPLACE-ME"       # same id as workers/admin/wrangler.toml
+migrations_dir = "../migrations"

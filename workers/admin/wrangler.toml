@@ -1,0 +1,33 @@
+name = "beehive-admin"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# Custom domain admin.beehivebin.co is attached via the account-level Workers
+# Domains API, the same way api.beehivebin.co is on beehive-forms.
+#
+# IMPORTANT: this Worker trusts Cloudflare Access to have already authenticated
+# the visitor. Put an Access application in front of admin.beehivebin.co before
+# the first deploy — the Worker rejects requests without a valid Access JWT, so
+# an unprotected deploy fails closed rather than open, but don't leave it that way.
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# /api must reach the Worker, never the SPA fallback.
+run_worker_first = ["/api/*"]
+
+[vars]
+# From the Zero Trust dashboard: Settings → Custom Pages shows your team domain.
+ACCESS_TEAM_DOMAIN = "REPLACE-ME.cloudflareaccess.com"
+# Access → Applications → (this app) → Overview → "Application Audience (AUD) Tag".
+# Without the right value here, a token minted for any other app in the team
+# would be accepted. It is an identifier, not a secret.
+ACCESS_AUD = "REPLACE-ME"
+ALLOWED_EMAIL_DOMAIN = "beehivebin.co"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "beehive"
+database_id = "REPLACE-ME"       # `wrangler d1 create beehive` prints this
+migrations_dir = "../migrations"

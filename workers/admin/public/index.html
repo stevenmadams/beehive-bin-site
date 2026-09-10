@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Beehive Bin Co. — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap" rel="stylesheet">
+<style>
+:root{
+  --yellow:#FFC400; --yellow-deep:#E3A800;
+  --ink:#15130F; --char:#211E18; --paper:#F2F1EB; --white:#fff;
+  --muted:#6B675C; --line:rgba(21,19,15,.14);
+  --ok:#1F7A4C; --warn:#B4531A; --bad:#A32C2C;
+  --font-display:"Archivo Black","Archivo","Arial Black",system-ui,sans-serif;
+  --font-body:"Archivo",Inter,system-ui,-apple-system,sans-serif;
+  --radius:12px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:var(--font-body);background:var(--paper);color:var(--ink);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--font-display);font-weight:400;letter-spacing:-.02em;line-height:1.05;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:inherit}
+
+/* ---- shell ---- */
+#app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.rail{background:var(--ink);color:#fff;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.12)}
+.brand .name{font-family:var(--font-display);font-size:16px;letter-spacing:.01em;display:block}
+.brand .tag{display:block;font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--yellow);text-transform:uppercase;margin-top:4px}
+nav{padding:12px 10px;flex:1;overflow:auto}
+nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;text-decoration:none;
+  color:rgba(255,255,255,.72);font-weight:500;margin-bottom:2px}
+nav a:hover{background:rgba(255,255,255,.07);color:#fff}
+nav a[aria-current="page"]{background:var(--yellow);color:var(--ink);font-weight:600}
+nav a .ico{width:17px;text-align:center;flex:none;opacity:.9}
+nav a .badge{margin-left:auto;background:var(--yellow);color:var(--ink);font-size:11px;font-weight:700;
+  border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
+nav a[aria-current="page"] .badge{background:var(--ink);color:var(--yellow)}
+nav a.soon{opacity:.42;cursor:default}
+nav a.soon:hover{background:none;color:rgba(255,255,255,.72)}
+.rail-foot{padding:14px 16px;border-top:1px solid rgba(255,255,255,.12);font-size:12px;color:rgba(255,255,255,.6)}
+.rail-foot strong{display:block;color:#fff;font-weight:600;font-size:13px;word-break:break-all}
+.rail-foot .role{display:inline-block;margin-top:5px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--yellow);font-weight:700}
+
+main{padding:26px 30px 60px;max-width:1160px}
+.head{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+.head h1{font-size:30px}
+.head .count{color:var(--muted);font-weight:600}
+.sub{color:var(--muted);margin:0 0 20px}
+
+/* ---- controls ---- */
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.seg{display:inline-flex;background:rgba(21,19,15,.06);border-radius:999px;padding:3px}
+.seg button{border:0;background:none;padding:6px 14px;border-radius:999px;font-weight:600;font-size:13px;
+  color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--white);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.search{flex:1;min-width:190px;max-width:320px;padding:8px 12px;border:1px solid var(--line);
+  border-radius:999px;background:var(--white)}
+.search:focus{outline:2px solid var(--yellow);outline-offset:1px}
+
+.btn{border:1px solid var(--line);background:var(--white);padding:8px 14px;border-radius:9px;
+  font-weight:600;cursor:pointer}
+.btn:hover{border-color:rgba(21,19,15,.3)}
+.btn.primary{background:var(--yellow);border-color:var(--yellow-deep);color:var(--ink)}
+.btn.primary:hover{background:var(--yellow-deep)}
+.btn.danger{color:var(--bad);border-color:rgba(163,44,44,.3)}
+.btn.danger:hover{background:rgba(163,44,44,.06)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:5px 10px;font-size:12.5px;border-radius:7px}
+
+/* ---- table ---- */
+.card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  font-weight:700;padding:11px 14px;border-bottom:1px solid var(--line);background:rgba(21,19,15,.02)}
+td{padding:12px 14px;border-bottom:1px solid rgba(21,19,15,.07);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr.clickable{cursor:pointer}
+tbody tr.clickable:hover{background:rgba(255,196,0,.09)}
+.who{font-weight:600}
+.who small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.nowrap{white-space:nowrap}
+.num{font-variant-numeric:tabular-nums}
+
+.pill{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  padding:3px 9px;border-radius:999px;white-space:nowrap}
+.pill.new{background:rgba(255,196,0,.25);color:#7A5B00}
+.pill.approved{background:rgba(31,122,76,.14);color:var(--ok)}
+.pill.declined{background:rgba(163,44,44,.12);color:var(--bad)}
+.pill.converted{background:rgba(21,19,15,.1);color:var(--char)}
+.pill.staff{background:rgba(21,19,15,.08);color:var(--char)}
+.pill.owner{background:var(--yellow);color:var(--ink)}
+.pill.off{background:rgba(163,44,44,.12);color:var(--bad)}
+
+.empty{padding:48px 20px;text-align:center;color:var(--muted)}
+.empty strong{display:block;font-family:var(--font-display);font-size:19px;color:var(--ink);margin-bottom:6px}
+
+/* ---- drawer ---- */
+.scrim{position:fixed;inset:0;background:rgba(21,19,15,.42);z-index:40;animation:fade .15s ease}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--paper);z-index:41;
+  overflow:auto;box-shadow:-8px 0 30px rgba(0,0,0,.2);animation:slide .18s ease}
+@keyframes fade{from{opacity:0}}
+@keyframes slide{from{transform:translateX(24px);opacity:.4}}
+.drawer .dhead{position:sticky;top:0;background:var(--ink);color:#fff;padding:18px 20px;display:flex;
+  align-items:flex-start;gap:12px}
+.drawer .dhead h2{font-size:21px;flex:1}
+.drawer .dhead .meta{color:rgba(255,255,255,.6);font-size:12.5px;margin-top:5px}
+.x{border:0;background:rgba(255,255,255,.12);color:#fff;width:28px;height:28px;border-radius:8px;
+  font-size:16px;line-height:1;cursor:pointer;flex:none}
+.x:hover{background:rgba(255,255,255,.24)}
+.dbody{padding:18px 20px 30px}
+.kv{display:grid;grid-template-columns:112px 1fr;gap:7px 14px;margin-bottom:20px}
+.kv dt{color:var(--muted);font-size:12.5px;font-weight:600}
+.kv dd{margin:0;font-weight:500;word-break:break-word}
+.note{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+  margin-bottom:18px;white-space:pre-wrap}
+.note h4{margin:0 0 6px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--white);
+  resize:vertical;min-height:76px}
+textarea:focus,input:focus,select:focus{outline:2px solid var(--yellow);outline-offset:1px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+label.fl{display:block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 5px}
+
+/* ---- forms ---- */
+.formrow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:16px;background:var(--white);
+  border:1px solid var(--line);border-radius:var(--radius);margin-bottom:18px}
+.formrow .f{flex:1;min-width:150px}
+.formrow input,.formrow select{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:9px;
+  background:var(--white)}
+
+.banner{border-radius:10px;padding:12px 15px;margin-bottom:18px;font-weight:500}
+.banner.err{background:rgba(163,44,44,.09);border:1px solid rgba(163,44,44,.28);color:#7A2020}
+.banner.info{background:rgba(255,196,0,.16);border:1px solid rgba(227,168,0,.4)}
+
+.gate{min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center}
+.gate .box{max-width:430px}
+.gate h1{font-size:26px;margin-bottom:10px}
+.gate p{color:var(--muted)}
+
+.soonwrap{background:var(--white);border:1px dashed rgba(21,19,15,.22);border-radius:var(--radius);padding:30px}
+.soonwrap h3{font-size:19px;margin-bottom:8px}
+.soonwrap ul{margin:12px 0 0;padding-left:20px;color:var(--muted)}
+.soonwrap li{margin-bottom:5px}
+
+@media (max-width:820px){
+  #app{grid-template-columns:1fr}
+  .rail{position:static;height:auto;flex-direction:row;align-items:center;overflow:auto}
+  .brand{border-bottom:0;border-right:1px solid rgba(255,255,255,.12);white-space:nowrap}
+  nav{display:flex;padding:8px;gap:4px}
+  nav a{margin:0;white-space:nowrap}
+  .rail-foot{display:none}
+  main{padding:18px 16px 50px}
+  .hide-sm{display:none}
+}
+</style>
+</head>
+<body>
+<div id="root"><div class="gate"><div class="box"><p>Loading…</p></div></div></div>
+
+<script type="module">
+// Returns the single root when a template has one, otherwise the whole
+// fragment — a template with sibling roots (the drawer's header + body) must
+// not silently lose everything after the first.
+const $ = (h) => {
+  const t = document.createElement('template');
+  t.innerHTML = h.trim();
+  return t.content.children.length === 1 ? t.content.firstElementChild : t.content;
+};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const root = document.getElementById('root');
+
+let me = null;
+let counts = {};
+
+/* ---------- api ---------- */
+async function api(path, opts = {}) {
+  const res = await fetch(`/api${path}`, {
+    ...opts,
+    headers: opts.body ? { 'Content-Type': 'application/json' } : {},
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+  return body;
+}
+
+/* ---------- formatting ---------- */
+const money = c => (c == null ? '—' : '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: c % 100 ? 2 : 0 }));
+const fullName = r => [r.first_name, r.last_name].filter(Boolean).join(' ') || '(no name)';
+
+function niceDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + 'T12:00:00' : iso);
+  return isNaN(d) ? iso : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function ago(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  const mins = Math.round((Date.now() - d) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  const days = Math.round(mins / 1440);
+  return days < 30 ? `${days}d ago` : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+const pkg = r => (r.bins ? `${r.bins} bins · ${r.weeks === 1 ? '1 week' : `${r.weeks} weeks`}` : '—');
+
+/* ---------- shell ---------- */
+const NAV = [
+  { id: 'requests',  label: 'Requests',  ico: '◎', live: true },
+  { id: 'rentals',   label: 'Rentals',   ico: '▦' },
+  { id: 'schedule',  label: 'Schedule',  ico: '◫' },
+  { id: 'inventory', label: 'Inventory', ico: '▤' },
+  { id: 'customers', label: 'Customers', ico: '☺' },
+  { id: 'employees', label: 'Employees', ico: '⚑', live: true },
+  { id: 'settings',  label: 'Settings',  ico: '⚙' },
+];
+
+function shell(active) {
+  const links = NAV.map(n => {
+    const badge = n.id === 'requests' && counts.new ? `<span class="badge">${counts.new}</span>` : '';
+    if (!n.live) return `<a class="soon" title="Coming next" href="#/${n.id}"><span class="ico">${n.ico}</span>${n.label}</a>`;
+    return `<a href="#/${n.id}"${n.id === active ? ' aria-current="page"' : ''}><span class="ico">${n.ico}</span>${n.label}${badge}</a>`;
+  }).join('');
+
+  return $(`<div id="app">
+    <aside class="rail">
+      <div class="brand"><span class="name">Beehive Bin Co.</span><span class="tag">Operations</span></div>
+      <nav>${links}</nav>
+      <div class="rail-foot">
+        <strong>${esc(me.name || me.email)}</strong>
+        ${esc(me.email)}
+        <span class="role">${esc(me.role)}</span>
+      </div>
+    </aside>
+    <main id="view"></main>
+  </div>`);
+}
+
+function render(active, node) {
+  root.replaceChildren(shell(active));
+  document.getElementById('view').replaceChildren(node);
+}
+
+const banner = (msg, kind = 'err') => $(`<div class="banner ${kind}">${esc(msg)}</div>`);
+
+/* ---------- requests ---------- */
+const reqState = { status: 'new', q: '' };
+
+async function viewRequests() {
+  const view = $('<div></div>');
+  const filters = ['new', 'approved', 'declined', 'all'];
+  const head = $(`<div>
+    <div class="head"><h1>Requests</h1><span class="count" id="rcount"></span></div>
+    <p class="sub">Everything the reserve and contact forms send in. Approve one to move it toward a rental.</p>
+    <div class="toolbar">
+      <div class="seg">${filters.map(f =>
+        `<button data-f="${f}" aria-pressed="${f === reqState.status}">${f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>
+      <input class="search" type="search" placeholder="Name, email, phone, city…" value="${esc(reqState.q)}">
+    </div>
+  </div>`);
+  const list = $('<div class="card"><div class="empty">Loading…</div></div>');
+  view.append(head, list);
+  render('requests', view);
+
+  head.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+    reqState.status = b.dataset.f;
+    viewRequests();
+  }));
+
+  const search = head.querySelector('.search');
+  let timer;
+  search.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { reqState.q = search.value.trim(); loadList(list, head); }, 250);
+  });
+
+  loadList(list, head);
+}
+
+async function loadList(list, head) {
+  try {
+    const params = new URLSearchParams({ status: reqState.status });
+    if (reqState.q) params.set('q', reqState.q);
+    const { requests } = await api(`/requests?${params}`);
+    head.querySelector('#rcount').textContent = requests.length
+      ? `${requests.length}${requests.length === 200 ? '+' : ''}` : '';
+
+    if (!requests.length) {
+      list.replaceChildren($(`<div class="empty"><strong>Nothing here</strong>${
+        reqState.q ? 'No request matches that search.' : `No ${reqState.status === 'all' ? '' : reqState.status + ' '}requests yet.`}</div>`));
+      return;
+    }
+
+    const rows = requests.map(r => `<tr class="clickable" data-id="${r.id}">
+      <td><span class="pill ${r.status}">${r.status}</span></td>
+      <td><div class="who">${esc(fullName(r))}<small>${esc(r.email || r.phone || '—')}</small></div></td>
+      <td class="nowrap">${r.kind === 'contact' ? '<em style="color:var(--muted)">Question</em>' : esc(pkg(r))}</td>
+      <td class="nowrap num">${esc(niceDate(r.start_date))}</td>
+      <td class="hide-sm">${esc(r.delivery_city || '—')}</td>
+      <td class="nowrap num hide-sm">${esc(money(r.quoted_total_cents))}</td>
+      <td class="nowrap hide-sm" style="color:var(--muted)">${esc(ago(r.created_at))}</td>
+    </tr>`).join('');
+
+    const table = $(`<table>
+      <thead><tr>
+        <th>Status</th><th>Who</th><th>Package</th><th>Starts</th>
+        <th class="hide-sm">City</th><th class="hide-sm">Quoted</th><th class="hide-sm">In</th>
+      </tr></thead>
+      <tbody>${rows}</tbody></table>`);
+    table.querySelectorAll('tbody tr').forEach(tr =>
+      tr.addEventListener('click', () => { location.hash = `#/requests/${tr.dataset.id}`; }));
+    list.replaceChildren(table);
+  } catch (err) {
+    list.replaceChildren($(`<div class="empty"><strong>Could not load requests</strong>${esc(err.message)}</div>`));
+  }
+}
+
+/* ---------- request drawer ---------- */
+async function openRequest(id) {
+  if (!document.getElementById('app')) await viewRequests();
+
+  const scrim = $('<div class="scrim"></div>');
+  const drawer = $('<div class="drawer" role="dialog" aria-modal="true"><div class="dbody">Loading…</div></div>');
+  const close = () => { scrim.remove(); drawer.remove(); document.removeEventListener('keydown', onKey);
+    if (location.hash.startsWith('#/requests/')) location.hash = '#/requests'; };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  scrim.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.append(scrim, drawer);
+
+  let r;
+  try {
+    ({ request: r } = await api(`/requests/${id}`));
+  } catch (err) {
+    drawer.replaceChildren($(`<div class="dbody"><div class="banner err">${esc(err.message)}</div></div>`));
+    return;
+  }
+
+  const extras = [];
+  if (r.kind === 'reserve' && r.return_date) extras.push(['Back by', r.return_date]);
+  if (r.pickup_city && r.pickup_city !== r.delivery_city) extras.push(['Pickup city', r.pickup_city]);
+
+  drawer.replaceChildren($(`
+    <div class="dhead">
+      <div style="flex:1">
+        <h2>${esc(fullName(r))}</h2>
+        <div class="meta">${r.kind === 'reserve' ? 'Reservation' : 'Question'} · #${r.id} · ${esc(ago(r.created_at))}</div>
+      </div>
+      <span class="pill ${r.status}" style="margin-top:3px">${r.status}</span>
+      <button class="x" aria-label="Close">×</button>
+    </div>
+    <div class="dbody">
+      <dl class="kv">
+        <dt>Phone</dt><dd>${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : '—'}</dd>
+        <dt>Email</dt><dd>${r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : '—'}</dd>
+        ${r.kind === 'reserve' ? `
+        <dt>Package</dt><dd>${esc(pkg(r))}</dd>
+        <dt>Quoted</dt><dd>${esc(money(r.quoted_total_cents))} <span style="color:var(--muted);font-weight:400">before tax</span></dd>` : ''}
+        <dt>${r.kind === 'reserve' ? 'Starts' : 'Needs bins'}</dt><dd>${esc(niceDate(r.start_date))}</dd>
+        ${extras.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}
+        <dt>Delivery city</dt><dd>${esc(r.delivery_city || '—')}</dd>
+        ${r.decided_by ? `<dt>Decided</dt><dd>${esc(r.decided_by)}<br><span style="color:var(--muted);font-weight:400">${esc(ago(r.decided_at))}</span></dd>` : ''}
+      </dl>
+
+      ${r.message ? `<div class="note"><h4>Their message</h4>${esc(r.message)}</div>` : ''}
+      ${r.customer_notes ? `<div class="note"><h4>Notes from the customer</h4>${esc(r.customer_notes)}</div>` : ''}
+      ${r.decline_reason ? `<div class="note"><h4>Why it was declined</h4>${esc(r.decline_reason)}</div>` : ''}
+
+      <label class="fl" for="inotes">Internal notes</label>
+      <textarea id="inotes" placeholder="Only staff see this.">${esc(r.internal_notes || '')}</textarea>
+      <div class="actions">
+        <button class="btn sm" data-act="savenote">Save note</button>
+        <span id="notestate" style="align-self:center;color:var(--muted);font-size:12.5px"></span>
+      </div>
+
+      <div class="actions" style="margin-top:22px;border-top:1px solid var(--line);padding-top:18px">
+        ${r.status === 'new' ? `
+          <button class="btn primary" data-act="approve">Approve</button>
+          <button class="btn danger" data-act="decline">Decline</button>`
+        : `<button class="btn" data-act="reopen">Move back to new</button>`}
+      </div>
+      <div id="drawer-msg"></div>
+    </div>`));
+
+  drawer.querySelector('.x').addEventListener('click', close);
+
+  const msg = drawer.querySelector('#drawer-msg');
+  const act = async (action, extra = {}) => {
+    msg.replaceChildren();
+    try {
+      await api(`/requests/${id}/decision`, { method: 'POST', body: JSON.stringify({ action, ...extra }) });
+      await refreshCounts();
+      close();
+      viewRequests();
+    } catch (err) {
+      msg.replaceChildren(banner(err.message));
+    }
+  };
+
+  drawer.querySelector('[data-act="savenote"]')?.addEventListener('click', async e => {
+    const state = drawer.querySelector('#notestate');
+    e.target.disabled = true; state.textContent = 'Saving…';
+    try {
+      await api(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ internal_notes: drawer.querySelector('#inotes').value }) });
+      state.textContent = 'Saved';
+    } catch (err) { state.textContent = err.message; }
+    e.target.disabled = false;
+  });
+  drawer.querySelector('[data-act="approve"]')?.addEventListener('click', () => act('approve'));
+  drawer.querySelector('[data-act="reopen"]')?.addEventListener('click', () => act('reopen'));
+  drawer.querySelector('[data-act="decline"]')?.addEventListener('click', () => {
+    const reason = prompt('Why is this being declined? (optional — the customer never sees it)');
+    if (reason === null) return;
+    act('decline', { reason });
+  });
+}
+
+/* ---------- employees ---------- */
+async function viewEmployees() {
+  const view = $(`<div>
+    <div class="head"><h1>Employees</h1></div>
+    <p class="sub">Who can sign in to this panel.</p>
+    <div id="emsg"></div>
+    <div id="emform"></div>
+    <div class="card" id="emlist"><div class="empty">Loading…</div></div>
+  </div>`);
+  render('employees', view);
+
+  const msg = view.querySelector('#emsg');
+  const reload = async () => {
+    try {
+      const { employees, domain } = await api('/employees');
+      view.querySelector('#emform').replaceChildren(
+        $(`<div class="banner info">Anyone with an <strong>@${esc(domain)}</strong> mailbox can sign in and is added here automatically. Add addresses below to let in anyone else.</div>`),
+      );
+      if (me.role === 'owner') {
+        const form = $(`<form class="formrow">
+          <div class="f"><label class="fl" for="nemail">Email</label><input id="nemail" type="email" required placeholder="person@example.com"></div>
+          <div class="f"><label class="fl" for="nname">Name</label><input id="nname" placeholder="Optional"></div>
+          <div class="f" style="max-width:130px"><label class="fl" for="nrole">Role</label>
+            <select id="nrole"><option value="staff">Staff</option><option value="owner">Owner</option></select></div>
+          <button class="btn primary" type="submit">Add</button>
+        </form>`);
+        form.addEventListener('submit', async e => {
+          e.preventDefault();
+          msg.replaceChildren();
+          const btn = form.querySelector('button');
+          btn.disabled = true;
+          try {
+            await api('/employees', { method: 'POST', body: JSON.stringify({
+              email: form.querySelector('#nemail').value,
+              name: form.querySelector('#nname').value,
+              role: form.querySelector('#nrole').value,
+            })});
+            form.reset();
+            reload();
+          } catch (err) { msg.replaceChildren(banner(err.message)); }
+          btn.disabled = false;
+        });
+        view.querySelector('#emform').append(form);
+      }
+
+      const rows = employees.map(e => `<tr>
+        <td><div class="who">${esc(e.name || '—')}<small>${esc(e.email)}</small></div></td>
+        <td><span class="pill ${e.role}">${e.role}</span></td>
+        <td>${e.active ? '<span style="color:var(--ok);font-weight:600">Active</span>' : '<span class="pill off">Revoked</span>'}</td>
+        <td class="nowrap hide-sm" style="color:var(--muted)">${e.last_seen_at ? esc(ago(e.last_seen_at)) : 'never'}</td>
+        <td class="nowrap" style="text-align:right">${
+          me.role === 'owner' && e.email !== me.email
+            ? `<button class="btn sm ${e.active ? 'danger' : ''}" data-id="${e.id}" data-active="${e.active ? 0 : 1}">${e.active ? 'Revoke' : 'Restore'}</button>`
+            : '<span style="color:var(--muted);font-size:12px">—</span>'}</td>
+      </tr>`).join('');
+
+      const table = $(`<table><thead><tr>
+        <th>Person</th><th>Role</th><th>Access</th><th class="hide-sm">Last seen</th><th></th>
+      </tr></thead><tbody>${rows}</tbody></table>`);
+
+      table.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', async () => {
+        msg.replaceChildren();
+        b.disabled = true;
+        try {
+          await api(`/employees/${b.dataset.id}`, { method: 'PATCH', body: JSON.stringify({ active: b.dataset.active === '1' }) });
+          reload();
+        } catch (err) { msg.replaceChildren(banner(err.message)); b.disabled = false; }
+      }));
+      view.querySelector('#emlist').replaceChildren(table);
+    } catch (err) {
+      view.querySelector('#emlist').replaceChildren($(`<div class="empty"><strong>Could not load</strong>${esc(err.message)}</div>`));
+    }
+  };
+  reload();
+}
+
+/* ---------- stubs ---------- */
+const SOON = {
+  rentals:   ['Approved requests that became real rentals', 'What is out right now, where, and when it is due back', 'Extensions and overdue flags'],
+  schedule:  ['Today and this week: deliveries and pickups', 'A printable run sheet with addresses and gate codes', 'Conflicts when two jobs need the same bin set'],
+  inventory: ['Bin sets and dollies, with condition notes', 'Which set is at which address', 'What is available for a given date range'],
+  customers: ['One record per renter, merged across requests', 'Rental history and repeat business', 'Notes that outlive a single rental'],
+  settings:  ['Package pricing and extra-week rates', 'Service area and blackout dates', 'Reply-to address and notification preferences'],
+};
+
+function viewSoon(id) {
+  const label = NAV.find(n => n.id === id).label;
+  render('requests', $(`<div>
+    <div class="head"><h1>${label}</h1></div>
+    <p class="sub">Not built yet.</p>
+    <div class="soonwrap">
+      <h3>What lives here</h3>
+      <ul>${SOON[id].map(s => `<li>${esc(s)}</li>`).join('')}</ul>
+      <p style="margin-top:16px;color:var(--muted)">Requests is the tab that works today. This one gets built once approving a request reliably produces a rental.</p>
+    </div>
+  </div>`));
+}
+
+/* ---------- boot + routing ---------- */
+async function refreshCounts() {
+  try { ({ counts } = await api('/stats')); } catch { counts = {}; }
+}
+
+function route() {
+  const hash = location.hash.replace(/^#\/?/, '') || 'requests';
+  const [tab, id] = hash.split('/');
+  if (tab === 'employees') return viewEmployees();
+  if (tab === 'requests' && id) return openRequest(id);
+  if (SOON[tab]) return viewSoon(tab);
+  return viewRequests();
+}
+
+(async () => {
+  try {
+    ({ user: me } = await api('/me'));
+  } catch (err) {
+    root.replaceChildren($(`<div class="gate"><div class="box">
+      <h1>No access</h1>
+      <p>${esc(err.message)}</p>
+      <p style="margin-top:14px;font-size:13px">If you think this is wrong, ask an owner to add your address in the Employees tab.</p>
+    </div></div>`));
+    return;
+  }
+  await refreshCounts();
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
+</body>
+</html>
