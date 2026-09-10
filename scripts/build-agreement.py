@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Regenerate workers/form-handler/src/agreement.js from the source markdown.
+
+The agreement a customer signs must be the same words as the document in the
+repo, so the customer-facing copy is generated rather than transcribed. Run
+this after editing docs/rental-agreement-template.md, and commit both files.
+
+The version stamp changes whenever the text does, which is deliberate: an
+acceptance records the version, so you can always answer which wording someone
+actually agreed to.
+"""
+import hashlib, json, pathlib, re
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+src = (ROOT / 'docs/rental-agreement-template.md').read_text()
+
+# The editorial header, signature block and owner checklist are notes to
+# ourselves, not terms; strip them.
+body = src.split('## Moving Bin Rental Agreement', 1)[1]
+body = body.split('*Owner checklist before first send:*', 1)[0]
+body = body.split('**Customer signature:**', 1)[0].rstrip()
+body = body.replace('---', '').strip()
+
+version = hashlib.sha256(body.encode()).hexdigest()[:12]
+
+esc = lambda t: t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+def inline(t):
+    t = esc(t)
+    t = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', t)
+    t = re.sub(r'"([^"]+)"', r'&ldquo;\1&rdquo;', t)
+    return t.replace("'", '&rsquo;')
+
+html, buf, in_list = [], [], False
+
+def flush():
+    global buf
+    if buf:
+        html.append('<p>' + inline(' '.join(buf)) + '</p>')
+        buf = []
+
+for raw in body.split('\n'):
+    line = raw.rstrip()
+    if line.startswith('### '):
+        flush()
+        if in_list:
+            html.append('</ul>'); in_list = False
+        html.append('<h3>' + inline(line[4:]) + '</h3>')
+    elif line.startswith('- '):
+        flush()
+        if not in_list:
+            html.append('<ul>'); in_list = True
+        html.append('<li>' + inline(line[2:]) + '</li>')
+    elif not line.strip():
+        flush()
+        if in_list:
+            html.append('</ul>'); in_list = False
+    else:
+        if in_list:
+            html[-1] = html[-1][:-5] + ' ' + inline(line.strip()) + '</li>'
+        else:
+            buf.append(line.strip())
+
+flush()
+if in_list:
+    html.append('</ul>')
+
+out = '''/* GENERATED — do not edit by hand.
+   Source: docs/rental-agreement-template.md
+   Regenerate with: python3 scripts/build-agreement.py
+
+   The customer-facing agreement text, and a version stamp derived from it.
+   Recording the version alongside each acceptance is what lets you answer, a
+   year later, exactly which wording someone agreed to — the text in the repo
+   will have moved on by then. */
+
+export const AGREEMENT_VERSION = %s;
+export const AGREEMENT_SOURCE_SHA = %s;
+
+export const AGREEMENT_HTML = %s;
+''' % (json.dumps(version),
+       json.dumps(hashlib.sha256(src.encode()).hexdigest()[:12]),
+       json.dumps('\n'.join(html)))
+
+(ROOT / 'workers/form-handler/src/agreement.js').write_text(out)
+print('agreement version', version, '·', len('\n'.join(html)), 'bytes')

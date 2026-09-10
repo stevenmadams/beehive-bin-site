@@ -84,7 +84,7 @@ export async function createInvoice(env, rental) {
     throw new SquareError('This rental has no total to invoice.', 400);
   }
   if (!rental.email) {
-    throw new SquareError('Square emails the invoice, so this rental needs an email address.', 400);
+    throw new SquareError('Square needs an email address for the customer record.', 400);
   }
 
   const customerId = await findOrCreateCustomer(call, env, rental);
@@ -117,7 +117,10 @@ export async function createInvoice(env, rental) {
         due_date: rental.start_date,
         automatic_payment_source: 'NONE',
       }],
-      delivery_method: 'EMAIL',
+      // We send the customer one link — our own confirmation page — and it
+      // hands off to this invoice. Letting Square email its own copy as well
+      // would put two competing "pay now" messages in the same inbox.
+      delivery_method: 'SHARE_MANUALLY',
       accepted_payment_methods: { card: true, bank_account: false },
       title: `Bin rental — ${rental.bins} bins, ${weeks}`,
       description: `Delivery ${rental.start_date} · pickup ${rental.due_date}. Taxes applied at checkout where required.`,

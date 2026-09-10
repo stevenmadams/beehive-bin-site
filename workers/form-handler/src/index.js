@@ -1,3 +1,6 @@
+import { WorkerEntrypoint } from 'cloudflare:workers';
+import { handleConfirm } from './confirm.js';
+
 /* Beehive Bin Co. — form handler.
    Receives reserve/contact form POSTs from beehivebin.co and emails them to
    the shared inbox via Resend. Stage 2 (Square pipeline) builds on this. */
@@ -230,6 +233,67 @@ async function handleSquareWebhook(request, env) {
   return new Response('ok', { status: 200 });
 }
 
+/* Called by the admin panel over a service binding, never over HTTP.
+
+   Resend lives on this Worker, so rather than duplicating the API key into the
+   panel's secrets, the panel asks this Worker to send. An RPC entrypoint has no
+   URL at all, so this adds no public surface to defend. */
+export class Mailer extends WorkerEntrypoint {
+  async sendConfirmLink({ to, name, link, bins, weeks, startDate, dueDate, totalCents }) {
+    if (!to || !link) return { ok: false, error: 'missing recipient or link' };
+
+    const weeksText = weeks === 1 ? '1 week' : `${weeks} weeks`;
+    const total = totalCents == null ? '' : `$${(totalCents / 100).toFixed(totalCents % 100 ? 2 : 0)}`;
+    const day = iso => {
+      const d = new Date(`${iso}T12:00:00`);
+      return isNaN(d) ? iso : d.toLocaleDateString('en-US',
+        { weekday: 'long', month: 'long', day: 'numeric' });
+    };
+
+    const text = `Hi ${name || 'there'},
+
+Good news — we've got bins available for you.
+
+  ${bins} bins · ${weeksText}
+  Delivered ${day(startDate)}
+  Back by ${day(dueDate)}
+  ${total} plus tax
+
+One link finishes everything — your delivery address, the rental agreement, and payment:
+
+${link}
+
+Nothing's booked until that's done, so the sooner the better if your dates matter.
+
+Questions? Just reply to this email.
+
+Beehive Bin Co.
+support@beehivebin.co`;
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: FROM,
+        to: [to],
+        reply_to: INBOX,
+        subject: `Confirm your bin rental — ${bins} bins, ${day(startDate)}`,
+        text,
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      console.log('confirm link send failed', res.status, detail);
+      return { ok: false, error: `Resend returned ${res.status}` };
+    }
+    return { ok: true };
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -238,6 +302,10 @@ export default {
     if (request.method === 'POST' && url.pathname === '/square/webhook') {
       return handleSquareWebhook(request, env);
     }
+
+    // The customer-facing confirmation flow answers on its own hostname, so a
+    // link in a customer's inbox reads as the business rather than as an API.
+    if (url.hostname === env.BOOKING_HOST) return handleConfirm(request, env, url);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origin) });
     if (request.method === 'GET') return new Response('beehive-forms ok', { status: 200 });

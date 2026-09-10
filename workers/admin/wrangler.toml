@@ -39,10 +39,20 @@ ALLOWED_EMAIL_DOMAIN = "beehivebin.co"
 # below when the sandbox run-through looks right — and remember the access token
 # is a different secret in each environment.
 #   production location: LEN3W9Q3WM2N8
+# Where the customer confirmation flow answers (see workers/form-handler).
+BOOKING_HOST = "book.beehivebin.co"
 SQUARE_ENV = "sandbox"
 SQUARE_LOCATION_ID = "LJR9D95SRQSN7"
 # SQUARE_ACCESS_TOKEN is a secret, set with:
 #   npx wrangler secret put SQUARE_ACCESS_TOKEN -c workers/admin/wrangler.toml
+
+# Resend lives on beehive-forms, so the panel asks it to send rather than
+# holding a second copy of the API key. RPC entrypoints have no URL, so this
+# adds nothing publicly reachable.
+[[services]]
+binding = "MAILER"
+service = "beehive-forms"
+entrypoint = "Mailer"
 
 [[d1_databases]]
 binding = "DB"

@@ -1,6 +1,11 @@
 name = "beehive-forms"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
+
+routes = [
+  { pattern = "api.beehivebin.co", custom_domain = true },
+  { pattern = "book.beehivebin.co", custom_domain = true }
+]
 # Custom domain api.beehivebin.co is attached via the account-level Workers
 # Domains API (not here) — the deploy token lacks zone Workers Routes access.
 
@@ -18,3 +23,5 @@ migrations_dir = "../migrations"
 SQUARE_WEBHOOK_URL = "https://api.beehivebin.co/square/webhook"
 # SQUARE_WEBHOOK_SIGNATURE_KEY is a secret, set with:
 #   npx wrangler secret put SQUARE_WEBHOOK_SIGNATURE_KEY -c workers/form-handler/wrangler.toml
+# The confirmation flow answers here; everything else on this Worker is the API.
+BOOKING_HOST = "book.beehivebin.co"

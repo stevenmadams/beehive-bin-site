@@ -315,6 +315,7 @@ async function updateEmployee(env, user, id, body) {
 /* ---------- rentals ---------- */
 
 const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
+  confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
   first_name, last_name, email, phone, contact_pref,
   bins, weeks, start_date, due_date, total_cents,
@@ -462,14 +463,49 @@ async function invoiceRental(env, user, id) {
     throw err;
   }
 
+  // The customer link and the invoice are minted together, because the link is
+  // useless without something to pay and the invoice is unreachable without it.
+  const token = rental.confirm_token || crypto.randomUUID();
+
   await env.DB.prepare(
     `UPDATE rentals SET square_customer_id=?1, square_order_id=?2, square_invoice_id=?3,
-       square_invoice_url=?4, square_status=?5 WHERE id=?6`,
+       square_invoice_url=?4, square_status=?5, confirm_token=?6 WHERE id=?7`,
   ).bind(sq.square_customer_id, sq.square_order_id, sq.square_invoice_id,
-         sq.square_invoice_url, sq.square_status, id).run();
+         sq.square_invoice_url, sq.square_status, token, id).run();
 
   await audit(env, user.email, 'rental.invoice', 'rental', id, sq.square_invoice_id);
+  await sendConfirmLink(env, user, id);
   return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+}
+
+/* The customer always gets this by email — the agreement and payment are the
+   record of the deal, and an email is what they can find again in six months.
+   Their contact preference governs informal chasing, not the paperwork. */
+async function sendConfirmLink(env, user, id) {
+  const r = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+    .bind(id).first();
+  if (!r) throw new HttpError(404, 'no such rental');
+  if (!r.confirm_token) throw new HttpError(400, 'Create the invoice first — the link needs something to pay.');
+  if (!r.email) throw new HttpError(400, 'This rental has no email address to send to.');
+
+  const res = await env.MAILER.sendConfirmLink({
+    to: r.email,
+    name: r.first_name,
+    link: `https://${env.BOOKING_HOST}/${r.confirm_token}`,
+    bins: r.bins,
+    weeks: r.weeks,
+    startDate: r.start_date,
+    dueDate: r.due_date,
+    totalCents: r.total_cents,
+  });
+
+  // A failure here is not fatal to the invoice, which already exists — but the
+  // owner must know the customer never heard about it.
+  if (!res?.ok) throw new HttpError(502, `The invoice was created, but the email failed to send (${res?.error || 'unknown'}). Try Resend link.`);
+
+  await env.DB.prepare("UPDATE rentals SET confirm_sent_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?1")
+    .bind(id).run();
+  await audit(env, user.email, 'rental.confirm_sent', 'rental', id, r.email);
 }
 
 /* Manual reconciliation for when a webhook was missed — Square is the source of
@@ -518,7 +554,7 @@ async function api(request, env, url) {
   const match = re => re.exec(path);
   let m;
 
-  if (path === '/me' && method === 'GET') return json({ user });
+  if (path === '/me' && method === 'GET') return json({ user, booking_host: env.BOOKING_HOST });
 
   if (path === '/stats' && method === 'GET') {
     const { results } = await env.DB.prepare(
@@ -591,6 +627,12 @@ async function api(request, env, url) {
   if ((m = match(/^\/rentals\/(\d+)\/invoice$/)) && method === 'POST') {
     return json({ rental: await invoiceRental(env, user, Number(m[1])) });
   }
+  if ((m = match(/^\/rentals\/(\d+)\/send$/)) && method === 'POST') {
+    const rid = Number(m[1]);
+    await sendConfirmLink(env, user, rid);
+    return json({ rental: await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(rid).first() });
+  }
+
   if ((m = match(/^\/rentals\/(\d+)\/sync$/)) && method === 'POST') {
     return json({ rental: await syncRental(env, user, Number(m[1])) });
   }

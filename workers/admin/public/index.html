@@ -134,6 +134,15 @@ tr.late td{background:rgba(163,44,44,.05)}
 .sqbox h4{margin:0 0 8px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
 .sqbox .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .sqbox .sqstatus{font-weight:700;font-size:13px}
+.linkbox{background:var(--ink);color:#fff;border-radius:10px;padding:13px 15px;margin-bottom:18px}
+.linkbox h4{margin:0 0 8px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--yellow)}
+.linkbox code{display:block;font-size:12px;word-break:break-all;color:rgba(255,255,255,.8);
+  margin-bottom:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.linkbox .row{display:flex;gap:8px;flex-wrap:wrap}
+.linkbox .btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);color:#fff}
+.linkbox .btn:hover{background:rgba(255,255,255,.22)}
+.linkbox .btn.primary{background:var(--yellow);border-color:var(--yellow);color:var(--ink)}
+.signed{font-size:12.5px;color:var(--muted);margin:-12px 0 18px}
 .pill.staff{background:rgba(21,19,15,.08);color:var(--char)}
 .pill.owner{background:var(--yellow);color:var(--ink)}
 .pill.off{background:rgba(163,44,44,.12);color:var(--bad)}
@@ -219,6 +228,7 @@ const root = document.getElementById('root');
 let me = null;
 let counts = {};
 let rentalCounts = {};
+let bookingHost = 'book.beehivebin.co';
 
 /* ---------- api ---------- */
 async function api(path, opts = {}) {
@@ -775,6 +785,22 @@ async function openRental(id) {
         <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
       </dl>
 
+      ${r.confirm_token ? `<div class="linkbox">
+          <h4>Confirmation link${r.confirm_sent_at
+            ? ` — emailed to ${esc(r.email)} ${esc(ago(r.confirm_sent_at))}`
+            : ' — not sent yet'}</h4>
+          <code>${esc(`https://${bookingHost}/${r.confirm_token}`)}</code>
+          <div class="row">
+            <button class="btn sm${r.confirm_sent_at ? '' : ' primary'}" id="r-send">${
+              r.confirm_sent_at ? 'Resend email' : 'Email it to them'}</button>
+            <button class="btn sm" id="r-copy">Copy link</button>
+            <a class="btn sm" href="${esc(`https://${bookingHost}/${r.confirm_token}`)}" target="_blank" rel="noopener">Preview</a>
+          </div>
+        </div>` : ''}
+
+      ${r.signed_at ? `<p class="signed">Signed by <strong>${esc(r.agreement_name || '—')}</strong>
+        ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}</p>` : ''}
+
       <div class="sqbox">
         <h4>Square</h4>
         ${r.square_invoice_id ? `
@@ -785,8 +811,8 @@ async function openRental(id) {
           </div>`
         : `
           <div class="row">
-            <button class="btn sm primary" id="r-invoice">Create &amp; send invoice</button>
-            <span style="color:var(--muted);font-size:12.5px">${esc(money(r.total_cents))} to ${esc(r.email || 'no email on file')}</span>
+            <button class="btn sm primary" id="r-invoice">Create invoice &amp; email the customer</button>
+            <span style="color:var(--muted);font-size:12.5px">${esc(money(r.total_cents))} · ${esc(r.email || 'no email on file')}</span>
           </div>`}
       </div>
 
@@ -841,6 +867,27 @@ async function openRental(id) {
     }
   }));
 
+  drawer.querySelector('#r-send')?.addEventListener('click', async e => {
+    const was = e.target.textContent;
+    e.target.disabled = true; e.target.textContent = 'Sending…';
+    msg.replaceChildren();
+    try {
+      await api(`/rentals/${id}/send`, { method: 'POST' });
+      openRental(id);
+    } catch (err) {
+      msg.replaceChildren(banner(err.message));
+      e.target.disabled = false; e.target.textContent = was;
+    }
+  });
+
+  drawer.querySelector('#r-copy')?.addEventListener('click', async e => {
+    try {
+      await navigator.clipboard.writeText(`https://${bookingHost}/${r.confirm_token}`);
+      e.target.textContent = 'Copied';
+      setTimeout(() => { e.target.textContent = 'Copy link'; }, 1500);
+    } catch { e.target.textContent = 'Copy failed'; }
+  });
+
   drawer.querySelector('#r-invoice')?.addEventListener('click', async e => {
     e.target.disabled = true;
     e.target.textContent = 'Sending…';
@@ -852,7 +899,7 @@ async function openRental(id) {
     } catch (err) {
       msg.replaceChildren(banner(err.message));
       e.target.disabled = false;
-      e.target.textContent = 'Create & send invoice';
+      e.target.textContent = 'Create invoice & email the customer';
     }
   });
 
@@ -1009,7 +1056,9 @@ function route() {
 
 (async () => {
   try {
-    ({ user: me } = await api('/me'));
+    const meRes = await api('/me');
+    me = meRes.user;
+    bookingHost = meRes.booking_host || 'book.beehivebin.co';
   } catch (err) {
     root.replaceChildren($(`<div class="gate"><div class="box">
       <h1>No access</h1>
