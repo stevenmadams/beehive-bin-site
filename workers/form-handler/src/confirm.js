@@ -226,7 +226,8 @@ Beehive Bin Co. · ${INBOX}`;
   });
 }
 
-const STEPS = [['address', 'Where'], ['agreement', 'Agreement'], ['pay', 'Payment']];
+const STEPS = [['review', 'Your rental'], ['address', 'Where'],
+  ['agreement', 'Agreement'], ['pay', 'Payment']];
 
 /* Which step someone is on is derived from what has actually been saved, never
    from a URL or a hidden field. Refresh, close the tab, come back tomorrow from
@@ -236,7 +237,8 @@ const stepFor = r => {
   if (r.agreement_signed_at && r.paid_at) return 'done';
   if (r.agreement_signed_at) return 'pay';
   if (r.delivery_address) return 'agreement';
-  return 'address';
+  if (r.details_confirmed_at) return 'address';
+  return 'review';
 };
 
 const progress = current => {
@@ -262,19 +264,31 @@ const details = r => `
     <a href="mailto:support@beehivebin.co">Tell us</a> before you sign.</p>
   </div>`;
 
-/* Step 1 — where the bins go, and where they come back from. These are two
+/* Step 1 — check we got it right before anything is asked of them. Cheaper to
+   fix a wrong date here than after a signature, and it is the moment they agree
+   these are the terms being signed for. */
+const reviewStep = r => page('Your rental', `
+  <h1>Confirm your rental</h1>
+  <p class="sub">Four quick steps and you&rsquo;re booked, ${esc(r.first_name || 'there')}.</p>
+  ${progress('review')}
+  ${details(r)}
+  <form method="POST">
+    <input type="hidden" name="step" value="review">
+    <button class="btn" type="submit">That&rsquo;s right &mdash; continue</button>
+  </form>`);
+
+/* Step 2 — where the bins go, and where they come back from. These are two
    different visits: dropped at a house, collected from a storage unit across
    town is entirely normal, and one set of instructions made the second visit
    guess. */
 const addressStep = r => page('Where are we going?', `
-  <h1>Confirm your rental</h1>
-  <p class="sub">Three quick steps and you&rsquo;re booked, ${esc(r.first_name || 'there')}.</p>
+  <h1>Where are we going?</h1>
+  <p class="sub">Where we drop the bins off, and where we collect them from.</p>
   ${progress('address')}
-  ${details(r)}
   <form method="POST">
     <input type="hidden" name="step" value="address">
     <div class="card">
-      <h2><span class="stepnum">1</span>Delivery</h2>
+      <h2><span class="stepnum">2</span>Delivery</h2>
       <label class="fl" for="daddr">Address${r.delivery_city ? ` &mdash; ${esc(r.delivery_city)}` : ''}</label>
       <input id="daddr" name="delivery_address" required autocomplete="street-address"
         placeholder="Street address, apartment or unit" value="${esc(r.delivery_address || '')}">
@@ -363,7 +377,7 @@ const payStep = r => page('Payment', `
   ${progress('pay')}
   ${details(r)}
   <div class="card">
-    <h2><span class="stepnum">3</span>Payment</h2>
+    <h2><span class="stepnum">4</span>Payment</h2>
     ${r.square_invoice_url
       ? `<p style="margin-top:0;color:var(--muted)">Secure payment is handled by Square.</p>
          <a class="btn" href="${esc(r.square_invoice_url)}">Pay ${esc(money(r.total_cents))} plus tax</a>`
@@ -372,7 +386,7 @@ const payStep = r => page('Payment', `
   </div>
   ${addressRecap(r)}`);
 
-const COLUMNS = `id, confirm_token, status, first_name, last_name, email, phone, bins, weeks,
+const COLUMNS = `id, confirm_token, status, details_confirmed_at, first_name, last_name, email, phone, bins, weeks,
   start_date, due_date, total_cents, delivery_city, pickup_city,
   delivery_address, pickup_address, delivery_notes, pickup_notes,
   agreement_signed_at, agreement_name, paid_at, square_invoice_url, square_status`;
@@ -392,7 +406,8 @@ export async function handleConfirm(request, env, url) {
     if (!form) return notFound();
 
     const step = String(form.get('step') || '');
-    const problem = step === 'address' ? await saveAddress(env, r, form)
+    const problem = step === 'review' ? await confirmDetails(env, r)
+      : step === 'address' ? await saveAddress(env, r, form)
       : step === 'agreement' ? await saveSignature(request, env, r, form)
       : 'Something went wrong. Please try again.';
 
@@ -406,10 +421,15 @@ export async function handleConfirm(request, env, url) {
   const at = stepFor(r);
   if (at === 'done') return allDone(r);
 
-  // Going back to fix an address is allowed; skipping ahead is not.
-  if (url.searchParams.get('step') === 'address' && at !== 'done') return addressStep(r);
+  // Going back to fix something is allowed; skipping ahead is not.
+  const back = url.searchParams.get('step');
+  if (back === 'address' && at !== 'done') return addressStep(r);
+  if (back === 'review' && at !== 'done') return reviewStep(r);
 
-  return at === 'address' ? addressStep(r) : at === 'agreement' ? agreementStep(r) : payStep(r);
+  return at === 'review' ? reviewStep(r)
+    : at === 'address' ? addressStep(r)
+    : at === 'agreement' ? agreementStep(r)
+    : payStep(r);
 }
 
 const retry = (r, step, problem) => page('Check that again', `
@@ -417,6 +437,14 @@ const retry = (r, step, problem) => page('Check that again', `
   <div class="banner err">${esc(problem)}</div>
   <p class="sub">Nothing was lost &mdash; go back and it will still be filled in.</p>
   <p><a class="btn" href="/${esc(r.confirm_token)}${step === 'address' ? '?step=address' : ''}">Go back</a></p>`);
+
+async function confirmDetails(env, r) {
+  if (r.details_confirmed_at) return null;
+  await env.DB.prepare(
+    "UPDATE rentals SET details_confirmed_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?1",
+  ).bind(r.id).run();
+  return null;
+}
 
 async function saveAddress(env, r, form) {
   const daddr = String(form.get('delivery_address') || '').trim().slice(0, 300);
