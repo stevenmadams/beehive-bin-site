@@ -541,6 +541,18 @@ async function updateRental(env, user, id, body) {
 
   const ADDRESS_PARTS = ['delivery_street', 'delivery_unit', 'delivery_city', 'delivery_zip',
     'pickup_street', 'pickup_unit', 'pickup_city', 'pickup_zip'];
+
+  /* After the visit the address is a record of where the bins actually went,
+     not a field. Editing it then rewrites history — and it is the address the
+     photo was taken at. */
+  const touches = prefix => ADDRESS_PARTS.some(f => f.startsWith(prefix) && f in body);
+  if (row.delivered_at && touches('delivery_')) {
+    throw new HttpError(409, 'These bins have already been delivered. The address is the record of where they went — reopen that step if it is genuinely wrong.');
+  }
+  if (row.returned_at && touches('pickup_')) {
+    throw new HttpError(409, 'These bins have already been collected. Reopen that step if the pickup address is genuinely wrong.');
+  }
+
   let addressChanged = false;
   for (const f of ADDRESS_PARTS) {
     if (f in body) { patch[f] = clean(body[f], 200); addressChanged = true; }
@@ -817,28 +829,10 @@ async function uploadPhoto(request, env, user, rentalId, url) {
 
   await audit(env, user.email, `rental.photo_${kind}`, 'rental', rentalId, `${Math.round(body.byteLength / 1024)}KB`);
 
-  /* The photo IS the visit. Someone standing at a door with the bins has
-     delivered them; asking them to also tick a box is modelling a database
-     rather than a job. So the milestone follows the evidence.
-
-     Prerequisites are recorded, not enforced, here: the bins are already on the
-     doorstep. Refusing to mark an unpaid rental delivered after the fact would
-     leave the record saying something that is not true. */
-  const milestone = kind === 'delivery' ? 'delivered' : 'returned';
-  const col = MILESTONES[milestone];
-  const current = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
-    .bind(rentalId).first();
-
-  if (current && !current[col]) {
-    const missing = (PREREQ[milestone] || []).filter(p => !current[p.col]).map(p => p.col);
-    const patched = { ...current, [col]: now() };
-    const byCol = milestone === 'delivered' ? 'delivered_by' : 'returned_by';
-    await env.DB.prepare(`UPDATE rentals SET ${col} = ?1, ${byCol} = ?2, status = ?3 WHERE id = ?4`)
-      .bind(patched[col], user.email, statusFrom(patched), rentalId).run();
-    await audit(env, user.email, `rental.${milestone}`, 'rental', rentalId,
-      missing.length ? `from photo, without ${missing.join(', ')}` : 'from photo');
-  }
-
+  /* Uploading no longer marks the visit on its own. Photos are added one at a
+     time but a visit is one event, so the panel stages them and commits the lot
+     with the milestone in a single deliberate action — otherwise the first
+     photo decides the delivery happened while you are still taking the others. */
   return listPhotos(env, rentalId);
 }
 
@@ -866,9 +860,21 @@ async function servePhoto(env, key) {
 
 async function deletePhoto(env, user, id) {
   const row = await env.DB.prepare(
-    'SELECT id, rental_id, r2_key, taken_by, deleted_at FROM rental_photos WHERE id = ?1').bind(id).first();
+    'SELECT id, rental_id, kind, r2_key, taken_by, deleted_at FROM rental_photos WHERE id = ?1').bind(id).first();
   if (!row) throw new HttpError(404, 'no such photo');
   if (row.deleted_at) return listPhotos(env, row.rental_id);
+
+  /* Once the visit is marked done these photos are the evidence for it, and
+     evidence that can be tidied afterwards is worth much less. Reopening the
+     step is the way out — deliberate, and recorded — rather than quietly
+     deleting the picture underneath a completed record. */
+  const rental = await env.DB.prepare('SELECT delivered_at, returned_at FROM rentals WHERE id = ?1')
+    .bind(row.rental_id).first();
+  const committed = row.kind === 'delivery' ? rental?.delivered_at : rental?.returned_at;
+  if (committed) {
+    throw new HttpError(409, `This is the record of a ${row.kind === 'delivery' ? 'delivery' : 'collection'} that has been marked done. Reopen that step first if it needs changing.`);
+  }
+
   if (row.taken_by !== user.email && user.role !== 'owner') {
     throw new HttpError(403, 'You can only remove photos you took.');
   }
