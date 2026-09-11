@@ -119,6 +119,10 @@ tbody tr.clickable:hover{background:rgba(255,196,0,.09)}
 nav a .badge.warn{background:var(--warn);color:#fff}
 tr.stale td{background:rgba(21,19,15,.035)}
 nav a .badge.overdue{background:var(--bad);color:#fff}
+/* A plain count is information, not an alarm, so it stays quiet until something
+   is actually wrong. */
+nav a .badge.quiet{background:rgba(255,255,255,.16);color:rgba(255,255,255,.9)}
+nav a[aria-current="page"] .badge.quiet{background:rgba(21,19,15,.22);color:var(--ink)}
 tr.late td{background:rgba(163,44,44,.05)}
 .steps{display:flex;flex-direction:column;gap:8px;margin:4px 0 20px}
 .step{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);
@@ -189,6 +193,8 @@ tr.late td{background:rgba(163,44,44,.05)}
 .step .lockbtn:hover{border-color:var(--ink);color:var(--ink)}
 .step.datelocked .tick{opacity:.4;cursor:not-allowed}
 .step .notdue{font-size:12px;color:var(--muted)}
+.step .by{font-size:12px;color:var(--muted);margin:9px 0 0 32px;line-height:1.45}
+.step .by strong{color:var(--char);font-weight:600}
 .step.photorow .addr{margin:12px 0 0 32px}
 .step.photorow .addr label{display:block;font-size:11px;font-weight:700;
   letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
@@ -377,6 +383,18 @@ function niceDate(iso) {
   const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + 'T12:00:00' : iso);
   return isNaN(d) ? iso : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
+/* "2h ago" is fine for a glance but useless in a dispute. Shown in Mountain
+   Time explicitly: the panel may be open anywhere, and a delivery time that
+   silently follows the reader's clock is worse than no time at all. */
+function stamp(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver',
+  });
+}
+
 function ago(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return '—';
@@ -1227,6 +1245,11 @@ async function openRental(id) {
                 <button class="lockbtn" data-unlock="${key}" title="Open this step early">🔒 Unlock</button>`
                 : `<span class="when" style="margin-left:auto">${r[col] ? esc(ago(r[col])) : ''}</span>`}
             </div>
+            ${r[col] ? `<div class="by">${key === 'delivered' ? 'Dropped off' : 'Collected'}
+              <strong>${esc(stamp(r[col]))}</strong>${
+                (key === 'delivered' ? r.delivered_by : r.returned_by)
+                  ? ` by <strong>${esc((key === 'delivered' ? r.delivered_by : r.returned_by).split('@')[0])}</strong>` : ''}
+              <span style="opacity:.7">&middot; Mountain Time</span></div>` : ''}
             <div class="addr">
               <label>${kind === 'delivery' ? 'Delivery address' : 'Pickup address'}</label>
               ${(() => {
@@ -1648,23 +1671,33 @@ function viewSoon(id) {
    mid-typing is worse than a stale number. */
 
 function updateBadges() {
-  const setBadge = (href, value, cls = '') => {
+  const setBadge = (href, value, cls = '', title = '') => {
     const link = document.querySelector(`nav a[href="${href}"]`);
     if (!link) return;
     let el = link.querySelector('.badge');
     if (!value) { el?.remove(); return; }
     if (!el) {
       el = document.createElement('span');
-      el.className = `badge ${cls}`.trim();
       link.append(el);
     }
     el.className = `badge ${cls}`.trim();
     el.textContent = value;
+    if (title) el.title = title;
   };
-  setBadge('#/requests', counts.new || 0);
-  // Overdue is louder than stalled, but a stalled rental still wants an eye.
-  const rentalAlert = rentalCounts.overdue || rentalCounts.stalled || 0;
-  setBadge('#/rentals', rentalAlert, rentalCounts.overdue ? 'overdue' : 'warn');
+
+  setBadge('#/requests', counts.new || 0, '', 'new requests');
+
+  /* Rentals always shows a number, because "how many jobs are live" is worth
+     knowing at a glance — but it escalates rather than averaging: something
+     overdue outranks something stalled, which outranks a plain count of what is
+     on. The colour carries which it is. */
+  if (rentalCounts.overdue) {
+    setBadge('#/rentals', rentalCounts.overdue, 'overdue', 'overdue — past the return date and still out');
+  } else if (rentalCounts.stalled) {
+    setBadge('#/rentals', rentalCounts.stalled, 'warn', 'stalled — never confirmed and the start date has passed');
+  } else {
+    setBadge('#/rentals', rentalCounts.active || 0, 'quiet', 'active rentals');
+  }
 }
 
 let pollTimer = null;

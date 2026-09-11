@@ -325,7 +325,7 @@ async function updateEmployee(env, user, id, body) {
 const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
   CASE WHEN status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('now')
        THEN 1 ELSE 0 END AS stalled,
-  photo_hold, delivery_unlocked_at, delivery_unlocked_by,
+  photo_hold, delivered_by, returned_by, delivery_unlocked_at, delivery_unlocked_by,
   pickup_unlocked_at, pickup_unlocked_by,
   signed_on_behalf, agreement_manual, agreement_manual_by,
   agreement_manual_reason, confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
@@ -523,6 +523,10 @@ async function updateRental(env, user, id, body) {
     }
 
     patch[col] = body.done === false ? null : now();
+    // Who, not just when — the audit log knows, but this is the record anyone
+    // actually reads when a customer says the bins never turned up.
+    if (body.milestone === 'delivered') patch.delivered_by = body.done === false ? null : user.email;
+    if (body.milestone === 'returned') patch.returned_by = body.done === false ? null : user.email;
 
     if (body.milestone === 'delivered' && patch.delivered_at) {
       const why = await requirePhoto(env, id, 'delivery', body.photo_reason);
@@ -583,8 +587,9 @@ async function updateRental(env, user, id, body) {
        pickup_city=?9, notes=?10, agreement_manual=?11, agreement_manual_by=?12,
        agreement_manual_reason=?13,
        delivery_street=?14, delivery_unit=?15, delivery_zip=?16,
-       pickup_street=?17, pickup_unit=?18, pickup_zip=?19
-     WHERE id=?20`,
+       pickup_street=?17, pickup_unit=?18, pickup_zip=?19,
+       delivered_by=?20, returned_by=?21
+     WHERE id=?22`,
   ).bind(
     patch.status, patch.agreement_signed_at, patch.paid_at, patch.delivered_at,
     patch.returned_at, patch.delivery_address, patch.pickup_address,
@@ -592,6 +597,7 @@ async function updateRental(env, user, id, body) {
     patch.agreement_manual ? 1 : 0, patch.agreement_manual_by, patch.agreement_manual_reason,
     patch.delivery_street, patch.delivery_unit, patch.delivery_zip,
     patch.pickup_street, patch.pickup_unit, patch.pickup_zip,
+    patch.delivered_by, patch.returned_by,
     id,
   ).run();
 
@@ -826,8 +832,9 @@ async function uploadPhoto(request, env, user, rentalId, url) {
   if (current && !current[col]) {
     const missing = (PREREQ[milestone] || []).filter(p => !current[p.col]).map(p => p.col);
     const patched = { ...current, [col]: now() };
-    await env.DB.prepare(`UPDATE rentals SET ${col} = ?1, status = ?2 WHERE id = ?3`)
-      .bind(patched[col], statusFrom(patched), rentalId).run();
+    const byCol = milestone === 'delivered' ? 'delivered_by' : 'returned_by';
+    await env.DB.prepare(`UPDATE rentals SET ${col} = ?1, ${byCol} = ?2, status = ?3 WHERE id = ?4`)
+      .bind(patched[col], user.email, statusFrom(patched), rentalId).run();
     await audit(env, user.email, `rental.${milestone}`, 'rental', rentalId,
       missing.length ? `from photo, without ${missing.join(', ')}` : 'from photo');
   }
