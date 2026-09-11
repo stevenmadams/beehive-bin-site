@@ -159,13 +159,27 @@ export async function createInvoice(env, rental, override) {
       payment_requests: [{
         request_type: 'BALANCE',
         due_date: override?.dueDate || rental.start_date,
-        automatic_payment_source: 'NONE',
+        ...(override?.cardId
+          ? { automatic_payment_source: 'CARD_ON_FILE', card_id: override.cardId }
+          : { automatic_payment_source: 'NONE' }),
       }],
-      // We send the customer one link — our own confirmation page — and it
-      // hands off to this invoice. Letting Square email its own copy as well
-      // would put two competing "pay now" messages in the same inbox.
-      delivery_method: 'SHARE_MANUALLY',
+      /* Square REQUIRES delivery_method EMAIL for an automatic card-on-file
+         charge — with SHARE_MANUALLY the invoice publishes cleanly and then
+         simply never charges, which is exactly what happened here.
+
+         The original reason for SHARE_MANUALLY was to avoid two competing "pay
+         now" messages. That reason disappears once the card is charged on
+         publish: Square's email is then a receipt, not a demand. Without a card
+         we still send nothing, because our own link is the only thing that
+         should be asking for money. */
+      delivery_method: override?.cardId ? 'EMAIL' : 'SHARE_MANUALLY',
       accepted_payment_methods: { card: true, bank_account: false },
+      /* Offers the payer a "save my card on file" checkbox. Defaults to false,
+         which left §4 of the rental agreement — charging for late returns and
+         damage without a further signature — with no card to charge. It is the
+         customer's choice, so a stored card is never guaranteed; what this does
+         is make it possible at the one moment they are already paying. */
+      store_payment_method_enabled: true,
       title: override?.title || `Bin rental — ${rental.bins} bins, ${weeks}`,
       description: override?.description || `Delivery ${rental.start_date} · pickup ${rental.due_date}.`,
       sale_or_service_date: override?.serviceDate || rental.start_date,
@@ -213,4 +227,39 @@ export async function ping(env) {
     status: match?.status || null,
     other_locations: locations.filter(l => l.id !== env.SQUARE_LOCATION_ID).map(l => l.id),
   };
+}
+
+/* Exchange a single-use token from the Web Payments SDK for a card stored
+   against the customer.
+
+   The token is created in the customer's browser and is worthless afterwards;
+   the card number never touches our servers, which is what keeps this out of
+   PCI scope. What comes back is an id we can charge later under §4, plus the
+   brand and last four so a human can recognise it. */
+export async function storeCard(env, { customerId, sourceId, verificationToken, holderName, postalCode }) {
+  const call = client(env);
+  const { card } = await call('POST', '/v2/cards', {
+    idempotency_key: uuid(),
+    source_id: sourceId,
+    ...(verificationToken ? { verification_token: verificationToken } : {}),
+    card: {
+      customer_id: customerId,
+      cardholder_name: holderName || undefined,
+      billing_address: postalCode ? { postal_code: postalCode } : undefined,
+      reference_id: `rental-card`,
+    },
+  });
+  return {
+    id: card.id,
+    brand: card.card_brand || null,
+    last4: card.last_4 || null,
+    exp: card.exp_month && card.exp_year ? `${String(card.exp_month).padStart(2, '0')}/${card.exp_year}` : null,
+  };
+}
+
+/* A customer record has to exist before a card can hang off it. Created here
+   rather than at invoice time, because the card now comes first. */
+export async function ensureCustomer(env, rental) {
+  const call = client(env);
+  return findOrCreateCustomer(call, env, rental);
 }

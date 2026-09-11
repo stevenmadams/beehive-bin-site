@@ -9,6 +9,7 @@
 import { AGREEMENT_HTML, AGREEMENT_TEXT, AGREEMENT_VERSION, renderAgreement } from './agreement.js';
 import { sendEmail, INBOX } from './mail.js';
 import { SERVICE_CITIES, canonicalCity } from './service-area.js';
+import { rateFor } from './tax.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -50,6 +51,28 @@ function nameLooksRight(typed, first, last) {
 
 /* The per-rental values the agreement text needs. Kept in one place so the page
    and the emailed copy can never show different terms for the same rental. */
+/* The real number, not "plus tax".
+
+   We know the delivery city and the date, so we know the rate — telling someone
+   "$129 plus tax" when we could tell them $138.61 just makes them work it out
+   or, worse, be surprised at the charge. Falls back to the vague form only if a
+   rate genuinely cannot be found, which the booking form should prevent. */
+function totals(r) {
+  const sub = r.total_cents || 0;
+  try {
+    const { rate } = rateFor(r.delivery_city, r.start_date);
+    const tax = Math.round(sub * parseFloat(rate) / 100);
+    return { sub, tax, total: sub + tax, rate, known: true };
+  } catch {
+    return { sub, tax: 0, total: sub, rate: null, known: false };
+  }
+}
+
+const totalLabel = r => {
+  const t = totals(r);
+  return t.known ? money(t.total) : `${money(t.sub)} plus tax`;
+};
+
 const agreementValues = r => ({
   BINS: r.bins,
   START_DATE: niceDate(r.start_date),
@@ -151,6 +174,10 @@ footer a{color:inherit}
 <footer>Questions? <a href="mailto:support@beehivebin.co">support@beehivebin.co</a></footer>
 </body></html>`, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 
+const json = (body, status = 200) => new Response(JSON.stringify(body), {
+  status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+});
+
 const notFound = () => page('Not found', `
   <h1>This link isn&rsquo;t valid</h1>
   <p class="sub">It may have expired, or been mistyped. Reply to the email we sent
@@ -162,9 +189,10 @@ const allDone = r => page('You&rsquo;re all set', `
     <div class="tick">&check;</div>
     <h1>You&rsquo;re all set, ${esc(r.first_name || 'there')}</h1>
     <p class="sub">${esc(r.bins)} bins arriving <strong>${esc(niceDate(r.start_date))}</strong>,
-    back by <strong>${esc(niceDate(r.due_date))}</strong>.</p>
+    back by <strong>${esc(niceDate(r.due_date))}</strong>. Paid ${esc(totalLabel(r))}.</p>
     <p style="color:var(--muted);font-size:14.5px">We&rsquo;ll confirm your delivery window
     closer to the day. Nothing else is needed from you.</p>
+    ${r.square_invoice_url ? `<a class="btn" href="${esc(r.square_invoice_url)}">View your receipt</a>` : ''}
   </div>`);
 
 /* The customer's copy of what they signed.
@@ -243,7 +271,7 @@ Beehive Bin Co. · ${INBOX}`;
 }
 
 const STEPS = [['review', 'Your rental'], ['address', 'Where'],
-  ['agreement', 'Agreement'], ['pay', 'Payment']];
+  ['agreement', 'Agreement'], ['card', 'Card'], ['pay', 'Payment']];
 
 /* Which step someone is on is derived from what has actually been saved, never
    from a URL or a hidden field. Refresh, close the tab, come back tomorrow from
@@ -251,6 +279,9 @@ const STEPS = [['review', 'Your rental'], ['address', 'Where'],
    cannot claim to be further along than it is. */
 const stepFor = r => {
   if (r.agreement_signed_at && r.paid_at) return 'done';
+  // The agreement requires a card on file for the whole rental, so it is
+  // collected before payment rather than hoped for during it.
+  if (r.agreement_signed_at && !r.square_card_id) return 'card';
   if (r.agreement_signed_at) return 'pay';
   if (r.delivery_address) return 'agreement';
   if (r.details_confirmed_at) return 'address';
@@ -266,18 +297,25 @@ const progress = current => {
   }).join('')}</ol>`;
 };
 
-const details = r => `
+/* Shown on the first step and again at payment, so the closing line has to
+   change: "tell us before you sign" is nonsense on a page you reach by signing. */
+const details = (r, opts = {}) => `
   <div class="card">
     <h2>Your rental</h2>
     <dl>
       <dt>Package</dt><dd>${esc(r.bins)} bins &middot; ${r.weeks === 1 ? '1 week' : `${esc(r.weeks)} weeks`}</dd>
       <dt>Delivered</dt><dd>${esc(niceDate(r.start_date))}</dd>
       <dt>Picked up</dt><dd>${esc(niceDate(r.due_date))}</dd>
-      <dt>Total</dt><dd>${esc(money(r.total_cents))} <span style="font-weight:400;color:var(--muted)">plus tax</span></dd>
+      ${(() => { const t = totals(r); return t.known ? `
+        <dt>Rental</dt><dd>${esc(money(t.sub))}</dd>
+        <dt>Utah sales tax</dt><dd>${esc(money(t.tax))} <span style="font-weight:400;color:var(--muted)">(${esc(t.rate)}% in ${esc(r.delivery_city)})</span></dd>
+        <dt>Total</dt><dd style="font-size:18px">${esc(money(t.total))}</dd>`
+        : `<dt>Total</dt><dd>${esc(money(t.sub))} <span style="font-weight:400;color:var(--muted)">plus tax</span></dd>`; })()}
     </dl>
     <p class="help" style="margin-top:14px">Deliveries and pickups happen in the evening &mdash;
-    we&rsquo;ll confirm your window closer to the day. Something wrong here?
-    <a href="mailto:support@beehivebin.co">Tell us</a> before you sign.</p>
+    we&rsquo;ll confirm your window closer to the day. ${opts.beforeSigning
+      ? 'Something wrong here? <a href="mailto:support@beehivebin.co">Tell us</a> before you sign.'
+      : 'Something not right? <a href="mailto:support@beehivebin.co">Get in touch</a> and we&rsquo;ll sort it out.'}</p>
   </div>`;
 
 /* One line is not enough. A free-text address could contradict the city the
@@ -320,7 +358,7 @@ const reviewStep = r => page('Your rental', `
   <h1>Confirm your rental</h1>
   <p class="sub">Four quick steps and you&rsquo;re booked, ${esc(r.first_name || 'there')}.</p>
   ${progress('review')}
-  ${details(r)}
+  ${details(r, { beforeSigning: true })}
   <form method="POST">
     <input type="hidden" name="step" value="review">
     <button class="btn" type="submit">That&rsquo;s right &mdash; continue</button>
@@ -372,8 +410,19 @@ const addressStep = r => page('Where are we going?', `
   (() => {
     const same = document.getElementById('same');
     const box = document.getElementById('pickupfields');
-    const sync = () => { box.hidden = same.checked; };
-    same.addEventListener('change', sync); sync();
+    const sync = () => {
+      box.hidden = same.checked;
+      /* Disable as well as hide. A required field that is hidden still blocks
+         submission, and the browser cannot show an error on a control it cannot
+         display — so the button appears to do nothing at all. Disabled controls
+         are skipped by validation and left out of the post, which is what we
+         want: the server copies the delivery address when "same" is ticked. */
+      box.querySelectorAll('input, select, textarea').forEach(el => {
+        el.disabled = same.checked;
+      });
+    };
+    same.addEventListener('change', sync);
+    sync();
   })();
   </script>`);
 
@@ -421,6 +470,85 @@ const agreementStep = (r, opts = {}) => page('Rental agreement', `
     <button class="btn" type="submit">Sign and continue to payment</button>
   </form>`);
 
+/* Step 4 — the card that §3 of the agreement requires.
+
+   Square's Web Payments SDK renders the card fields in an iframe it controls
+   and hands back a single-use token. The number never touches this page's
+   JavaScript or our servers. Without this the agreement's authorisation to
+   charge for late returns and damage had nothing behind it. */
+const cardStep = (r, env, problem) => page('Card on file', `
+  <h1>Card on file</h1>
+  <p class="sub">One card, used for this rental and anything agreed afterwards.</p>
+  ${progress('card')}
+  ${problem ? `<div class="banner err">${esc(problem)}</div>` : ''}
+  <div class="card">
+    <p style="margin-top:0;color:var(--muted);font-size:14.5px">
+      We keep your card on file for the length of the rental, as set out in the
+      agreement you just signed. It covers this rental, any extra weeks you ask
+      for, and the charges in Section&nbsp;4. We&rsquo;ll email a receipt for
+      anything we charge.</p>
+    <div id="card-container" style="margin:18px 0 6px"></div>
+    <div id="card-error" class="banner err" hidden style="margin-top:12px"></div>
+    ${(() => { const t = totals(r); return t.known ? `
+      <div class="recap" style="margin:0 0 16px">
+        <strong>What you&rsquo;ll be charged</strong>
+        ${esc(money(t.sub))} rental + ${esc(money(t.tax))} Utah sales tax (${esc(t.rate)}%)
+        = <strong style="display:inline;font-size:16px">${esc(money(t.total))}</strong>
+      </div>` : ''; })()}
+    <button class="btn" id="card-go" disabled>Save card and pay ${esc(totalLabel(r))}</button>
+    <p class="help" style="margin-top:14px">Your card details go straight to Square.
+    They never pass through our systems.</p>
+  </div>
+
+  <script src="${env.SQUARE_ENV === 'production'
+    ? 'https://web.squarecdn.com/v1/square.js'
+    : 'https://sandbox.web.squarecdn.com/v1/square.js'}"></script>
+  <script>
+  (async () => {
+    const btn = document.getElementById('card-go');
+    const errBox = document.getElementById('card-error');
+    const fail = m => { errBox.hidden = false; errBox.textContent = m; };
+
+    if (!window.Square) { fail('Card payment could not load. Please refresh, or reply to our email and we will take it another way.'); return; }
+
+    let card;
+    try {
+      const payments = window.Square.payments(${JSON.stringify(env.SQUARE_APP_ID || '')}, ${JSON.stringify(env.SQUARE_LOCATION_ID || '')});
+      card = await payments.card();
+      await card.attach('#card-container');
+      btn.disabled = false;
+    } catch (e) {
+      fail('Card payment could not start. Please refresh and try again.');
+      return;
+    }
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const was = btn.textContent;
+      btn.textContent = 'Saving\u2026';
+      errBox.hidden = true;
+      try {
+        const result = await card.tokenize();
+        if (result.status !== 'OK') {
+          throw new Error((result.errors && result.errors[0] && result.errors[0].message) || 'That card was not accepted.');
+        }
+        const res = await fetch(location.pathname + '/card', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sourceId: result.token }),
+        });
+        const body = await res.json();
+        if (!res.ok || !body.ok) throw new Error(body.error || 'That card could not be saved.');
+        location.href = location.pathname;
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = was;
+        fail(e.message || 'That card could not be saved.');
+      }
+    });
+  })();
+  </script>`);
+
 const payStep = r => page('Payment', `
   <h1>One step left</h1>
   <p class="sub">Signed and saved, ${esc(r.first_name || 'there')} &mdash; just payment now.</p>
@@ -428,15 +556,23 @@ const payStep = r => page('Payment', `
   ${details(r)}
   <div class="card">
     <h2>Payment</h2>
-    ${r.square_invoice_url
-      ? `<p style="margin-top:0;color:var(--muted)">Secure payment is handled by Square.</p>
-         <a class="btn" href="${esc(r.square_invoice_url)}">Pay ${esc(money(r.total_cents))} plus tax</a>`
+    ${r.square_card_id
+      /* No link to Square while a charge is pending. That URL is a payment form
+         — card fields, wallets, a "save my card" box — and handing it to someone
+         whose card is already being charged invites them to pay twice. It only
+         becomes a receipt once the invoice is settled. */
+      ? `<p style="margin-top:0">We&rsquo;re charging your ${esc(r.card_brand || 'card')} ending
+         <strong>${esc(r.card_last4 || '••••')}</strong> &mdash; <strong>${esc(totalLabel(r))}</strong>.</p>
+         <p style="color:var(--muted);font-size:14.5px">Square emails your receipt once it goes
+         through, usually within a minute. There&rsquo;s nothing else for you to do &mdash; and
+         nothing to pay separately. If the card is declined we&rsquo;ll email you.</p>`
       : `<div class="banner err">Your invoice isn&rsquo;t ready yet. We&rsquo;ll email it
          shortly &mdash; nothing else is needed from you right now.</div>`}
   </div>
   ${addressRecap(r)}`);
 
 const COLUMNS = `id, confirm_token, status, details_confirmed_at, signed_on_behalf,
+  square_card_id, card_brand, card_last4,
   delivery_street, delivery_unit, delivery_zip, pickup_street, pickup_unit, pickup_zip, first_name, last_name, email, phone, bins, weeks,
   start_date, due_date, total_cents, delivery_city, pickup_city,
   delivery_address, pickup_address, delivery_notes, pickup_notes,
@@ -446,11 +582,31 @@ const load = (env, token) => env.DB.prepare(
   `SELECT ${COLUMNS} FROM rentals WHERE confirm_token = ?1`).bind(token).first();
 
 export async function handleConfirm(request, env, url) {
-  const token = url.pathname.split('/').filter(Boolean)[0] || '';
+  const parts = url.pathname.split('/').filter(Boolean);
+  const token = parts[0] || '';
   if (!/^[a-f0-9-]{20,60}$/i.test(token)) return notFound();
 
   let r = await load(env, token);
   if (!r || r.status === 'cancelled') return notFound();
+
+  /* The card submission is JSON from the SDK, not a form post, and it charges
+     the rental as soon as the card is stored. */
+  if (request.method === 'POST' && url.pathname.endsWith('/card')) {
+    const body = await request.json().catch(() => null);
+    if (!body?.sourceId) return json({ ok: false, error: 'no card token' }, 400);
+    if (!r.agreement_signed_at) return json({ ok: false, error: 'sign the agreement first' }, 409);
+
+    const stored = await env.BILLING.storeCardForRental(token, body);
+    if (!stored?.ok) return json({ ok: false, error: stored?.error || 'That card could not be saved.' }, 400);
+
+    // Charging is a separate call so a stored card survives a payment failure —
+    // the agreement's authorisation is what we most need to keep.
+    const charged = await env.BILLING.chargeRental(token);
+    if (!charged?.ok) {
+      console.log('charge after card store failed:', charged?.error);
+    }
+    return json({ ok: true });
+  }
 
   if (request.method === 'POST') {
     const form = await request.formData().catch(() => null);
@@ -483,6 +639,7 @@ export async function handleConfirm(request, env, url) {
   return at === 'review' ? reviewStep(r)
     : at === 'address' ? addressStep(r)
     : at === 'agreement' ? agreementStep(r)
+    : at === 'card' ? cardStep(r, env)
     : payStep(r);
 }
 

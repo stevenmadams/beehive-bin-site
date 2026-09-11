@@ -5,8 +5,10 @@
    under /api is handled here. */
 
 import { verifyAccessJwt } from './auth.js';
-import { createInvoice, fetchInvoice, ping as squarePing, SquareError } from './square.js';
+import { WorkerEntrypoint } from 'cloudflare:workers';
+import { createInvoice, fetchInvoice, ping as squarePing, storeCard, ensureCustomer, SquareError } from './square.js';
 import { PRICES, EXTRA, quoteCents } from './pricing.js';
+import { rateFor } from './tax.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -326,6 +328,7 @@ const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
   photo_hold, signed_on_behalf, agreement_manual, agreement_manual_by,
   agreement_manual_reason, confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
+  square_card_id, card_brand, card_last4, card_exp, card_stored_at,
   first_name, last_name, email, phone, contact_pref,
   bins, weeks, start_date, due_date, total_cents,
   delivery_city, delivery_address, delivery_notes, delivery_street, delivery_unit, delivery_zip,
@@ -478,6 +481,23 @@ async function updateRental(env, user, id, body) {
       patch.agreement_manual_reason = null;
     }
 
+    /* A rental cannot be delivered before the day it is due to go out — not
+       without saying so. This mostly catches ticking the wrong rental, which is
+       easy when two look alike in a list. Returns are deliberately NOT
+       date-locked: customers finish early and you collect early, so a lock
+       there would be overridden most weeks and stop being read. */
+    if (body.done !== false && body.milestone === 'delivered' && row.start_date) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (row.start_date > today && !body.force) {
+        const days = Math.round((new Date(row.start_date) - new Date(today)) / 86400000);
+        throw new HttpError(423, `This is not due out for ${days} day${days === 1 ? '' : 's'} (${row.start_date}). Mark it delivered anyway?`);
+      }
+      if (row.start_date > today) {
+        const days = Math.round((new Date(row.start_date) - new Date(today)) / 86400000);
+        await audit(env, user.email, 'rental.delivered_early', 'rental', id, `${days} day(s) before ${row.start_date}`);
+      }
+    }
+
     if (body.done !== false) {
       const skipped = checkPrereqs(body.milestone, row, body);
       if (skipped.length) {
@@ -565,37 +585,23 @@ async function updateRental(env, user, id, body) {
   return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
 }
 
-/* Raising the invoice is explicit rather than automatic on approval: the owner
-   may want to adjust the address or the price first, and an invoice already
-   emailed to a customer is awkward to retract. */
+/* Starting a rental means giving the customer their link — nothing more.
+   The invoice is raised by the confirmation flow once their card is on file,
+   because an invoice created before then has no card to charge and Square will
+   not attach one afterwards. Creating it here was the reason three attempts at
+   automatic payment quietly did nothing. */
 async function invoiceRental(env, user, id) {
   const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
     .bind(id).first();
   if (!rental) throw new HttpError(404, 'no such rental');
-  if (rental.square_invoice_id) {
-    throw new HttpError(409, 'This rental already has an invoice.');
-  }
   if (rental.status === 'cancelled') throw new HttpError(400, 'This rental is cancelled.');
+  if (!rental.email) throw new HttpError(400, 'This rental has no email address to send to.');
 
-  let sq;
-  try {
-    sq = await createInvoice(env, rental);
-  } catch (err) {
-    if (err instanceof SquareError) throw new HttpError(err.status === 503 ? 503 : 400, err.message);
-    throw err;
+  if (!rental.confirm_token) {
+    await env.DB.prepare('UPDATE rentals SET confirm_token = ?1 WHERE id = ?2')
+      .bind(crypto.randomUUID(), id).run();
   }
 
-  // The customer link and the invoice are minted together, because the link is
-  // useless without something to pay and the invoice is unreachable without it.
-  const token = rental.confirm_token || crypto.randomUUID();
-
-  await env.DB.prepare(
-    `UPDATE rentals SET square_customer_id=?1, square_order_id=?2, square_invoice_id=?3,
-       square_invoice_url=?4, square_status=?5, confirm_token=?6 WHERE id=?7`,
-  ).bind(sq.square_customer_id, sq.square_order_id, sq.square_invoice_id,
-         sq.square_invoice_url, sq.square_status, token, id).run();
-
-  await audit(env, user.email, 'rental.invoice', 'rental', id, sq.square_invoice_id);
   await sendConfirmLink(env, user, id);
   return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
 }
@@ -745,12 +751,21 @@ async function uploadPhoto(request, env, user, rentalId, url) {
   const rental = await env.DB.prepare('SELECT id FROM rentals WHERE id = ?1').bind(rentalId).first();
   if (!rental) throw new HttpError(404, 'no such rental');
 
-  if (kind === 'pickup') {
-    const { delivered_at } = await env.DB.prepare('SELECT delivered_at FROM rentals WHERE id = ?1')
-      .bind(rentalId).first();
-    if (!delivered_at) {
-      throw new HttpError(409, 'These bins have not been delivered yet, so there is nothing to photograph coming back.');
-    }
+  /* A photo is evidence of a visit, so there has to have been one. Pickup needs
+     a delivery to come back from; delivery needs to be at least due — a photo
+     dated a week before the bins went out is worse than no photo, because it
+     looks like proof of something that had not happened. Once the lock on the
+     milestone is opened, the visit is on the record and photos follow. */
+  const state = await env.DB.prepare(
+    'SELECT start_date, delivered_at FROM rentals WHERE id = ?1').bind(rentalId).first();
+
+  if (kind === 'pickup' && !state?.delivered_at) {
+    throw new HttpError(409, 'These bins have not been delivered yet, so there is nothing to photograph coming back.');
+  }
+
+  if (kind === 'delivery' && !state?.delivered_at && state?.start_date
+      && state.start_date > new Date().toISOString().slice(0, 10)) {
+    throw new HttpError(423, `These bins are not due out until ${state.start_date}. Unlock the delivery step first if you are dropping them early.`);
   }
 
   const type = (request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
@@ -1067,6 +1082,12 @@ async function api(request, env, url) {
       const row = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
         .bind(rid).first();
       if (!row) throw new HttpError(404, 'no such rental');
+      // The panel should quote the same number the customer was shown.
+      try {
+        const { rate } = rateFor(row.delivery_city, row.start_date);
+        row.tax_cents = Math.round((row.total_cents || 0) * parseFloat(rate) / 100);
+        row.tax_rate = rate;
+      } catch { row.tax_cents = null; }
       return json({ rental: row });
     }
     if (method === 'PATCH') return json({ rental: await updateRental(env, user, rid, body) });
@@ -1114,6 +1135,32 @@ async function api(request, env, url) {
     const rid = Number(m[1]);
     if (method === 'GET') return json({ extensions: await listExtensions(env, rid) });
     if (method === 'POST') return json({ extensions: await extendRental(env, user, rid, body) }, 201);
+  }
+
+  /* Diagnostic: the invoice exactly as Square holds it. Read-only, owner only.
+     Guessing at why a charge did not fire has cost more than one attempt. */
+  if ((m = match(/^\/rentals\/(\d+)\/invoice-raw$/)) && method === 'GET') {
+    requireOwner(user);
+    const row = await env.DB.prepare('SELECT square_invoice_id, square_card_id, square_customer_id FROM rentals WHERE id = ?1')
+      .bind(Number(m[1])).first();
+    if (!row?.square_invoice_id) throw new HttpError(404, 'no invoice on this rental');
+    try {
+      const invoice = await fetchInvoice(env, row.square_invoice_id);
+      return json({
+        stored: row,
+        status: invoice.status,
+        delivery_method: invoice.delivery_method,
+        payment_requests: invoice.payment_requests,
+        accepted_payment_methods: invoice.accepted_payment_methods,
+        store_payment_method_enabled: invoice.store_payment_method_enabled,
+        next_payment_amount_money: invoice.next_payment_amount_money,
+        scheduled_at: invoice.scheduled_at,
+        created_at: invoice.created_at,
+        updated_at: invoice.updated_at,
+      });
+    } catch (err) {
+      return json({ error: err.message, detail: err.detail }, 400);
+    }
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/sync$/)) && method === 'POST') {
@@ -1166,6 +1213,94 @@ async function api(request, env, url) {
   }
 
   throw new HttpError(404, 'no such endpoint');
+}
+
+/* Called by the public Worker over a service binding, never over HTTP.
+
+   The Square access token lives here and nowhere else. The confirmation flow
+   runs on the public Worker — a customer has no Access session and never should
+   — so rather than copying the credential across, that Worker asks this one.
+   RPC entrypoints have no URL, so this adds no public surface. */
+export class Billing extends WorkerEntrypoint {
+  /* Exchange the browser's single-use token for a card stored against the
+     customer. Card details never reach either Worker. */
+  async storeCardForRental(token, payload) {
+    const env = this.env;
+    const rental = await env.DB.prepare(
+      `SELECT id, first_name, last_name, email, phone, square_customer_id, square_card_id
+       FROM rentals WHERE confirm_token = ?1`,
+    ).bind(token).first();
+    if (!rental) return { ok: false, error: 'no such rental' };
+    if (rental.square_card_id) return { ok: true, already: true };
+
+    try {
+      const customerId = rental.square_customer_id || await ensureCustomer(env, rental);
+      const card = await storeCard(env, {
+        customerId,
+        sourceId: payload.sourceId,
+        verificationToken: payload.verificationToken,
+        holderName: payload.holderName,
+        postalCode: payload.postalCode,
+      });
+
+      await env.DB.prepare(
+        `UPDATE rentals SET square_customer_id=?1, square_card_id=?2, card_brand=?3,
+           card_last4=?4, card_exp=?5, card_stored_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE id=?6`,
+      ).bind(customerId, card.id, card.brand, card.last4, card.exp, rental.id).run();
+
+      await env.DB.prepare(
+        'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
+      ).bind(rental.email || 'customer', 'rental.card_stored', 'rental', String(rental.id),
+             `${card.brand || 'card'} ending ${card.last4 || '????'}`).run();
+
+      return { ok: true, brand: card.brand, last4: card.last4 };
+    } catch (err) {
+      // Square's message is the useful one here — an expired card, a declined
+      // verification — so it is passed through rather than flattened.
+      console.log('storeCard failed', err.message);
+      return { ok: false, error: err instanceof SquareError ? err.message : 'That card could not be saved.' };
+    }
+  }
+
+  /* Raise the invoice and let Square charge the stored card. Called once the
+     customer has signed and their card is on file. */
+  async chargeRental(token) {
+    const env = this.env;
+    const rental = await env.DB.prepare(
+      `SELECT ${RENTAL_COLUMNS} FROM rentals WHERE confirm_token = ?1`,
+    ).bind(token).first();
+    if (!rental) return { ok: false, error: 'no such rental' };
+    if (rental.square_invoice_id) return { ok: true, already: true, url: rental.square_invoice_url };
+    if (!rental.square_card_id) return { ok: false, error: 'no card on file' };
+
+    try {
+      /* Charged now, not on the delivery date. Square bills a card-on-file
+         invoice on its due date, and discovering a declined card on the morning
+         a driver is loading bins is the worst possible moment to find out. The
+         customer has signed by this point, so terms.html's "nothing is charged
+         until we confirm and you sign" is satisfied. */
+      const today = new Date().toISOString().slice(0, 10);
+      const sq = await createInvoice(env, rental, {
+        cardId: rental.square_card_id,
+        dueDate: today,
+      });
+      await env.DB.prepare(
+        `UPDATE rentals SET square_customer_id=?1, square_order_id=?2, square_invoice_id=?3,
+           square_invoice_url=?4, square_status=?5 WHERE id=?6`,
+      ).bind(sq.square_customer_id, sq.square_order_id, sq.square_invoice_id,
+             sq.square_invoice_url, sq.square_status, rental.id).run();
+
+      await env.DB.prepare(
+        'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
+      ).bind('system', 'rental.invoice_auto', 'rental', String(rental.id), sq.square_invoice_id).run();
+
+      return { ok: true, url: sq.square_invoice_url, status: sq.square_status };
+    } catch (err) {
+      console.log('chargeRental failed', err.message);
+      return { ok: false, error: err instanceof SquareError ? err.message : 'The payment could not be taken.' };
+    }
+  }
 }
 
 export default {

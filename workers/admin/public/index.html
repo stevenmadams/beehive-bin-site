@@ -179,6 +179,12 @@ tr.late td{background:rgba(163,44,44,.05)}
 .step.waiting{opacity:.55}
 .step.waiting .tick{cursor:not-allowed}
 .step.waiting .soon{font-size:12.5px;color:var(--muted)}
+/* A padlock rather than an empty tick: it reads as "not yet" instead of
+   "nobody has got round to it", and it is clearly something you may open. */
+.step .tick.locked{border-style:dashed;border-color:rgba(21,19,15,.3);
+  color:var(--muted);font-size:11px}
+.step .tick.locked:hover{border-color:var(--ink);color:var(--ink)}
+.step .notdue{font-size:12px;color:var(--muted)}
 .step.photorow .addr{margin:12px 0 0 32px}
 .step.photorow .addr label{display:block;font-size:11px;font-weight:700;
   letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
@@ -1141,13 +1147,17 @@ async function openRental(id) {
              r.signed_on_behalf ? ` · <span style="color:var(--warn);font-weight:700">on behalf of ${esc(fullName(r))}</span>` : ''}</p>`) : ''}
 
 
-      ${!r.square_invoice_id ? `
+      ${/* Gated on the link being sent, not on an invoice existing — the invoice
+            is now raised by the customer's card at the end, so waiting for one
+            would hide the checklist for the whole rental. */
+        !r.confirm_sent_at ? `
       <div class="kickoff">
         <h4>Start this rental</h4>
         <p>Nothing else can happen until the customer has their link &mdash; they
-        confirm the details, sign the agreement and pay from it.</p>
+        confirm the details, sign the agreement, put a card on file and pay from
+        it. The invoice is raised and charged when they do.</p>
         <button class="btn primary" id="r-invoice"${r.email ? '' : ' disabled'}>
-          ${r.email ? 'Create invoice &amp; email the customer' : 'No email address on this rental'}</button>
+          ${r.email ? 'Email them the link' : 'No email address on this rental'}</button>
         <span class="to">${esc(money(r.total_cents))} + tax${r.email ? ` &rarr; ${esc(r.email)}` : ''}</span>
       </div>` : `
       <div class="steps">${STEPS.map(([key, col, label]) => {
@@ -1159,14 +1169,17 @@ async function openRental(id) {
           const locked = r.square_status === 'PAID';
           // The checklist only renders once an invoice exists, so this row is
           // never the place an invoice gets created.
-          const acts = `${r.square_invoice_url ? `<a class="btn sm" href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">Open</a>` : ''}
-               ${locked ? '' : '<button class="btn sm" id="r-sync">Check</button>'}`;
+          const acts = r.square_invoice_id
+            ? `${r.square_invoice_url ? `<a class="btn sm" href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">Open</a>` : ''}
+               ${locked ? '' : '<button class="btn sm" id="r-sync">Check</button>'}`
+            : `<span class="amt">${r.square_card_id ? 'card saved, raising invoice…' : 'waiting on the customer'}</span>`;
           return `
           <div class="step payrow" data-done="${done}" data-locked="${locked ? 1 : 0}">
             <button class="tick" data-step="paid" data-done="${done}"
               data-locked="${locked ? 1 : 0}" title="${locked ? 'Square has this paid' : 'Mark paid by hand'}">✓</button>
             <span class="lbl">Payment</span>
-            <span class="amt">${esc(money(r.total_cents))} + tax</span>
+            <span class="amt">${r.tax_cents != null
+              ? `${esc(money(r.total_cents + r.tax_cents))} inc. tax` : `${esc(money(r.total_cents))} + tax`}</span>
             ${locked ? '<span class="src">via Square</span>'
               : r.square_invoice_id ? `<span class="src">${esc(r.square_status || 'sent')}</span>` : ''}
             <div class="acts">${acts}${
@@ -1188,12 +1201,19 @@ async function openRental(id) {
                 alt="${kind} photo" title="${esc(ph.taken_by)} · ${esc(ago(ph.taken_at))}">
               <button class="rm" data-rm="${ph.id}" title="Remove">×</button>
             </figure>`).join('');
+          // Not due out yet. Openable, not forbidden — you sometimes drop the
+          // evening before, and the audit records when you did.
+          const notDue = key === 'delivered' && !done && r.start_date
+            && r.start_date > new Date().toISOString().slice(0, 10);
           return `
           <div class="step photorow${waiting ? ' waiting' : ''}" data-done="${done}">
             <div class="top">
-              <button class="tick"${waiting ? ' disabled' : ` data-step="${key}"`} data-done="${done}">✓</button>
+              <button class="tick${notDue ? ' locked' : ''}"${waiting ? ' disabled' : ` data-step="${key}"`}
+                data-done="${done}"${notDue ? ` title="Not due out until ${esc(niceDate(r.start_date))}"` : ''}>${
+                notDue ? '🔒' : '✓'}</button>
               <span class="lbl">${label}</span>
               ${waiting ? '<span class="soon">after the bins are delivered</span>' : ''}
+              ${notDue ? `<span class="notdue">not due out until ${esc(niceDate(r.start_date))}</span>` : ''}
               <span class="when" style="margin-left:auto">${r[col] ? esc(ago(r[col])) : ''}</span>
             </div>
             <div class="addr">
@@ -1230,7 +1250,9 @@ async function openRental(id) {
                     esc(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)}</div>` : ''}
             </div>
             <div class="ev">
-              ${waiting
+              ${notDue
+                ? `<span class="soon">Photos once they&rsquo;re out &mdash; unlock the step above if you&rsquo;re dropping early.</span>`
+                : waiting
                 ? '<span class="soon">The pickup photo is taken when the bins come back.</span>'
                 : `${thumbs || `<span class="need">Photo needed</span>`}
                    <label class="shoot">
@@ -1300,6 +1322,24 @@ async function openRental(id) {
       openRental(id);
     } catch (err) {
       // Delivering something unpaid is allowed, but only on purpose.
+      // Not due out yet. The lock is there to catch ticking the wrong rental,
+      // so opening it is one confirmation rather than a typed reason — and the
+      // history records how early it went.
+      if (/not due out for/i.test(err.message)) {
+        if (!confirm(err.message)) return;
+        try { await patch({ milestone: b.dataset.step, done: true, force: true }); openRental(id); }
+        catch (e2) {
+          if (/photo yet/i.test(e2.message)) {
+            const why = prompt(`${e2.message}\n\nWhy is there no photo?`);
+            if (why === null || !why.trim()) return;
+            await patch({ milestone: b.dataset.step, done: true, force: true, photo_reason: why });
+            openRental(id);
+            return;
+          }
+          msg.replaceChildren(banner(e2.message));
+        }
+        return;
+      }
       // A hard ordering rule — nothing comes back before it goes out. No reason
       // makes it true, so there is nothing to prompt for.
       if (/cannot come back|already marked back|nothing to photograph/i.test(err.message)) {

@@ -87,6 +87,9 @@ export function rateFor(city, onDate) {{
 export const knownCities = () => Object.keys(RATES).sort();
 '''
 (ROOT / 'workers/admin/src/tax.js').write_text(tax)
+# The confirmation flow runs on the public Worker and needs the same rates to
+# show a customer the real total rather than "plus tax". Generated, not copied.
+(ROOT / 'workers/form-handler/src/tax.js').write_text(tax)
 
 # --- 2. the public Worker's city list -------------------------------------
 names = ',\n'.join(f"  {json.dumps(c['name'])}" for c in bookable)
