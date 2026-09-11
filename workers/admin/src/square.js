@@ -93,17 +93,20 @@ const money = cents => ({ amount: Math.round(cents), currency: 'USD' });
    therefore uses October's rate. This is the defensible reading rather than a
    settled one — it is on the list to confirm with the Tax Commission, and it is
    a one-line change if they say otherwise. */
-function taxesFor(rental, onDate) {
+function taxesFor(rental, onDate, scope = 'ORDER') {
   const { rate } = rateFor(rental.delivery_city, onDate || rental.start_date);
   return {
     taxes: [{
+      uid: TAX_UID,
       name: 'Utah sales tax',
       percentage: rate,
-      scope: 'ORDER',
+      scope,
       type: 'ADDITIVE',   // added on top, matching "plus tax" everywhere else
     }],
   };
 }
+
+const TAX_UID = 'utah-sales-tax';
 
 
 
@@ -112,7 +115,14 @@ function taxesFor(rental, onDate) {
    rental so the webhook can find its way back here. */
 export async function createInvoice(env, rental, override) {
   const call = client(env);
-  const amountCents = override?.amountCents ?? rental.total_cents;
+
+  /* One line, or several. A rental invoice is a single package; a charges
+     invoice is "$65 late, $30 for two cracked bins" — itemised, because a
+     customer disputing a lump sum is a customer you have already lost. */
+  const lines = override?.lineItems?.length ? override.lineItems : null;
+  const amountCents = lines
+    ? lines.reduce((n, l) => n + l.amountCents, 0)
+    : override?.amountCents ?? rental.total_cents;
   if (!amountCents || amountCents <= 0) {
     throw new SquareError('There is no amount to invoice.', 400);
   }
@@ -132,19 +142,41 @@ export async function createInvoice(env, rental, override) {
   const customerId = await findOrCreateCustomer(call, env, rental);
   const weeks = rental.weeks === 1 ? '1 week' : `${rental.weeks} weeks`;
 
+  /* Tax hangs off the order as a whole when everything on it is taxable, and
+     off individual lines when it is not — a replacement charge whose treatment
+     the Tax Commission has not answered yet can be marked untaxed without
+     dropping tax from the late fee sitting next to it. */
+  const mixed = lines ? lines.some(l => l.taxable === false) : false;
+  const lineItems = lines
+    ? lines.map((l, i) => ({
+        uid: `line-${i}`,
+        name: l.name,
+        quantity: String(l.quantity ?? 1),
+        // Priced per unit, never amount/quantity — two bins at $15 must invoice
+        // as 2 × $15, not as one $30 line that rounds if the maths is uneven.
+        base_price_money: money(l.unitCents ?? l.amountCents),
+        note: l.note || undefined,
+        ...(mixed && l.taxable !== false
+          ? { applied_taxes: [{ tax_uid: TAX_UID }] }
+          : {}),
+      }))
+    : [{
+        name: override?.lineName || `${rental.bins} moving bins — ${weeks}`,
+        quantity: '1',
+        base_price_money: money(amountCents),
+        note: override?.lineNote || `Delivered ${rental.start_date}, back by ${rental.due_date}`,
+      }];
+
   const { order } = await call('POST', '/v2/orders', {
     idempotency_key: uuid(),
     order: {
       location_id: env.SQUARE_LOCATION_ID,
       customer_id: customerId,
-      reference_id: `rental-${rental.id}`,
-      line_items: [{
-        name: override?.lineName || `${rental.bins} moving bins — ${weeks}`,
-        quantity: '1',
-        base_price_money: money(amountCents),
-        note: override?.lineNote || `Delivered ${rental.start_date}, back by ${rental.due_date}`,
-      }],
-      ...taxesFor(rental, override?.serviceDate),
+      reference_id: override?.referenceId || `rental-${rental.id}`,
+      line_items: lineItems,
+      ...(mixed && !lines.some(l => l.taxable !== false)
+        ? {}
+        : taxesFor(rental, override?.serviceDate, mixed ? 'LINE_ITEM' : 'ORDER')),
     },
   });
 

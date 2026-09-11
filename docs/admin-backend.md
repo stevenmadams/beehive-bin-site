@@ -23,9 +23,25 @@ reserve/contact form ──POST──▶ beehive-forms ──┬─▶ D1 `reque
   *both* fail.
 - **`workers/admin/`** — the panel. `src/auth.js` verifies the Access JWT,
   `src/index.js` is the API, `public/index.html` is the whole UI.
+  `src/inventory.js` answers what is free on a date, `src/charges.js` works out
+  what §4 allows when a rental goes wrong, `src/square.js` talks to Square and
+  `src/tax.js` / `src/pricing.js` are generated from `data/`.
 
-**Requests and Rentals work.** Schedule, Inventory, Customers and Settings
-render a description of what will live there.
+**Requests, Rentals, Schedule, Inventory and Employees work.** Customers and
+Settings render a description of what will live there.
+
+**Schedule** answers "what am I doing tonight": collections first, then
+deliveries — bins coming back can go straight out again — with the address, the
+gate code, the customer's own notes and a call/text button per job, plus how
+many bins go out, come back, and are in use that day. Sundays are shown and
+flagged rather than hidden, because a job landing on one is a mistake worth
+seeing. **Print run sheet** drops the navigation and prints the list.
+
+**Inventory** is the bin list: one row per bin, with condition, notes, what it
+cost and when it was bought. Bins are added in numbered batches. The bookable
+fleet is however many are `good`, so marking one damaged takes it out of
+availability immediately; a 14-day strip shows what is free to book, and which
+day is the tight one.
 
 Approving a reservation creates a **rental** — a separate record, because the
 two have different lifecycles: a request is answered once, a rental is worked
@@ -244,12 +260,28 @@ follows the delivery address rather than ours.
 `rates_verified` when you do. `/api/square/ping` reports the date it was last
 checked. A stale table undercollects silently.
 
-**Open questions for the Tax Commission**, both flagged in the code: whether the
-rate should follow the delivery date (what we use) or the payment date, and
-whether Wolf Creek takes the unincorporated Weber rate given neighbouring
-Huntsville carries a resort tax.
+**Open questions for the Tax Commission**, all flagged in the code: whether the
+rate should follow the delivery date (what we use) or the payment date; whether
+Wolf Creek takes the unincorporated Weber rate given neighbouring Huntsville
+carries a resort tax; and how a §4 charge is treated — a late fee is further
+consideration for the lease and is taxed, but a $15 replacement for a bin that
+never came back may be a retail sale of that bin, or may be untaxed damages.
+Charges default to taxable, and `charges.taxable` is per-row so the answer can
+be applied without a migration.
 
 ## Operating notes
+
+- **Migrations are applied with `d1 execute --file`**, not
+  `wrangler d1 migrations apply`. The `d1_migrations` ledger on the remote only
+  ever recorded `0001`, so `migrations apply` would try to replay everything
+  since and fail on the first duplicate column. Apply a new file to remote and
+  local:
+
+  ```bash
+  npx wrangler d1 execute beehive -c workers/admin/wrangler.toml --remote --file=workers/migrations/00NN_thing.sql
+  npx wrangler d1 execute beehive -c workers/admin/wrangler.toml --local --persist-to workers/admin/.wrangler/state --file=workers/migrations/00NN_thing.sql
+  ```
+
 
 - **`audit_log` is append-only.** Nothing in the app updates or deletes it. It
   is how you answer "who approved this, and when" in three months.
@@ -261,20 +293,52 @@ Huntsville carries a resort tax.
   buttons fall back to showing all three unhighlighted when it is NULL.
 - **`requests.source`** is `web` or `manual` — the latter for anything staff
   entered through the panel's **+ New request** button.
-- **Approving does not yet charge or send anything.** It sets a status. The
-  contract and invoice are still the manual Square steps from Stage 2.
+- **Approving checks availability.** `canFit()` refuses a request that would
+  overbook the fleet on any day of its span, including the turnaround. It is a
+  refusal rather than a warning because approving is what emails the customer
+  their confirmation link. The panel offers an override, and taking it writes a
+  `rental.overbooked` line to the audit log.
+- **The fleet is the bin list.** `bins` holds one row per bin; the bookable
+  fleet is `COUNT(*) WHERE condition = 'good'`. There is no fleet-size setting
+  to keep in step with it.
+
+## When a rental goes wrong
+
+§4 of the rental agreement authorises exactly three charges beyond the rental
+fee, and `workers/admin/src/charges.js` proposes those and nothing else:
+
+| What happened | What the agreement allows | How it is worked out |
+|---|---|---|
+| Bins kept past the return date | the extra-week rate per week **or partial week** | `lateWeeks()` — one day over is one week |
+| Bins not returned | $15 per bin, lid included | `bins` minus `bins_returned`, once someone has counted |
+| Damage beyond normal wear | $15 per item | bins flagged to the rental and marked `damaged` |
+| Nothing at all for 48 hours past the date, and unreachable | §7: full replacement for everything outstanding | offered only once the 48 hours are up, and never alongside a counted shortfall |
+
+**Nothing charges itself.** Every proposal waits for someone to press Add, and
+the charge carries their name — the gap between "three days late" and "her
+father died on Tuesday" is a judgement call, and the card on file makes the
+wrong one expensive to undo. Waiving is recorded with a reason rather than
+deleted, and a waived kind is not proposed again.
+
+**Counting is what creates a missing-bin charge.** `rentals.bins_returned` is
+null until someone counts; "we never counted" and "all of them came back" are
+different answers and only one of them supports a charge.
+
+**Charges go out on one invoice, separate from the rental's own.** The rental
+was settled at delivery; this is what came after. With a card on file it is
+charged under §4 on publish; without one it is an invoice the customer pays
+themselves. The webhook settles every charge row sharing that invoice id.
+
+A shortfall with nothing marked lost on the bin list raises a note in the panel:
+the charge stands, but those bins are still counted as bookable until someone
+marks them in Inventory.
 
 ## What's next
 
 In the order that pays off soonest:
 
-1. **Schedule** — today and this week's deliveries and pickups, from
-   `rentals.start_date` / `due_date`, plus a printable run sheet. The rental
-   already carries the street address the run sheet needs.
-3. **Availability** — with 3–4 bin sets, check sets-booked against sets-owned
-   for the requested dates and flag conflicts before anyone approves.
-4. **Settings** — a panel for the owner to change things without a deploy.
+1. **Settings** — a panel for the owner to change things without a deploy.
    Pricing and the service area are no longer duplicated (both are generated
    from `data/`), so this is now a convenience rather than a correctness fix.
-5. **E-sign** — per this repo's Stage 2 research, Square Contracts has no public
+2. **E-sign** — per this repo's Stage 2 research, Square Contracts has no public
    API, so this stays manual unless that has changed.

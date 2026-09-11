@@ -9,6 +9,8 @@ import { WorkerEntrypoint } from 'cloudflare:workers';
 import { createInvoice, fetchInvoice, ping as squarePing, storeCard, ensureCustomer, SquareError } from './square.js';
 import { PRICES, EXTRA, quoteCents } from './pricing.js';
 import { rateFor } from './tax.js';
+import { availability, canFit, getSettings, addDays } from './inventory.js';
+import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -249,7 +251,7 @@ async function decideRequest(env, user, id, body) {
   if (action === 'approve') {
     const already = await env.DB.prepare('SELECT id FROM rentals WHERE request_id = ?1')
       .bind(id).first();
-    rentalId = already ? already.id : await createRentalFromRequest(env, user, existing);
+    rentalId = already ? already.id : await createRentalFromRequest(env, user, existing, body.force === true);
   }
 
   const status = action === 'approve' ? 'converted' : action === 'decline' ? 'declined' : 'new';
@@ -332,7 +334,7 @@ const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
   square_card_id, card_brand, card_last4, card_exp, card_stored_at,
   first_name, last_name, email, phone, contact_pref,
-  bins, weeks, start_date, due_date, total_cents,
+  bins, bins_returned, weeks, start_date, due_date, total_cents,
   delivery_city, delivery_address, delivery_notes, delivery_street, delivery_unit, delivery_zip,
   pickup_city, pickup_address, pickup_notes, pickup_street, pickup_unit, pickup_zip,
   agreement_signed_at, paid_at, delivered_at, returned_at, notes`;
@@ -354,7 +356,7 @@ function statusFrom(r) {
 /* Turning a request into a rental copies the agreed terms across. If the
    request never had a start date or package (a contact-form enquiry), there is
    nothing to schedule and it should not become a rental. */
-async function createRentalFromRequest(env, user, req) {
+async function createRentalFromRequest(env, user, req, forceOverbook = false) {
   if (req.kind !== 'reserve') {
     throw new HttpError(400, 'Only a reservation can become a rental. Take the details first with + New request.');
   }
@@ -363,6 +365,21 @@ async function createRentalFromRequest(env, user, req) {
   }
 
   const due = addWeeks(req.start_date, req.weeks);
+
+  /* Don't promise bins that are already spoken for. Refused rather than warned:
+     approving is what sends the customer a confirmation link, and un-promising
+     forty bins after that email has gone is a phone call nobody wants to make.
+     Overriding is deliberate — sometimes you know a set is coming back early.
+
+     An empty bin list means the fleet is unknown, not that it is zero, so that
+     case says so instead of blocking every approval. */
+  const fit = await canFit(env, { startDate: req.start_date, dueDate: due, bins: req.bins });
+  if (!fit.fits && !forceOverbook) {
+    throw new HttpError(409, fit.fleetUnknown
+      ? 'There are no bins on the inventory list yet, so availability cannot be checked. Add your fleet in Inventory, or approve anyway.'
+      : `Only ${fit.availableThen} bins are free on ${fit.tightestDay} — this needs ${req.bins}, short by ${fit.shortBy}. Move the date, cut the package, or approve anyway.`);
+  }
+
   const res = await env.DB.prepare(
     `INSERT INTO rentals (request_id, created_by, first_name, last_name, email, phone,
        contact_pref, bins, weeks, start_date, due_date, total_cents,
@@ -376,6 +393,12 @@ async function createRentalFromRequest(env, user, req) {
 
   const id = res.meta.last_row_id;
   await audit(env, user.email, 'rental.create', 'rental', id, `from request ${req.id}`);
+  if (!fit.fits) {
+    await audit(env, user.email, 'rental.overbooked', 'rental', id,
+      fit.fleetUnknown
+        ? 'approved with no bins on the inventory list'
+        : `approved short by ${fit.shortBy} on ${fit.tightestDay}`);
+  }
   return id;
 }
 
@@ -700,6 +723,199 @@ async function syncRental(env, user, id) {
 
   await audit(env, user.email, 'rental.sync', 'rental', id, invoice.status);
   return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+}
+
+/* ---------- schedule ----------
+
+   What someone is actually doing tonight. Deliveries and collections are
+   different jobs at different addresses, but they happen on the same run, so
+   they belong in one list ordered by the evening rather than in two tabs.
+
+   Sundays are included but marked: the business does not work them, and a job
+   landing on one is a mistake worth seeing rather than hiding. */
+
+async function schedule(env, from, days) {
+  const to = addDays(from, Math.max(0, days - 1));
+
+  const { results: drops } = await env.DB.prepare(
+    `SELECT id, 'deliver' AS job, start_date AS on_date, bins, first_name, last_name,
+            phone, email, contact_pref, delivery_address AS address, delivery_city AS city,
+            delivery_unit AS unit, delivery_zip AS zip,
+            delivery_notes AS notes, delivered_at AS done_at, delivered_by AS done_by,
+            status, agreement_signed_at, paid_at
+     FROM rentals
+     WHERE status NOT IN ('cancelled') AND start_date IS NOT NULL
+       AND date(start_date) BETWEEN date(?1) AND date(?2)`,
+  ).bind(from, to).all();
+
+  const { results: collects } = await env.DB.prepare(
+    `SELECT id, 'collect' AS job, due_date AS on_date, bins, first_name, last_name,
+            phone, email, contact_pref, pickup_address AS address, pickup_city AS city,
+            pickup_unit AS unit, pickup_zip AS zip,
+            pickup_notes AS notes, returned_at AS done_at, returned_by AS done_by,
+            status, agreement_signed_at, paid_at
+     FROM rentals
+     WHERE status NOT IN ('cancelled') AND due_date IS NOT NULL
+       AND date(due_date) BETWEEN date(?1) AND date(?2)
+       AND delivered_at IS NOT NULL`,
+  ).bind(from, to).all();
+
+  const byDay = new Map();
+  for (let i = 0; i < days; i++) {
+    const date = addDays(from, i);
+    byDay.set(date, {
+      date,
+      sunday: new Date(`${date}T12:00:00Z`).getUTCDay() === 0,
+      jobs: [],
+      binsOut: 0,
+      binsBack: 0,
+    });
+  }
+
+  for (const j of [...drops, ...collects]) {
+    const day = byDay.get(j.on_date);
+    if (!day) continue;
+    day.jobs.push(j);
+    if (j.job === 'deliver') day.binsOut += j.bins || 0;
+    else day.binsBack += j.bins || 0;
+  }
+
+  // Collections before deliveries within a day: bins coming back can go
+  // straight out again, and an empty van is easier to load than a full one.
+  for (const day of byDay.values()) {
+    day.jobs.sort((a, b) => (a.job === b.job ? a.id - b.id : a.job === 'collect' ? -1 : 1));
+  }
+
+  return [...byDay.values()];
+}
+
+/* ---------- charges ----------
+
+   Raised against the card on file under §4, on a separate invoice from the
+   rental itself: the rental was settled at delivery, and this is what came
+   afterwards. Nothing is charged automatically — see charges.js. */
+
+const CHARGE_KINDS = ['late', 'missing', 'damage', 'other'];
+const CHARGE_LINE = {
+  late:    'Late return',
+  missing: 'Unreturned bins',
+  damage:  'Damage beyond normal wear',
+  other:   'Additional charge',
+};
+const dollars = c => `$${(c / 100).toFixed(2)}`;
+
+async function addCharge(env, user, rentalId, body) {
+  const rental = await env.DB.prepare('SELECT id FROM rentals WHERE id = ?1').bind(rentalId).first();
+  if (!rental) throw new HttpError(404, 'no such rental');
+  if (!CHARGE_KINDS.includes(body.kind)) {
+    throw new HttpError(400, 'A charge is late, missing, damage or other.');
+  }
+  const qty = parseInt(body.qty, 10);
+  const unit = parseInt(body.unit_cents, 10);
+  if (!Number.isFinite(qty) || qty < 1 || qty > 1000) throw new HttpError(400, 'Quantity must be between 1 and 1000.');
+  if (!Number.isFinite(unit) || unit < 1 || unit > 500000) throw new HttpError(400, 'Unit price must be between $0.01 and $5,000.');
+  // The customer reads this line on their invoice, so it cannot be blank.
+  const reason = clean(body.reason, 300);
+  if (!reason) throw new HttpError(400, 'Say what the charge is for — the customer sees this on the invoice.');
+
+  const amount = qty * unit;
+  await env.DB.prepare(
+    `INSERT INTO charges (rental_id, kind, qty, unit_cents, amount_cents, taxable, reason, bin_labels, created_by)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)`,
+  ).bind(rentalId, body.kind, qty, unit, amount, body.taxable === false ? 0 : 1,
+         reason, clean(body.bin_labels, 500), user.email).run();
+  await audit(env, user.email, 'charge.add', 'rental', rentalId,
+    `${body.kind} — ${qty} × ${dollars(unit)} = ${dollars(amount)} — ${reason}`);
+  return listCharges(env, rentalId);
+}
+
+/* Waiving is a decision, so it is recorded rather than deleted. Once money has
+   moved, Square is the place to undo it — a row flipped here would say the
+   customer was not charged when their statement says otherwise. */
+async function waiveCharge(env, user, chargeId, body) {
+  const row = await env.DB.prepare(
+    'SELECT id, rental_id, kind, amount_cents, invoiced_at, paid_at, waived_at FROM charges WHERE id = ?1',
+  ).bind(chargeId).first();
+  if (!row) throw new HttpError(404, 'no such charge');
+  if (row.waived_at) return listCharges(env, row.rental_id);
+  if (row.paid_at) throw new HttpError(409, 'That has been paid. Refund it in Square — waiving it here would not give the money back.');
+  if (row.invoiced_at) throw new HttpError(409, 'That is already on an invoice with the customer. Cancel the invoice in Square first.');
+  const reason = clean(body.reason, 300);
+  if (!reason) throw new HttpError(400, 'Say why — this is the record of the decision.');
+
+  await env.DB.prepare(
+    `UPDATE charges SET waived_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'),
+       waived_by = ?1, waive_reason = ?2 WHERE id = ?3`,
+  ).bind(user.email, reason, chargeId).run();
+  await audit(env, user.email, 'charge.waive', 'rental', row.rental_id,
+    `${row.kind} ${dollars(row.amount_cents)} waived — ${reason}`);
+  return listCharges(env, row.rental_id);
+}
+
+/* One invoice for everything outstanding. Separate invoices per charge would
+   mean three emails and three card authorisations for one bad rental. */
+async function invoiceCharges(env, user, rentalId) {
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+    .bind(rentalId).first();
+  if (!rental) throw new HttpError(404, 'no such rental');
+
+  const due = outstanding(await listCharges(env, rentalId));
+  if (!due.length) throw new HttpError(400, 'Nothing outstanding to invoice.');
+
+  const when = new Date().toISOString().slice(0, 10);
+  let sq;
+  try {
+    sq = await createInvoice(env, rental, {
+      lineItems: due.map(c => ({
+        name: CHARGE_LINE[c.kind],
+        quantity: c.qty,
+        unitCents: c.unit_cents,
+        amountCents: c.amount_cents,
+        note: c.reason + (c.bin_labels ? ` — ${c.bin_labels}` : ''),
+        taxable: !!c.taxable,
+      })),
+      referenceId: `rental-${rental.id}-charges`,
+      serviceDate: when,
+      dueDate: when,
+      cardId: rental.square_card_id || undefined,
+      title: `Beehive Bin Co. — rental #${rental.id}`,
+      description: rental.square_card_id
+        ? 'Charged to the card you kept on file, as agreed in section 4 of your rental agreement.'
+        : 'Charges on your bin rental, under section 4 of your rental agreement.',
+    });
+  } catch (err) {
+    if (err instanceof SquareError) throw new HttpError(err.status === 503 ? 503 : 400, err.message);
+    throw err;
+  }
+
+  for (const c of due) {
+    await env.DB.prepare(
+      `UPDATE charges SET square_invoice_id = ?1, square_invoice_url = ?2, square_status = ?3,
+         invoiced_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?4`,
+    ).bind(sq.square_invoice_id, sq.square_invoice_url, sq.square_status, c.id).run();
+  }
+  const total = due.reduce((n, c) => n + c.amount_cents, 0);
+  await audit(env, user.email, 'charge.invoice', 'rental', rentalId,
+    `${due.length} charge${due.length === 1 ? '' : 's'}, ${dollars(total)} — ${
+      rental.square_card_id ? `card on file ••${rental.card_last4}` : 'no card on file, invoice emailed'}`);
+  return listCharges(env, rentalId);
+}
+
+/* How many actually came back. Counted, not assumed: "we never counted" and
+   "all of them came back" are different answers, and only one of them supports
+   a missing-bin charge. */
+async function recordReturnedCount(env, user, rentalId, body) {
+  const rental = await env.DB.prepare('SELECT id, bins, bins_returned FROM rentals WHERE id = ?1')
+    .bind(rentalId).first();
+  if (!rental) throw new HttpError(404, 'no such rental');
+  const n = body.bins_returned === null || body.bins_returned === '' ? null : parseInt(body.bins_returned, 10);
+  if (n !== null && (!Number.isFinite(n) || n < 0 || n > rental.bins)) {
+    throw new HttpError(400, `That has to be between 0 and ${rental.bins}.`);
+  }
+  await env.DB.prepare('UPDATE rentals SET bins_returned = ?1 WHERE id = ?2').bind(n, rentalId).run();
+  await audit(env, user.email, 'rental.counted', 'rental', rentalId,
+    n === null ? 'count cleared' : `${n} of ${rental.bins} bins back`);
+  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(rentalId).first();
 }
 
 /* ---------- internal notes ----------
@@ -1213,6 +1429,36 @@ async function api(request, env, url) {
     return json({ rental: await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(rid).first() });
   }
 
+  if ((m = match(/^\/rentals\/(\d+)\/charges$/))) {
+    const rid = Number(m[1]);
+    if (method === 'GET') {
+      const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+        .bind(rid).first();
+      if (!rental) throw new HttpError(404, 'no such rental');
+      const { proposals: suggested, charges, flagged } = await proposals(env, rental);
+      return json({
+        charges, proposals: suggested, flagged,
+        owed_cents: owedCents(charges),
+        outstanding_cents: outstanding(charges).reduce((n, c) => n + c.amount_cents, 0),
+        card: rental.square_card_id
+          ? { brand: rental.card_brand, last4: rental.card_last4, exp: rental.card_exp } : null,
+      });
+    }
+    if (method === 'POST') return json({ charges: await addCharge(env, user, rid, body) }, 201);
+  }
+
+  if ((m = match(/^\/rentals\/(\d+)\/charges\/invoice$/)) && method === 'POST') {
+    return json({ charges: await invoiceCharges(env, user, Number(m[1])) });
+  }
+
+  if ((m = match(/^\/charges\/(\d+)\/waive$/)) && method === 'POST') {
+    return json({ charges: await waiveCharge(env, user, Number(m[1]), body) });
+  }
+
+  if ((m = match(/^\/rentals\/(\d+)\/counted$/)) && method === 'POST') {
+    return json({ rental: await recordReturnedCount(env, user, Number(m[1]), body) });
+  }
+
   if ((m = match(/^\/rentals\/(\d+)\/extensions$/))) {
     const rid = Number(m[1]);
     if (method === 'GET') return json({ extensions: await listExtensions(env, rid) });
@@ -1285,6 +1531,130 @@ async function api(request, env, url) {
        WHERE entity = ?1 AND entity_id = ?2 ORDER BY at DESC, id DESC LIMIT 100`,
     ).bind(entity, m[2]).all();
     return json({ history: results });
+  }
+
+  if (path === '/schedule' && method === 'GET') {
+    const from = url.searchParams.get('from') || new Date().toISOString().slice(0, 10);
+    const days = Math.min(60, Math.max(1, parseInt(url.searchParams.get('days') || '1', 10)));
+    return json({ from, days: await schedule(env, from, days) });
+  }
+
+  if (path === '/inventory' && method === 'GET') {
+    const from = url.searchParams.get('from') || new Date().toISOString().slice(0, 10);
+    const days = Math.min(120, Math.max(1, parseInt(url.searchParams.get('days') || '30', 10)));
+    return json(await availability(env, from, days));
+  }
+
+  if (path === '/settings') {
+    if (method === 'GET') return json(await getSettings(env));
+    if (method === 'PATCH') {
+      requireOwner(user);
+      const allowed = { turnaround_days: 'turnaroundDays' };
+      for (const [key, field] of Object.entries(allowed)) {
+        if (!(field in body)) continue;
+        const n = parseInt(body[field], 10);
+        if (!Number.isFinite(n) || n < 0 || n > 100000) throw new HttpError(400, `${field} must be a whole number.`);
+        await env.DB.prepare(
+          `INSERT INTO settings (key, value, updated_by) VALUES (?1,?2,?3)
+           ON CONFLICT(key) DO UPDATE SET value = ?2, updated_by = ?3,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')`,
+        ).bind(key, String(n), user.email).run();
+        await audit(env, user.email, 'settings.update', 'settings', 0, `${key}=${n}`);
+      }
+      return json(await getSettings(env));
+    }
+  }
+
+  /* The bin list. Added in batches because nobody types a hundred rows, but
+     each bin exists on its own so condition and cost attach to a specific one. */
+  if (path === '/bins') {
+    if (method === 'GET') {
+      const cond = url.searchParams.get('condition');
+      const where = cond && cond !== 'all' ? 'WHERE condition = ?1' : '';
+      const { results } = await env.DB.prepare(
+        `SELECT id, label, condition, notes, acquired_on, cost_cents,
+                flagged_rental_id, created_at, updated_at, updated_by
+         FROM bins ${where} ORDER BY label LIMIT 1000`,
+      ).bind(...(where ? [cond] : [])).all();
+      const { results: counts } = await env.DB.prepare(
+        'SELECT condition, COUNT(*) AS n FROM bins GROUP BY condition').all();
+      return json({ bins: results, counts: Object.fromEntries(counts.map(c => [c.condition, c.n])) });
+    }
+
+    if (method === 'POST') {
+      requireOwner(user);
+      const count = parseInt(body.count, 10);
+      const prefix = (clean(body.prefix, 12) || 'B').toUpperCase();
+      const pad = Math.max(1, Math.min(6, parseInt(body.pad, 10) || 3));
+      if (!Number.isFinite(count) || count < 1 || count > 500) {
+        throw new HttpError(400, 'Add between 1 and 500 bins at a time.');
+      }
+
+      // Continue the numbering rather than restart it, so a second batch does
+      // not collide with the first.
+      const { last } = await env.DB.prepare(
+        `SELECT MAX(CAST(substr(label, ?1) AS INTEGER)) AS last FROM bins WHERE label LIKE ?2`,
+      ).bind(prefix.length + 2, `${prefix}-%`).first();
+      let next = (last || 0) + 1;
+
+      const cost = body.cost_each ? Math.round(parseFloat(String(body.cost_each).replace(/[^\d.]/g, '')) * 100) : null;
+      const acquired = clean(body.acquired_on, 10);
+      const made = [];
+      for (let n = 0; n < count; n++) {
+        const label = `${prefix}-${String(next++).padStart(pad, '0')}`;
+        try {
+          await env.DB.prepare(
+            `INSERT INTO bins (label, acquired_on, cost_cents, created_by) VALUES (?1,?2,?3,?4)`,
+          ).bind(label, acquired, cost, user.email).run();
+          made.push(label);
+        } catch {
+          // A label already in use just means the run continues past it.
+          n--;
+        }
+      }
+      await audit(env, user.email, 'bins.add', 'bin', 0, `${made.length} bins (${made[0]}–${made.at(-1)})`);
+      return json({ added: made.length, first: made[0], last: made.at(-1) }, 201);
+    }
+  }
+
+  if ((m = match(/^\/bins\/(\d+)$/))) {
+    const bid = Number(m[1]);
+    if (method === 'PATCH') {
+      const row = await env.DB.prepare('SELECT id, label, condition FROM bins WHERE id = ?1')
+        .bind(bid).first();
+      if (!row) throw new HttpError(404, 'no such bin');
+      const condition = ['good', 'damaged', 'retired', 'lost'].includes(body.condition)
+        ? body.condition : row.condition;
+      await env.DB.prepare(
+        `UPDATE bins SET condition = ?1, notes = coalesce(?2, notes),
+           flagged_rental_id = ?3,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'), updated_by = ?4
+         WHERE id = ?5`,
+      ).bind(condition, clean(body.notes, 500),
+             body.rental_id ? Number(body.rental_id) : null, user.email, bid).run();
+      if (condition !== row.condition) {
+        await audit(env, user.email, 'bin.condition', 'bin', bid,
+          `${row.label}: ${row.condition} → ${condition}${body.notes ? ` — ${clean(body.notes, 120)}` : ''}`);
+      }
+      return json({ ok: true });
+    }
+    if (method === 'DELETE') {
+      requireOwner(user);
+      const row = await env.DB.prepare('SELECT label FROM bins WHERE id = ?1').bind(bid).first();
+      if (!row) throw new HttpError(404, 'no such bin');
+      await env.DB.prepare('DELETE FROM bins WHERE id = ?1').bind(bid).run();
+      await audit(env, user.email, 'bin.remove', 'bin', bid, row.label);
+      return json({ ok: true });
+    }
+  }
+
+  if (path === '/availability' && method === 'GET') {
+    const startDate = url.searchParams.get('start');
+    const dueDate = url.searchParams.get('due');
+    const bins = parseInt(url.searchParams.get('bins') || '0', 10);
+    if (!startDate || !dueDate || !bins) throw new HttpError(400, 'start, due and bins are required');
+    return json(await canFit(env, { startDate, dueDate, bins,
+      excludeRentalId: url.searchParams.get('exclude') ? Number(url.searchParams.get('exclude')) : undefined }));
   }
 
   if (path === '/audit' && method === 'GET') {

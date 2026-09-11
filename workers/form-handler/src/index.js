@@ -227,6 +227,31 @@ async function handleSquareWebhook(request, env) {
       return new Response('ok', { status: 200 });
     }
 
+    /* Late fees, missing bins and damage go out on one invoice covering several
+       charge rows, so this settles all of them together. */
+    const { charged } = await env.DB.prepare(
+      'SELECT COUNT(*) AS charged FROM charges WHERE square_invoice_id = ?1',
+    ).bind(invoiceId).first();
+
+    if (charged) {
+      const sqStatus = invoice.status || null;
+      const paidAt = sqStatus === 'PAID' ? new Date().toISOString().replace(/\.\d+/, '') : null;
+      await env.DB.prepare(
+        `UPDATE charges SET square_status = ?1, paid_at = coalesce(paid_at, ?2)
+         WHERE square_invoice_id = ?3`,
+      ).bind(sqStatus, paidAt, invoiceId).run();
+      const row = await env.DB.prepare(
+        'SELECT rental_id FROM charges WHERE square_invoice_id = ?1 LIMIT 1').bind(invoiceId).first();
+      await env.DB.prepare(
+        'INSERT INTO audit_log (actor_email, action, entity, entity_id, detail) VALUES (?1,?2,?3,?4,?5)',
+      ).bind('square-webhook', `square.charges.${event.type || 'event'}`, 'rental',
+             String(row?.rental_id ?? 0), `${charged} charge${charged === 1 ? '' : 's'} — ${sqStatus}`).run();
+
+      await env.DB.prepare('UPDATE square_events SET handled = 1 WHERE event_id = ?1')
+        .bind(eventId).run();
+      return new Response('ok', { status: 200 });
+    }
+
     const rental = await env.DB.prepare(
       `SELECT id, status, agreement_signed_at, paid_at, delivered_at, returned_at
        FROM rentals WHERE square_invoice_id = ?1`,
