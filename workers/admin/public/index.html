@@ -166,7 +166,7 @@ tr.late td{background:rgba(163,44,44,.05)}
 .step.photorow[data-locked="1"] .tick{cursor:default}
 .step.photorow .ev{display:flex;gap:7px;align-items:center;flex-wrap:wrap;
   margin:11px 0 0 32px}
-.step.photorow figure{margin:0;position:relative;width:52px}
+.step.photorow figure{margin:0;position:relative;width:52px;height:52px;flex:none;z-index:0}
 .step.photorow img{width:52px;height:52px;object-fit:cover;border-radius:7px;
   border:1px solid var(--line);display:block;background:rgba(21,19,15,.05)}
 .step.photorow .rm{position:absolute;top:2px;right:2px;border:0;border-radius:5px;
@@ -181,9 +181,13 @@ tr.late td{background:rgba(163,44,44,.05)}
 .step.waiting .soon{font-size:12.5px;color:var(--muted)}
 /* A padlock rather than an empty tick: it reads as "not yet" instead of
    "nobody has got round to it", and it is clearly something you may open. */
-.step .tick.locked{border-style:dashed;border-color:rgba(21,19,15,.3);
-  color:var(--muted);font-size:11px}
-.step .tick.locked:hover{border-color:var(--ink);color:var(--ink)}
+/* The lock belongs to the card, not to the checkbox — opening it is a different
+   act from saying the bins went out. */
+.step .lockbtn{margin-left:auto;border:1px solid var(--line);background:var(--white);
+  border-radius:8px;padding:5px 9px;font-size:12px;cursor:pointer;display:flex;
+  align-items:center;gap:5px;color:var(--muted)}
+.step .lockbtn:hover{border-color:var(--ink);color:var(--ink)}
+.step.datelocked .tick{opacity:.4;cursor:not-allowed}
 .step .notdue{font-size:12px;color:var(--muted)}
 .step.photorow .addr{margin:12px 0 0 32px}
 .step.photorow .addr label{display:block;font-size:11px;font-weight:700;
@@ -276,7 +280,10 @@ tr.late td{background:rgba(163,44,44,.05)}
   overflow:auto;box-shadow:-8px 0 30px rgba(0,0,0,.2);animation:slide .18s ease}
 @keyframes fade{from{opacity:0}}
 @keyframes slide{from{transform:translateX(24px);opacity:.4}}
-.drawer .dhead{position:sticky;top:0;background:var(--ink);color:#fff;padding:18px 20px;display:flex;
+/* z-index matters: the photo thumbnails are positioned (for their remove
+   button) and come later in the DOM, so without this they scroll OVER the
+   sticky header rather than under it. */
+.drawer .dhead{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;padding:18px 20px;display:flex;
   align-items:flex-start;gap:12px}
 .drawer .dhead h2{font-size:21px;flex:1}
 .drawer .dhead .meta{color:rgba(255,255,255,.6);font-size:12.5px;margin-top:5px}
@@ -1201,20 +1208,24 @@ async function openRental(id) {
                 alt="${kind} photo" title="${esc(ph.taken_by)} · ${esc(ago(ph.taken_at))}">
               <button class="rm" data-rm="${ph.id}" title="Remove">×</button>
             </figure>`).join('');
-          // Not due out yet. Openable, not forbidden — you sometimes drop the
-          // evening before, and the audit records when you did.
-          const notDue = key === 'delivered' && !done && r.start_date
-            && r.start_date > new Date().toISOString().slice(0, 10);
+          /* Not due yet, and not unlocked. Openable, not forbidden — you drop
+             the evening before, or collect early when someone finishes — and
+             the history records that you did. Both ends behave the same way;
+             two cards that look identical should not follow different rules. */
+          const today = new Date().toISOString().slice(0, 10);
+          const notDue = !done && (
+            (key === 'delivered' && !r.delivery_unlocked_at && r.start_date && r.start_date > today) ||
+            (key === 'returned' && !waiting && !r.pickup_unlocked_at && r.due_date && r.due_date > today));
+          const dueOn = key === 'delivered' ? r.start_date : r.due_date;
           return `
-          <div class="step photorow${waiting ? ' waiting' : ''}" data-done="${done}">
+          <div class="step photorow${waiting ? ' waiting' : ''}${notDue ? ' datelocked' : ''}" data-done="${done}">
             <div class="top">
-              <button class="tick${notDue ? ' locked' : ''}"${waiting ? ' disabled' : ` data-step="${key}"`}
-                data-done="${done}"${notDue ? ` title="Not due out until ${esc(niceDate(r.start_date))}"` : ''}>${
-                notDue ? '🔒' : '✓'}</button>
+              <button class="tick"${waiting || notDue ? ' disabled' : ` data-step="${key}"`} data-done="${done}">✓</button>
               <span class="lbl">${label}</span>
               ${waiting ? '<span class="soon">after the bins are delivered</span>' : ''}
-              ${notDue ? `<span class="notdue">not due out until ${esc(niceDate(r.start_date))}</span>` : ''}
-              <span class="when" style="margin-left:auto">${r[col] ? esc(ago(r[col])) : ''}</span>
+              ${notDue ? `<span class="notdue">not due ${key === 'delivered' ? 'out' : 'back'} until ${esc(niceDate(dueOn))}</span>
+                <button class="lockbtn" data-unlock="${key}" title="Open this step early">🔒 Unlock</button>`
+                : `<span class="when" style="margin-left:auto">${r[col] ? esc(ago(r[col])) : ''}</span>`}
             </div>
             <div class="addr">
               <label>${kind === 'delivery' ? 'Delivery address' : 'Pickup address'}</label>
@@ -1251,7 +1262,7 @@ async function openRental(id) {
             </div>
             <div class="ev">
               ${notDue
-                ? `<span class="soon">Photos once they&rsquo;re out &mdash; unlock the step above if you&rsquo;re dropping early.</span>`
+                ? `<span class="soon">Unlock this step to add a photo.</span>`
                 : waiting
                 ? '<span class="soon">The pickup photo is taken when the bins come back.</span>'
                 : `${thumbs || `<span class="need">Photo needed</span>`}
@@ -1322,24 +1333,6 @@ async function openRental(id) {
       openRental(id);
     } catch (err) {
       // Delivering something unpaid is allowed, but only on purpose.
-      // Not due out yet. The lock is there to catch ticking the wrong rental,
-      // so opening it is one confirmation rather than a typed reason — and the
-      // history records how early it went.
-      if (/not due out for/i.test(err.message)) {
-        if (!confirm(err.message)) return;
-        try { await patch({ milestone: b.dataset.step, done: true, force: true }); openRental(id); }
-        catch (e2) {
-          if (/photo yet/i.test(e2.message)) {
-            const why = prompt(`${e2.message}\n\nWhy is there no photo?`);
-            if (why === null || !why.trim()) return;
-            await patch({ milestone: b.dataset.step, done: true, force: true, photo_reason: why });
-            openRental(id);
-            return;
-          }
-          msg.replaceChildren(banner(e2.message));
-        }
-        return;
-      }
       // A hard ordering rule — nothing comes back before it goes out. No reason
       // makes it true, so there is nothing to prompt for.
       if (/cannot come back|already marked back|nothing to photograph/i.test(err.message)) {
@@ -1374,6 +1367,15 @@ async function openRental(id) {
       }
       msg.replaceChildren(banner(err.message));
     }
+  }));
+
+  drawer.querySelectorAll('[data-unlock]').forEach(b => b.addEventListener('click', async () => {
+    const step = b.dataset.unlock;
+    const when = niceDate(step === 'delivered' ? r.start_date : r.due_date);
+    const what = step === 'delivered' ? "aren't due out" : "aren't due back";
+    if (!confirm(`These bins ${what} until ${when}.\n\nUnlock this step anyway? It'll be recorded.`)) return;
+    try { await api(`/rentals/${id}/unlock`, { method: 'POST', body: JSON.stringify({ step }) }); openRental(id); }
+    catch (err) { msg.replaceChildren(banner(err.message)); }
   }));
 
   drawer.querySelectorAll('.photorow input[type="file"]').forEach(input =>

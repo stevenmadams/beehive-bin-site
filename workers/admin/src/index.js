@@ -325,7 +325,9 @@ async function updateEmployee(env, user, id, body) {
 const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
   CASE WHEN status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('now')
        THEN 1 ELSE 0 END AS stalled,
-  photo_hold, signed_on_behalf, agreement_manual, agreement_manual_by,
+  photo_hold, delivery_unlocked_at, delivery_unlocked_by,
+  pickup_unlocked_at, pickup_unlocked_by,
+  signed_on_behalf, agreement_manual, agreement_manual_by,
   agreement_manual_reason, confirm_token, confirm_sent_at, agreement_name, agreement_version, agreement_signed_at AS signed_at,
   square_customer_id, square_order_id, square_invoice_id, square_invoice_url, square_status,
   square_card_id, card_brand, card_last4, card_exp, card_stored_at,
@@ -486,7 +488,8 @@ async function updateRental(env, user, id, body) {
        easy when two look alike in a list. Returns are deliberately NOT
        date-locked: customers finish early and you collect early, so a lock
        there would be overridden most weeks and stop being read. */
-    if (body.done !== false && body.milestone === 'delivered' && row.start_date) {
+    if (body.done !== false && body.milestone === 'delivered' && row.start_date
+        && !row.delivery_unlocked_at) {
       const today = new Date().toISOString().slice(0, 10);
       if (row.start_date > today && !body.force) {
         const days = Math.round((new Date(row.start_date) - new Date(today)) / 86400000);
@@ -495,6 +498,19 @@ async function updateRental(env, user, id, body) {
       if (row.start_date > today) {
         const days = Math.round((new Date(row.start_date) - new Date(today)) / 86400000);
         await audit(env, user.email, 'rental.delivered_early', 'rental', id, `${days} day(s) before ${row.start_date}`);
+      }
+    }
+
+    if (body.done !== false && body.milestone === 'returned' && row.due_date
+        && !row.pickup_unlocked_at) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (row.due_date > today && !body.force) {
+        const days = Math.round((new Date(row.due_date) - new Date(today)) / 86400000);
+        throw new HttpError(423, `These are not due back for ${days} day${days === 1 ? '' : 's'} (${row.due_date}). Mark them back anyway?`);
+      }
+      if (row.due_date > today) {
+        const days = Math.round((new Date(row.due_date) - new Date(today)) / 86400000);
+        await audit(env, user.email, 'rental.returned_early', 'rental', id, `${days} day(s) before ${row.due_date}`);
       }
     }
 
@@ -757,14 +773,21 @@ async function uploadPhoto(request, env, user, rentalId, url) {
      looks like proof of something that had not happened. Once the lock on the
      milestone is opened, the visit is on the record and photos follow. */
   const state = await env.DB.prepare(
-    'SELECT start_date, delivered_at FROM rentals WHERE id = ?1').bind(rentalId).first();
+    `SELECT start_date, due_date, delivered_at, returned_at,
+            delivery_unlocked_at, pickup_unlocked_at FROM rentals WHERE id = ?1`)
+    .bind(rentalId).first();
 
   if (kind === 'pickup' && !state?.delivered_at) {
     throw new HttpError(409, 'These bins have not been delivered yet, so there is nothing to photograph coming back.');
   }
 
-  if (kind === 'delivery' && !state?.delivered_at && state?.start_date
-      && state.start_date > new Date().toISOString().slice(0, 10)) {
+  if (kind === 'pickup' && !state?.returned_at && !state?.pickup_unlocked_at
+      && state?.due_date && state.due_date > new Date().toISOString().slice(0, 10)) {
+    throw new HttpError(423, `These are not due back until ${state.due_date}. Unlock the pickup step first if you are collecting early.`);
+  }
+
+  if (kind === 'delivery' && !state?.delivered_at && !state?.delivery_unlocked_at
+      && state?.start_date && state.start_date > new Date().toISOString().slice(0, 10)) {
     throw new HttpError(423, `These bins are not due out until ${state.start_date}. Unlock the delivery step first if you are dropping them early.`);
   }
 
@@ -787,6 +810,28 @@ async function uploadPhoto(request, env, user, rentalId, url) {
          (url.searchParams.get('caption') || '').slice(0, 300) || null).run();
 
   await audit(env, user.email, `rental.photo_${kind}`, 'rental', rentalId, `${Math.round(body.byteLength / 1024)}KB`);
+
+  /* The photo IS the visit. Someone standing at a door with the bins has
+     delivered them; asking them to also tick a box is modelling a database
+     rather than a job. So the milestone follows the evidence.
+
+     Prerequisites are recorded, not enforced, here: the bins are already on the
+     doorstep. Refusing to mark an unpaid rental delivered after the fact would
+     leave the record saying something that is not true. */
+  const milestone = kind === 'delivery' ? 'delivered' : 'returned';
+  const col = MILESTONES[milestone];
+  const current = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+    .bind(rentalId).first();
+
+  if (current && !current[col]) {
+    const missing = (PREREQ[milestone] || []).filter(p => !current[p.col]).map(p => p.col);
+    const patched = { ...current, [col]: now() };
+    await env.DB.prepare(`UPDATE rentals SET ${col} = ?1, status = ?2 WHERE id = ?3`)
+      .bind(patched[col], statusFrom(patched), rentalId).run();
+    await audit(env, user.email, `rental.${milestone}`, 'rental', rentalId,
+      missing.length ? `from photo, without ${missing.join(', ')}` : 'from photo');
+  }
+
   return listPhotos(env, rentalId);
 }
 
@@ -1100,6 +1145,24 @@ async function api(request, env, url) {
     const rid = Number(m[1]);
     if (method === 'GET') return json({ photos: await listPhotos(env, rid) });
     if (method === 'POST') return json({ photos: await uploadPhoto(request, env, user, rid, url) }, 201);
+  }
+
+  /* Opening the lock is separate from marking the step done. Conflating them
+     meant "unlock" tried to tick the box and immediately demanded a photo that
+     could not be taken yet. */
+  if ((m = match(/^\/rentals\/(\d+)\/unlock$/)) && method === 'POST') {
+    const rid = Number(m[1]);
+    const which = body.step === 'returned' ? 'pickup' : 'delivery';
+    const row = await env.DB.prepare('SELECT id, start_date, due_date FROM rentals WHERE id = ?1')
+      .bind(rid).first();
+    if (!row) throw new HttpError(404, 'no such rental');
+    await env.DB.prepare(
+      `UPDATE rentals SET ${which}_unlocked_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'),
+         ${which}_unlocked_by = ?1 WHERE id = ?2`,
+    ).bind(user.email, rid).run();
+    await audit(env, user.email, `rental.${which}_unlocked`, 'rental', rid,
+      `before its date of ${which === 'pickup' ? row.due_date : row.start_date}`);
+    return json({ rental: await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(rid).first() });
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/photo-hold$/)) && method === 'POST') {
