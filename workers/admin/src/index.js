@@ -574,6 +574,12 @@ async function updateRental(env, user, id, body) {
          cancellation, it is a loose end. And cancelling a paid one without
          saying what happened to the money leaves a customer out of pocket with
          no record of why. */
+      if (row.returned_at) {
+        /* It happened: the bins went out, came back, and the money was taken.
+           Cancelling would say none of that occurred. A refund belongs in
+           Square and an explanation belongs in the notes. */
+        throw new HttpError(409, 'This rental is finished — the bins went out and came back. If something needs putting right, refund it in Square and add a note here.');
+      }
       if (row.delivered_at && !row.returned_at) {
         throw new HttpError(409, 'These bins are still out. Mark them back before cancelling, or this rental disappears with your bins at a customer\'s house.');
       }

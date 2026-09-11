@@ -1344,6 +1344,12 @@ async function openRental(id) {
       <div class="actions" style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
         ${r.status === 'cancelled'
           ? '<button class="btn" data-status="pending">Reinstate</button>'
+          : r.returned_at
+          /* Finished. Offering "cancel" on a rental that ran its course invites
+             erasing something that happened; the honest remedies are a refund
+             in Square and a note explaining it. */
+          ? `<span style="color:var(--muted);font-size:13px">Finished ${esc(stamp(r.returned_at))}.
+             Refunds are issued in Square.</span>`
           : '<button class="btn danger" data-status="cancelled">Cancel rental</button>'}
       </div>
     </div>`));
