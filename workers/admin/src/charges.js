@@ -19,9 +19,13 @@ import { today, dayDiff } from '../../shared/clock.js';
 /* "Each week or partial week the Bins are kept past the agreed return date."
    One day late is one week — that is what the agreement says, and softening it
    here would mean the panel and the contract disagree about what is owed. */
+/* The collection's business day, never the UTC date of its timestamp —
+   7pm Mountain on the due date is on time. */
+export const returnedOn = r => r.returned_on || (r.returned_at ? r.returned_at.slice(0, 10) : null);
+
 export function lateWeeks(rental, asOf = today()) {
   if (!rental.due_date) return 0;
-  const end = (rental.returned_at || '').slice(0, 10) || asOf;
+  const end = (rental.returned_at ? returnedOn(rental) : null) || asOf;
   const days = dayDiff(end, rental.due_date);
   return days <= 0 ? 0 : Math.ceil(days / 7);
 }
@@ -83,7 +87,7 @@ export async function proposals(env, rental) {
       out.push({ kind: 'late', blocked:
         `This is a ${rental.bins}-bin rental, which is not one of the standard packages, so there is no extra-week rate to apply. Add the late fee by hand.` });
     } else {
-      const back = (rental.returned_at || '').slice(0, 10);
+      const back = rental.returned_at ? returnedOn(rental) : '';
       out.push({
         kind: 'late', qty: weeks, unit_cents: extra, amount_cents: weeks * extra, taxable: 1,
         reason: `Late return — ${weeks === 1 ? '1 week' : `${weeks} weeks`} past ${rental.due_date}` +

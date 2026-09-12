@@ -376,7 +376,7 @@ const RENTAL_COLUMNS = () => `id, request_id, created_at, created_by, status,
                  AND NOT EXISTS (SELECT 1 FROM charges c WHERE c.rental_id = rentals.id AND c.kind = 'damage'))
       OR EXISTS (SELECT 1 FROM rental_items ri WHERE ri.rental_id = rentals.id AND ri.back_condition = 'lost'
                  AND NOT EXISTS (SELECT 1 FROM charges c WHERE c.rental_id = rentals.id AND c.kind = 'missing'))
-      OR (date(substr(returned_at, 1, 10)) > date(due_date)
+      OR (date(coalesce(returned_on, substr(returned_at, 1, 10))) > date(due_date)
                  AND NOT EXISTS (SELECT 1 FROM charges c WHERE c.rental_id = rentals.id AND c.kind = 'late')))
        THEN 'settling' WHEN status = 'inspected' THEN 'done' ELSE status END AS phase,
   photo_hold, delivered_by, returned_by, delivery_unlocked_at, delivery_unlocked_by,
@@ -391,7 +391,7 @@ const RENTAL_COLUMNS = () => `id, request_id, created_at, created_by, status,
   pickup_city, pickup_address, pickup_notes, pickup_street, pickup_unit, pickup_zip,
   agreement_signed_at, paid_at, delivered_at, returned_at, notes,
   delivery_window, pickup_window, delivery_slot, pickup_slot, reminded_delivery_at, reminded_pickup_at,
-  inspected_at, inspected_by, customer_id`;
+  inspected_at, inspected_by, customer_id, delivered_on, returned_on`;
 
 /* A kind is a word: lowercase, letters and underscores. "Hand truck" and
    "hand_truck" and "HAND-TRUCK" are the same thing and must land in the same
@@ -650,8 +650,8 @@ async function updateRental(env, user, id, body) {
     patch[col] = body.done === false ? null : now();
     // Who, not just when — the audit log knows, but this is the record anyone
     // actually reads when a customer says the bins never turned up.
-    if (body.milestone === 'delivered') patch.delivered_by = body.done === false ? null : user.email;
-    if (body.milestone === 'returned') patch.returned_by = body.done === false ? null : user.email;
+    if (body.milestone === 'delivered') { patch.delivered_by = body.done === false ? null : user.email; patch.delivered_on = body.done === false ? null : today(); }
+    if (body.milestone === 'returned') { patch.returned_by = body.done === false ? null : user.email; patch.returned_on = body.done === false ? null : today(); }
     if (body.milestone === 'inspected') patch.inspected_by = body.done === false ? null : user.email;
     if (body.done === false && body.milestone === 'returned' && row.inspected_at) {
       throw new HttpError(409, 'This rental has been inspected. Undo that first.');
@@ -781,7 +781,8 @@ async function updateRental(env, user, id, body) {
        delivery_street=?14, delivery_unit=?15, delivery_zip=?16,
        pickup_street=?17, pickup_unit=?18, pickup_zip=?19,
        delivered_by=?20, returned_by=?21, delivery_window=?23, pickup_window=?24,
-       delivery_slot=?25, pickup_slot=?26, inspected_at=?27, inspected_by=?28
+       delivery_slot=?25, pickup_slot=?26, inspected_at=?27, inspected_by=?28,
+       delivered_on=?29, returned_on=?30
      WHERE id=?22`,
   ).bind(
     patch.status, patch.agreement_signed_at, patch.paid_at, patch.delivered_at,
@@ -792,7 +793,7 @@ async function updateRental(env, user, id, body) {
     patch.pickup_street, patch.pickup_unit, patch.pickup_zip,
     patch.delivered_by, patch.returned_by,
     id, patch.delivery_window, patch.pickup_window, patch.delivery_slot, patch.pickup_slot,
-    patch.inspected_at, patch.inspected_by,
+    patch.inspected_at, patch.inspected_by, patch.delivered_on, patch.returned_on,
   ).run();
 
   // A milestone or a cancellation has already been written up above; only an

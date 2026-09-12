@@ -46,6 +46,11 @@ until inspection. Inspection is a checklist — tick a bin back, flag an issue
 rental's count, and what the charges panel proposes. A bin is free again only
 once inspected. Inventory shows where every bin is tonight.
 
+**Visits have a business day** (`delivered_on`, `returned_on`), set from the
+Mountain clock when the visit is recorded and kept beside the UTC instant.
+Lateness reads the day, never the first ten characters of the instant — a
+7pm collection on the due date is on time.
+
 **Customers** (`customers`, `workers/shared/customers.js`): one row per
 person, matched by email, or by phone when one side has no email (two emails
 on one phone are two people who share a line). Both Workers link on write.
@@ -241,6 +246,22 @@ form value and as the fallback if the calendar cannot load.
 **Blackouts** (`blackouts` table, Settings tab) stop a booking starting on a
 day; adding one reports jobs already booked for it. **Lead time**
 (`lead_days`) is what the website needs; the panel can book inside it.
+
+## Demo data
+
+```bash
+python3 scripts/seed-demo.py --remote          # plant one of everything
+python3 scripts/seed-demo.py --remove --remote # take exactly that out again
+```
+
+Twelve people, seven open or answered requests, thirteen rentals — one in
+every phase, including tonight's delivery, an overdue one, one back and
+uninspected, one settling with a lost and a damaged bin, one with a paid
+extension, one cancelled after payment — plus 200 bins and a few dollies,
+hours for the owner, a dentist's appointment and three days away. Dates are
+relative to the day it runs. Everything it writes is marked (emails end in
+`@demo.example.com`, labels start `T-`, `created_by = 'demo-seed'`), so
+`--remove` is exact.
 
 ## Tests
 

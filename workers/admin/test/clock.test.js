@@ -94,3 +94,19 @@ describe('the business day is Mountain Time, not UTC', () => {
     expect((await ok(`/rentals/${s.id}/cancel-preview`)).percent).toBe(100);
   });
 });
+
+describe('collected at 7pm on the due date is on time', () => {
+  it('T8 no late week, no settling — the business date of the collection is what counts', async () => {
+    await fleet(40);
+    const r = await rental({ bins: 20, weeks: 1, start_date: '2026-09-05' });
+    await sql("UPDATE rentals SET due_date = '2026-09-12', delivered_at = '2026-09-05T20:00:00Z', status = 'out', agreement_signed_at = 'x', paid_at = 'x' WHERE id = ?1", r.id);
+    evening();   // 7:30pm MDT, Sat 12 Sep — 01:30Z on the 13th
+    await ok(`/rentals/${r.id}/unlock`, { method: 'POST', body: { step: 'returned' } });
+    const back = await ok(`/rentals/${r.id}`, { method: 'PATCH', body: { milestone: 'returned', done: true, force: true, photo_reason: 'x' } });
+    expect(back.rental.returned_at).toBe('2026-09-13T01:30:00Z');
+    expect(back.rental.returned_on).toBe('2026-09-12');
+    expect((await ok(`/rentals/${r.id}/charges`)).proposals.find(p => p.kind === 'late')).toBeUndefined();
+    await ok(`/rentals/${r.id}`, { method: 'PATCH', body: { milestone: 'inspected', done: true } });
+    expect((await ok(`/rentals/${r.id}`)).rental.phase).toBe('done');
+  });
+});

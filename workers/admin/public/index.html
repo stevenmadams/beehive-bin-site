@@ -397,6 +397,7 @@ tr.dayhead td{background:#F4F2EC;font-size:11px;letter-spacing:.06em;text-transf
 .pill.declined{background:rgba(163,44,44,.12);color:var(--bad)}
 .rgrid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:26px;align-items:start}
 .rside .card.side{padding:16px 18px;margin-bottom:16px}
+.rmain .card{overflow-x:auto}
 .rside .contactbar{margin:0 0 12px}
 .rside .kv{margin:0}
 .rside .linkbox{margin:0 0 16px}
@@ -2469,42 +2470,47 @@ async function viewCustomer(id) {
   catch (err) { page.replaceChildren(banner(err.message)); return; }
   const { customer: c, requests, rentals } = d;
   const contact = contactActions({ phone: c.phone, email: c.email, contact_pref: requests[0]?.contact_pref });
-  const live = rentals.filter(r => r.status !== 'cancelled' && !r.inspected_at);
-  const past = rentals.filter(r => r.inspected_at || r.status === 'cancelled');
-  const spent = past.filter(r => r.paid_at && r.status !== 'cancelled').reduce((n, r) => n + (r.total_cents || 0), 0);
 
-  const rentalRow = r => `<tr class="clickable" data-rental="${r.id}">
-    <td><span class="pill ${r.phase}">${r.phase}</span></td>
-    <td class="nowrap">${r.bins} bins · ${r.weeks === 1 ? '1 wk' : r.weeks + ' wks'}</td>
-    <td class="nowrap num">${esc(niceDate(r.start_date))} → ${esc(niceDate(r.due_date))}</td>
-    <td class="hide-sm">${esc(r.delivery_city || '')}</td>
-    <td class="nowrap num">${esc(money(r.total_cents))}${r.paid_at ? '' : ' <span style="color:var(--muted)">unpaid</span>'}</td>
-  </tr>`;
-  const requestRow = q => `<tr class="clickable" data-request="${q.id}">
-    <td>${q.lapsed ? '<span class="pill lapsed">lapsed</span>' : `<span class="pill ${q.status}">${q.status}</span>`}</td>
-    <td class="nowrap">${q.kind === 'contact' ? '<em style="color:var(--muted)">Question</em>' : esc(pkg(q))}</td>
-    <td class="nowrap num">${esc(niceDate(q.start_date))}</td>
-    <td class="hide-sm" style="color:var(--muted)">${esc(q.decline_reason || q.message?.slice(0, 60) || '')}</td>
-    <td class="nowrap hide-sm" style="color:var(--muted)">${esc(ago(q.created_at))}</td>
-  </tr>`;
+  /* One line per story. A request that became a rental is that rental —
+     the request is where it started, not a second thing that happened. Only
+     a request that went nowhere (declined, lapsed, still open, a question)
+     stands on its own. */
+  const byRequest = new Map(rentals.map(r => [r.request_id, r]));
+  const stories = [
+    ...rentals.map(r => ({ kind: 'rental', at: r.start_date, live: !['done', 'cancelled'].includes(r.phase), r })),
+    ...requests.filter(q => !byRequest.has(q.id)).map(q => ({ kind: 'request', at: q.start_date || q.created_at.slice(0, 10), live: q.status === 'new', q })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+  const live = stories.filter(s => s.live), past = stories.filter(s => !s.live);
+  const spent = rentals.filter(r => r.paid_at && r.status !== 'cancelled').reduce((n, r) => n + (r.total_cents || 0), 0);
+
+  const row = st => st.kind === 'rental' ? `<tr class="clickable" data-rental="${st.r.id}">
+      <td><span class="pill ${st.r.phase}">${st.r.phase}</span>${st.r.overdue ? ' <span class="pill overdue">overdue</span>' : st.r.stalled ? ' <span class="pill stalled">stalled</span>' : ''}</td>
+      <td class="nowrap">${st.r.bins} bins · ${st.r.weeks === 1 ? '1 wk' : st.r.weeks + ' wks'}</td>
+      <td class="nowrap num">${esc(niceDate(st.r.start_date))} → ${esc(niceDate(st.r.due_date))}</td>
+      <td class="hide-sm">${esc(st.r.delivery_city || '')}</td>
+      <td class="nowrap num">${esc(money(st.r.total_cents))}${st.r.paid_at ? '' : ' <span style="color:var(--muted)">unpaid</span>'}</td>
+      <td class="nowrap hide-sm" style="color:var(--muted)">asked ${esc(ago(st.r.created_at))}</td>
+    </tr>` : `<tr class="clickable" data-request="${st.q.id}">
+      <td>${st.q.lapsed ? '<span class="pill lapsed">lapsed</span>' : `<span class="pill ${st.q.status}">${st.q.kind === 'contact' && st.q.status === 'new' ? 'question' : st.q.status}</span>`}</td>
+      <td class="nowrap">${st.q.kind === 'contact' ? '<em style="color:var(--muted)">Question</em>' : esc(pkg(st.q))}</td>
+      <td class="nowrap num">${st.q.start_date ? esc(niceDate(st.q.start_date)) : ''}</td>
+      <td class="hide-sm" colspan="2" style="color:var(--muted)">${esc(st.q.decline_reason || st.q.message?.slice(0, 70) || st.q.customer_notes?.slice(0, 70) || '')}</td>
+      <td class="nowrap hide-sm" style="color:var(--muted)">asked ${esc(ago(st.q.created_at))}</td>
+    </tr>`;
 
   page.replaceChildren($(`
     <div class="rhead">
       <a class="back" href="#/customers">&larr; Customers</a>
       <div class="title"><h1>${esc(custName(c))}</h1>
         <div class="meta">${[c.city, c.email, fmtPhone(c.phone)].filter(Boolean).map(esc).join(' · ')}
-          · customer since ${esc(niceDate(c.created_at.slice(0, 10)))}</div></div>
+          · customer since ${esc(niceDate(c.created_at.slice(0, 10)))}${spent ? ` · ${esc(money(spent))} paid` : ''}</div></div>
     </div>
     <div class="rgrid">
       <div class="rmain">
-        ${live.length ? `<h3 class="sect">Live rental${live.length === 1 ? '' : 's'}</h3>
-          <div class="card"><table><tbody>${live.map(rentalRow).join('')}</tbody></table></div>` : ''}
-        <h3 class="sect">Past rentals <span class="cnt">${past.length}${spent ? ` · ${esc(money(spent))} paid` : ''}</span></h3>
-        <div class="card">${past.length ? `<table><tbody>${past.map(rentalRow).join('')}</tbody></table>`
-          : '<div class="empty">No finished rentals yet.</div>'}</div>
-        <h3 class="sect">Requests <span class="cnt">${requests.length}</span></h3>
-        <div class="card">${requests.length ? `<table><tbody>${requests.map(requestRow).join('')}</tbody></table>`
-          : '<div class="empty">None.</div>'}</div>
+        ${live.length ? `<h3 class="sect">Now</h3><div class="card"><table><tbody>${live.map(row).join('')}</tbody></table></div>` : ''}
+        <h3 class="sect">History <span class="cnt">${past.length}</span></h3>
+        <div class="card">${past.length ? `<table><tbody>${past.map(row).join('')}</tbody></table>`
+          : '<div class="empty">Nothing finished yet.</div>'}</div>
       </div>
       <aside class="rside">
         <div class="card side">
