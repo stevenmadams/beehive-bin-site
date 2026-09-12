@@ -1690,7 +1690,8 @@ async function openRental(id) {
              in Square and a note explaining it. */
           ? `<span style="color:var(--muted);font-size:13px">Finished ${esc(stamp(r.returned_at))}.
              Refunds are issued in Square.</span>`
-          : '<button class="btn danger" data-status="cancelled">Cancel rental</button>'}
+          : `${r.delivered_at ? '' : '<button class="btn" id="r-move">Change date</button>'}
+             <button class="btn danger" data-status="cancelled">Cancel rental</button>`}
       </div>
     </div>`));
 
@@ -1932,14 +1933,39 @@ async function openRental(id) {
   drawer.querySelectorAll('[data-status]').forEach(b => b.addEventListener('click', async () => {
     let reason;
     if (b.dataset.status === 'cancelled') {
-      reason = prompt(r.paid_at
-        ? 'This rental has been paid. Cancelling here does NOT refund anything — issue that in Square.\n\nWhy is it being cancelled?'
-        : 'Why is this being cancelled?');
+      /* §8: full refund 48h or more before delivery, half under that. The
+         panel does the arithmetic so the person on the phone does not have to,
+         and says it before the reason is typed, not after. */
+      let head = 'Why is this being cancelled?';
+      if (r.paid_at) {
+        try {
+          const p = await api(`/rentals/${id}/cancel-preview`);
+          head = `They paid ${money(p.paid_cents)}. This is ${p.hours_before >= 48 ? '48 hours or more' : 'under 48 hours'} before delivery, so §8 says refund ${p.percent}% — ${money(p.cents)}.\n\nCancelling here does NOT move money: issue the ${money(p.cents)} refund in Square.\n\nWhy is it being cancelled?`;
+        } catch { head = 'This rental has been paid. Cancelling here does NOT refund anything — issue that in Square.\n\nWhy is it being cancelled?'; }
+      }
+      reason = prompt(head);
       if (reason === null || !reason.trim()) return;
     }
-    try { await patch({ status: b.dataset.status, reason }); openRental(id); }
+    try {
+      const res = await patch({ status: b.dataset.status, reason });
+      if (res.refund?.cents) alert(`Cancelled. Refund ${money(res.refund.cents)} (${res.refund.percent}%) in Square — it is on the history for this rental.`);
+      openRental(id);
+    }
     catch (err) { msg.replaceChildren(banner(err.message)); }
   }));
+
+  /* Moving the dates. Only before the bins go out — after that it is an
+     extension, and the button is not there to tempt anyone. */
+  drawer.querySelector('#r-move')?.addEventListener('click', async () => {
+    const to = prompt(`New delivery date (currently ${r.start_date}). The return date moves with it — ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'} stays ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'}.\n\nYYYY-MM-DD:`, r.start_date);
+    if (to === null || !to.trim() || to.trim() === r.start_date) return;
+    const reason = prompt('Why? (optional — goes on the history and in the email to the customer)') ?? '';
+    try {
+      const res = await api(`/rentals/${id}/reschedule`, { method: 'POST', body: JSON.stringify({ start_date: to.trim(), reason }) });
+      if (res.note) alert(res.note);
+      openRental(id);
+    } catch (err) { msg.replaceChildren(banner(err.message)); }
+  });
 }
 
 /* ---------- employees ---------- */

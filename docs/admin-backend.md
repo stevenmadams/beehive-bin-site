@@ -153,6 +153,20 @@ the panel is not exposed — it rejects every request that arrives without a val
 Access JWT, so an unprotected deploy fails closed. Don't rely on that as your
 security model; it is a backstop, not the plan.
 
+## Tests
+
+```bash
+npm test
+```
+
+Both Workers run inside workerd (Cloudflare's Vitest pool) against a real
+in-memory D1 with every migration applied, so a test is the production code
+path. `docs/scenarios.md` lists what is covered, as things that happen to the
+business, each naming its test file. Square and Resend are stubs under
+`workers/*/test/stub-*.js` that record what was asked of them; the other
+Worker's RPC entrypoint is stubbed the same way. Nothing in a test can reach
+the internet.
+
 ## Local development
 
 ```bash

@@ -22,8 +22,11 @@ BANNER = ('/* GENERATED from data/pricing.json — do not edit by hand.\n'
 dollars = lambda key: '{ ' + ', '.join(f"{p['bins']}: {p[key]}" for p in pkgs) + ' }'
 cents   = lambda key: '{ ' + ', '.join(f"{p['bins']}: {p[key] * 100}" for p in pkgs) + ' }'
 
-# --- 1. the admin Worker (cents: it computes what is charged) --------------
-(ROOT / 'workers/admin/src/pricing.js').write_text(BANNER + f'''
+# --- 1. the Workers (cents: they compute what is charged) -------------------
+# The public Worker validates what the website sends against the same table,
+# so a tampered form cannot book a package we do not sell at a price we did
+# not set.
+pricing_js = BANNER + f'''
 /* Package pricing in cents. The invoice is raised from this, so it is the
    number that actually moves money — the website's copy is generated from the
    same source so the two cannot disagree. */
@@ -38,7 +41,9 @@ export function quoteCents(bins, weeks) {{
   if (PRICES[bins] == null) return null;
   return PRICES[bins] + (weeks - 1) * EXTRA[bins];
 }}
-''')
+'''
+(ROOT / 'workers/admin/src/pricing.js').write_text(pricing_js)
+(ROOT / 'workers/form-handler/src/pricing.js').write_text(pricing_js)
 
 # --- 2 & 3. the two browser copies, between markers ------------------------
 def patch(path, block):

@@ -1,6 +1,8 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { handleConfirm } from './confirm.js';
 import { sendEmail, FROM, INBOX } from './mail.js';
+import { serviceCity } from './tax.js';
+import { quoteCents } from './pricing.js';
 
 /* Beehive Bin Co. — form handler.
    Receives reserve/contact form POSTs from beehivebin.co and emails them to
@@ -68,14 +70,30 @@ const contactPref = v => {
   const t = String(v ?? '').trim().toLowerCase();
   return CONTACT_PREFS.includes(t) ? t : null;
 };
-// "$129" / "$1,299.50" -> cents. The form sends a display string, not a number.
-const centsFrom = v => {
-  const m = /([\d,]+(?:\.\d{1,2})?)/.exec(String(v ?? ''));
-  return m ? Math.round(parseFloat(m[1].replace(/,/g, '')) * 100) : null;
-};
 // <input type="date"> gives yyyy-mm-dd; reject anything else rather than
 // storing junk in a column the schedule will later sort on.
 const isoDate = v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '').trim()) ? String(v).trim() : null);
+
+/* What the website sends is checked here, not trusted. The form has a city
+   dropdown and a package picker, but a form is a suggestion to a browser; a
+   POST can say anything. Each refusal names the field so the form can show
+   it, and each is something the panel would otherwise choke on later — an
+   unservable city cannot be invoiced, a Sunday cannot be delivered. */
+function reserveProblem(data) {
+  const bins = int(data.bins);
+  const weeks = int(data.weeks);
+  if (quoteCents(bins, 1) == null) return 'bins: pick one of our packages';
+  if (!weeks || weeks < 1 || weeks > 26) return 'weeks: between 1 and 26';
+  const start = isoDate(data.start);
+  if (!start) return 'start: pick a date';
+  const today = new Date().toISOString().slice(0, 10);
+  if (start < today) return 'start: that date has already passed';
+  if (new Date(`${start}T12:00:00Z`).getUTCDay() === 0) return 'start: we do not deliver on Sundays';
+  if (!serviceCity(data.dcity)) return `dcity: we don't serve "${trim(data.dcity, 60) || ''}" yet`;
+  if (trim(data.pcity) && !serviceCity(data.pcity)) return `pcity: we don't serve "${trim(data.pcity, 60)}" yet`;
+  if (!isEmail(data.email)) return 'email: that address looks wrong';
+  return null;
+}
 
 async function storeRequest(env, data) {
   const contact = trim(data.contact, 200);
@@ -89,9 +107,11 @@ async function storeRequest(env, data) {
         weeks: int(data.weeks),
         start_date: isoDate(data.start),
         return_date: trim(data.return_date, 60),
-        quoted_total_cents: centsFrom(data.total_before_tax),
-        delivery_city: trim(data.dcity, 120),
-        pickup_city: trim(data.pcity, 120),
+        // Quoted from the price table, never from the form: the display
+        // string the page sends is for the customer's eyes, not the invoice.
+        quoted_total_cents: quoteCents(int(data.bins), int(data.weeks)),
+        delivery_city: serviceCity(data.dcity),
+        pickup_city: trim(data.pcity) ? serviceCity(data.pcity) : null,
         customer_notes: trim(data.notes, 4000),
         message: null,
         contact_pref: contactPref(data.contact_pref),
@@ -343,6 +363,30 @@ support@beehivebin.co`;
     }
     return { ok: true };
   }
+
+  /* The dates moved. Short, because the only question in the reader's head
+     is "when are they coming now?" — and answered in the first line. */
+  async sendRescheduled({ to, name, bins, weeks, startDate, dueDate, previousStart, reason }) {
+    if (!to) return { ok: false, error: 'missing recipient' };
+    const day = iso => {
+      const d = new Date(`${iso}T12:00:00`);
+      return isNaN(d) ? iso : d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    };
+    const text = `Hi ${name || 'there'},
+
+Your bin delivery has moved to ${day(startDate)} (it was ${day(previousStart)}).
+${reason ? `\n${reason}\n` : ''}
+  ${bins} bins · ${weeks === 1 ? '1 week' : `${weeks} weeks`}
+  Delivered ${day(startDate)}
+  Back by ${day(dueDate)}
+
+Everything else about your rental stays the same. If that date doesn't work, reply to this email and we'll sort it out.
+
+Beehive Bin Co.
+support@beehivebin.co`;
+
+    return sendEmail(this.env, { to, subject: `Your bin delivery is now ${day(startDate)}`, text });
+  }
 }
 
 export default {
@@ -377,6 +421,10 @@ export default {
     if (!spec) return json({ ok: false, error: 'unknown form' }, 400, origin);
     for (const f of spec.required) {
       if (!String(data[f] || '').trim()) return json({ ok: false, error: `missing ${f}` }, 400, origin);
+    }
+    if (data.form === 'reserve') {
+      const problem = reserveProblem(data);
+      if (problem) return json({ ok: false, error: problem }, 400, origin);
     }
 
     const lines = spec.fields

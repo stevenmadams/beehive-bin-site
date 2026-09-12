@@ -366,6 +366,7 @@ const DEFAULT_PREFIX = { bin: 'B', dolly: 'D', hand_truck: 'HT', moving_blanket:
 
 const RENTAL_STATUSES = ['pending', 'confirmed', 'out', 'returned', 'cancelled'];
 const now = () => new Date().toISOString().replace(/\.\d+/, '');
+const dollars = c => `$${(c / 100).toFixed(2)}`;
 
 /* Status is derived from the milestone timestamps so the two can never
    disagree — except `cancelled`, which is a decision rather than an event and
@@ -482,6 +483,26 @@ const MILESTONES = {
   delivered: 'delivered_at',
   returned: 'returned_at',
 };
+
+/* §8 of the agreement: cancel 48 hours or more before delivery for a full
+   refund, less than that for half. Measured to the start of the delivery day
+   in Mountain Time, since "delivery on the 16th" means the 16th to the
+   customer, not 00:00 UTC.
+
+   The money itself is refunded in Square; this works out how much, says so,
+   and writes it down, so nobody has to remember the rule at 9pm. */
+function refundFor(rental, at = new Date()) {
+  const paidCents = rental.paid_at ? (rental.total_cents || 0) : 0;
+  const deliveryDay = new Date(`${rental.start_date}T06:00:00Z`);   // ~midnight Mountain
+  const hoursBefore = (deliveryDay - at) / 3600000;
+  const percent = hoursBefore >= 48 ? 100 : 50;
+  return {
+    percent,
+    cents: Math.round(paidCents * percent / 100),
+    paid_cents: paidCents,
+    hours_before: Math.round(hoursBefore),
+  };
+}
 
 /* Milestones toggle rather than only set, because the commonest correction is
    marking the wrong rental delivered and needing to undo it immediately. */
@@ -614,6 +635,7 @@ async function updateRental(env, user, id, body) {
     patch.delivery_address = line('delivery') || patch.delivery_address;
     patch.pickup_address = line('pickup') || patch.pickup_address;
   }
+  let refund = null;
   if ('status' in body) {
     if (!RENTAL_STATUSES.includes(body.status)) throw new HttpError(400, 'unknown status');
 
@@ -635,8 +657,10 @@ async function updateRental(env, user, id, body) {
       if (!why) throw new HttpError(428, 'Why is this being cancelled?');
 
       if (row.paid_at) {
+        refund = refundFor(row);
         await audit(env, user.email, 'rental.cancelled_after_payment', 'rental', id,
-          `${why} — refund must be issued in Square`);
+          `${why} — ${dollars(refund.cents)} (${refund.percent}%) to refund in Square, ${
+            refund.hours_before >= 48 ? '48h or more' : 'under 48h'} before delivery`);
       }
       await audit(env, user.email, 'rental.cancel', 'rental', id, why);
     }
@@ -678,7 +702,61 @@ async function updateRental(env, user, id, body) {
     await audit(env, user.email, 'rental.reinstate', 'rental', id, null);
   }
 
-  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+  const updated = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+  return refund ? { rental: updated, refund } : { rental: updated };
+}
+
+/* Moving a rental to a new start date. The commonest change there is — a
+   closing slips, a landlord changes the handover — and until now it meant
+   cancelling and rebooking, which lost the link, the signature and the
+   payment.
+
+   Weeks stay the same, so the due date moves with the start. The bins are
+   re-checked for the new span with this rental's own hold ignored. Once the
+   bins are out there is nothing to move: that is an extension. */
+async function rescheduleRental(env, user, id, body) {
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+    .bind(id).first();
+  if (!rental) throw new HttpError(404, 'no such rental');
+  if (rental.status === 'cancelled') throw new HttpError(400, 'This rental is cancelled. Reinstate it first.');
+  if (rental.delivered_at) throw new HttpError(409, 'These bins are already out. To keep them longer, add an extension.');
+
+  const start = isoDate(body.start_date);
+  if (!start) throw new HttpError(400, 'A new start date is required.');
+  const today = new Date().toISOString().slice(0, 10);
+  if (start < today) throw new HttpError(400, 'That date has already passed.');
+  if (new Date(`${start}T12:00:00Z`).getUTCDay() === 0) throw new HttpError(400, 'We do not deliver on Sundays.');
+  if (start === rental.start_date) throw new HttpError(400, 'That is already the start date.');
+
+  const due = addWeeks(start, rental.weeks);
+  const fit = await canFit(env, { startDate: start, dueDate: due, bins: rental.bins, excludeRentalId: id });
+  if (!fit.fits && !fit.fleetUnknown) {
+    throw new HttpError(409, `Only ${fit.availableThen} bins are free on ${fit.tightestDay} — this needs ${rental.bins}. Try another date.`);
+  }
+
+  await env.DB.prepare('UPDATE rentals SET start_date = ?1, due_date = ?2 WHERE id = ?3')
+    .bind(start, due, id).run();
+
+  /* The agreement the customer signed names the dates in its first clause.
+     Moving them afterwards does not void it — §8 allows rescheduling — but
+     the record should show the signature predates the change. */
+  const signed = !!rental.agreement_signed_at;
+  const why = clean(body.reason, 300);
+  await audit(env, user.email, 'rental.reschedule', 'rental', id,
+    `${rental.start_date} → ${start}${why ? ` — ${why}` : ''}${signed ? ' (after signing)' : ''}`);
+
+  if (rental.email) {
+    await env.MAILER.sendRescheduled({
+      to: rental.email, name: rental.first_name, bins: rental.bins, weeks: rental.weeks,
+      startDate: start, dueDate: due, previousStart: rental.start_date, reason: why,
+    }).catch(err => console.log('reschedule mail failed', err.message));
+  }
+
+  const updated = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+  return {
+    rental: updated,
+    note: signed ? 'The signed agreement names the old dates. The change is on record; the customer has been emailed the new ones.' : null,
+  };
 }
 
 /* Starting a rental means giving the customer their link — nothing more.
@@ -835,7 +913,6 @@ const CHARGE_LINE = {
   damage:  'Damage beyond normal wear',
   other:   'Additional charge',
 };
-const dollars = c => `$${(c / 100).toFixed(2)}`;
 
 async function addCharge(env, user, rentalId, body) {
   const rental = await env.DB.prepare('SELECT id FROM rentals WHERE id = ?1').bind(rentalId).first();
@@ -1255,6 +1332,13 @@ async function extendRental(env, user, id, body) {
   const previousDue = rental.due_date;
   const newDue = addWeeks(previousDue, weeks);
 
+  // The extra weeks are a hold on bins someone else may already have booked.
+  // Checked before anything is written or sent, so a refusal leaves no trace.
+  const fit = await canFit(env, { startDate: addDays(previousDue, 1), dueDate: newDue, bins: rental.bins, excludeRentalId: id });
+  if (!fit.fits && !fit.fleetUnknown) {
+    throw new HttpError(409, `Only ${fit.availableThen} bins are free on ${fit.tightestDay} — another customer has them. A shorter extension may fit.`);
+  }
+
   const res = await env.DB.prepare(
     `INSERT INTO rental_extensions (rental_id, weeks, amount_cents, previous_due_date,
        new_due_date, reason, created_by)
@@ -1403,7 +1487,16 @@ async function api(request, env, url) {
       } catch { row.tax_cents = null; }
       return json({ rental: row });
     }
-    if (method === 'PATCH') return json({ rental: await updateRental(env, user, rid, body) });
+    if (method === 'PATCH') return json(await updateRental(env, user, rid, body));
+  }
+
+  if ((m = match(/^\/rentals\/(\d+)\/cancel-preview$/)) && method === 'GET') {
+    const r = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(Number(m[1])).first();
+    if (!r) throw new HttpError(404, 'no such rental');
+    return json(refundFor(r));
+  }
+  if ((m = match(/^\/rentals\/(\d+)\/reschedule$/)) && method === 'POST') {
+    return json(await rescheduleRental(env, user, Number(m[1]), body));
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/invoice$/)) && method === 'POST') {

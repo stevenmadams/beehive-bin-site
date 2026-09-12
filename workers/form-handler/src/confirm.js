@@ -79,7 +79,7 @@ const agreementValues = r => ({
   RETURN_DATE: niceDate(r.due_date),
 });
 
-const page = (title, inner, extraHead = '') => new Response(`<!doctype html>
+const page = (title, inner, extraHead = '', status = 200) => new Response(`<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
@@ -172,7 +172,8 @@ footer a{color:inherit}
 </span></div></header>
 <div class="wrap">${inner}</div>
 <footer>Questions? <a href="mailto:support@beehivebin.co">support@beehivebin.co</a></footer>
-</body></html>`, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+</body></html>`, { status,
+  headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
@@ -181,7 +182,15 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 const notFound = () => page('Not found', `
   <h1>This link isn&rsquo;t valid</h1>
   <p class="sub">It may have expired, or been mistyped. Reply to the email we sent
-  and we&rsquo;ll send a fresh one.</p>`);
+  and we&rsquo;ll send a fresh one.</p>`, '', 404);
+
+/* Cancelled is not "not found". The customer had this link in their inbox;
+   telling them it is invalid sends them looking for a typo. */
+const cancelled = r => page('This rental was cancelled', `
+  <h1>This rental was cancelled</h1>
+  <p class="sub">There&rsquo;s nothing to do here${r.paid_at ? ' &mdash; if a refund is due, it goes back to the card you paid with' : ''}.
+  If that&rsquo;s a surprise, reply to the email we sent or write to
+  <a href="mailto:support@beehivebin.co">support@beehivebin.co</a> and we&rsquo;ll sort it out.</p>`, '', 410);
 
 /* Already signed and paid — nothing left to do but reassure them. */
 const allDone = r => page('You&rsquo;re all set', `
@@ -587,7 +596,8 @@ export async function handleConfirm(request, env, url) {
   if (!/^[a-f0-9-]{20,60}$/i.test(token)) return notFound();
 
   let r = await load(env, token);
-  if (!r || r.status === 'cancelled') return notFound();
+  if (!r) return notFound();
+  if (r.status === 'cancelled') return cancelled(r);
 
   /* The card submission is JSON from the SDK, not a form post, and it charges
      the rental as soon as the card is stored. */
@@ -595,6 +605,9 @@ export async function handleConfirm(request, env, url) {
     const body = await request.json().catch(() => null);
     if (!body?.sourceId) return json({ ok: false, error: 'no card token' }, 400);
     if (!r.agreement_signed_at) return json({ ok: false, error: 'sign the agreement first' }, 409);
+    // Paid is paid. A stale tab or a double-tap must not store a second card
+    // or ask for a second charge — the answer is simply "done".
+    if (r.paid_at) return json({ ok: true, already: true });
 
     const stored = await env.BILLING.storeCardForRental(token, body);
     if (!stored?.ok) return json({ ok: false, error: stored?.error || 'That card could not be saved.' }, 400);
@@ -613,6 +626,17 @@ export async function handleConfirm(request, env, url) {
     if (!form) return notFound();
 
     const step = String(form.get('step') || '');
+
+    /* Each step is only accepted once the ones before it are done. The pages
+       enforce this by what they show; the handler enforces it by what it
+       saves, because a form post is just a request and can say anything. A
+       signature with no address behind it would be an agreement to deliver
+       nowhere. */
+    const order = STEPS.map(([id]) => id);
+    if (order.indexOf(step) > order.indexOf(stepFor(r))) {
+      return new Response(null, { status: 303, headers: { Location: `/${token}` } });
+    }
+
     const problem = step === 'review' ? await confirmDetails(env, r)
       : step === 'address' ? await saveAddress(env, r, form)
       : step === 'agreement' ? await saveSignature(request, env, r, form)

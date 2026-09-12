@@ -528,12 +528,23 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
     btn.disabled = true; const label = btn.textContent; btn.textContent = 'Sending\u2026';
     try {
       const res = await fetch(FORM_ENDPOINT, {method: 'POST', body: data, headers: {Accept: 'application/json'}});
-      if (!res.ok) throw new Error(res.status);
+      if (!res.ok) {
+        // The server names the field ("start: we do not deliver on Sundays");
+        // show the reason and put the cursor on it rather than a generic sorry.
+        const body = await res.json().catch(() => ({}));
+        const m = /^(\w+): (.+)$/.exec(body.error || '');
+        throw Object.assign(new Error(m ? m[2] : ''), { field: m && m[1] });
+      }
       showSuccess();
     } catch (err) {
       const e = document.getElementById('send-error');
+      e.textContent = err.message
+        ? err.message.charAt(0).toUpperCase() + err.message.slice(1) + '.'
+        : 'Something went wrong sending your request. Please try again, or email us directly at support@beehivebin.co.';
       e.hidden = false;
-      e.scrollIntoView({behavior:'smooth', block:'center'});
+      const f = err.field && form.querySelector(`[name="${err.field}"]`);
+      (f || e).scrollIntoView({behavior:'smooth', block:'center'});
+      f?.focus();
     } finally {
       btn.disabled = false; btn.textContent = label;
     }

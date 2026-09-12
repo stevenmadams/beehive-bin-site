@@ -6,15 +6,20 @@ Status is what the code does today, not what the docs say.
 
 Legend: ✅ built and tested · ⚠️ partly there · ❌ missing
 
+Run them with `npm test` (both Workers), or `npm run test:admin` /
+`npm run test:forms`. They run in workerd against a real D1, so they are the
+same code paths as production; Square and Resend are stubs that record what
+was asked of them.
+
 ## A customer
 
 | # | Scenario | Status | T |
 |---|---|---|---|
 | C1 | Fills in the reserve form → a request appears in the panel and the inbox gets a notification | ✅ | forms/submit |
 | C2 | Leaves email or phone off the reserve form → refused, told which field | ✅ | forms/submit |
-| C3 | Picks a city we don't serve (tampered form) → refused, not stored | ❌ → ✅ | forms/submit |
-| C4 | Asks for a package or week count we don't sell → refused | ❌ → ✅ | forms/submit |
-| C5 | Asks for a start date in the past, or a Sunday → refused | ❌ → ✅ | forms/submit |
+| C3 | Picks a city we don't serve (tampered form) → refused, not stored | ✅ | forms/submit |
+| C4 | Asks for a package or week count we don't sell → refused | ✅ | forms/submit |
+| C5 | Asks for a start date in the past, or a Sunday → refused | ✅ | forms/submit |
 | C6 | Sends a contact-form message → stored, contact method sorted into phone or email | ✅ | forms/submit |
 | C7 | Is a bot filling the honeypot → gets a fake yes, nothing stored | ✅ | forms/submit |
 | C8 | Opens the confirmation link → sees their package, dates, price **with tax** | ✅ | forms/confirm |
@@ -22,12 +27,13 @@ Legend: ✅ built and tested · ⚠️ partly there · ❌ missing
 | C10 | Enters delivery address with unit and zip; pickup same or different | ✅ | forms/confirm |
 | C11 | Types a junk name on the agreement → refused; on-behalf allowed with a real surname | ✅ | forms/confirm |
 | C12 | Signs → agreement version, IP, UA recorded; signed copy emailed | ✅ | forms/confirm |
-| C13 | Stores a card → invoice is raised and charged to it; page shows paid | ✅ (Square mocked) | forms/confirm |
+| C12b | Square says an invoice is paid → rental, extension or charges settle; bad signatures refused; replays ignored | ✅ | forms/webhook |
+| C13 | Stores a card → invoice is raised and charged to it; page shows paid | ✅ | forms/confirm, admin/charges |
 | C14 | Revisits the link after paying → sees "all done", cannot pay twice | ✅ | forms/confirm |
-| C15 | Opens the link after the rental was cancelled → told so, not asked to pay | ⚠️ → ✅ | forms/confirm |
-| C16 | Cancels ≥48h before delivery → full refund owed; <48h → 50% | ❌ → ✅ | admin/rentals |
-| C17 | Asks for more weeks → extension invoice, return date moves | ✅ | admin/extensions |
-| C18 | Extension would overbook the bins for someone else → refused | ❌ → ✅ | admin/extensions |
+| C15 | Opens the link after the rental was cancelled → told so, not asked to pay | ✅ | forms/confirm |
+| C16 | Cancels ≥48h before delivery → full refund owed; <48h → 50% | ✅ | admin/changes |
+| C17 | Asks for more weeks → extension invoice, return date moves | ✅ | admin/changes |
+| C18 | Extension would overbook the bins for someone else → refused | ✅ | admin/changes |
 | C19 | Is late / loses bins / damages bins → charged only what §4 allows, itemised | ✅ | admin/charges |
 | C20 | Gets a reminder the day before delivery and the day before pickup | ❌ | — (see notes) |
 
@@ -37,7 +43,7 @@ Legend: ✅ built and tested · ⚠️ partly there · ❌ missing
 |---|---|---|---|
 | S1 | New requests show a badge count; opening one shows everything sent | ✅ | admin/requests |
 | S2 | Takes a booking by phone → **+ New request**, source `manual` | ✅ | admin/requests |
-| S3 | Phone booking city must be one we serve (typo'd city can't be invoiced) | ❌ → ✅ | admin/requests |
+| S3 | Phone booking city must be one we serve (typo'd city can't be invoiced) | ✅ | admin/requests |
 | S4 | Approves a reservation → rental created, request `converted`, link exists | ✅ | admin/requests |
 | S5 | Approves the same request twice → one rental | ✅ | admin/requests |
 | S6 | Approves a contact-form enquiry → refused (no package/dates) | ✅ | admin/requests |
@@ -56,8 +62,8 @@ Legend: ✅ built and tested · ⚠️ partly there · ❌ missing
 | S19 | Changes the delivery address after delivery → refused | ✅ | admin/rentals |
 | S20 | Cancels a pending/confirmed rental with a reason | ✅ | admin/rentals |
 | S21 | Cancels while bins are out, or after they're back → refused | ✅ | admin/rentals |
-| S22 | Cancels a paid rental → refund amount per the 48h rule is shown and audited | ❌ → ✅ | admin/rentals |
-| S23 | Reschedules a rental (new start date) → availability re-checked, due date moves, customer told | ❌ → ✅ | admin/rentals |
+| S22 | Cancels a paid rental → refund amount per the 48h rule is shown and audited | ✅ | admin/changes |
+| S23 | Reschedules a rental (new start date) → availability re-checked, due date moves, customer told | ✅ | admin/changes |
 | S24 | Adds an internal note → attributed; can edit/delete own | ✅ | admin/notes |
 | S25 | Sees who did what in History | ✅ | admin/notes |
 | S26 | Rental never confirmed and start date passed → **stalled** badge | ✅ | admin/rentals |
