@@ -171,6 +171,15 @@ deliveries (signed and paid) and pickups (out), once each —
 `reminded_delivery_at` / `reminded_pickup_at`. The 09:00 UTC cron is photo
 retention.
 
+**Who drives when.** `shifts` holds a weekly pattern per person and one-off
+days (extra hours, or off). `workers/shared/coverage.js` turns that into a
+day's slots — an hour each, with room for `jobs_per_slot` per driver — and
+both Workers read it: the panel's rental drawer and calendar, and the
+customer's address step, which offers only the slots with room. Until
+anyone has entered a shift, every evening is covered in the usual window.
+`delivery_slot` / `pickup_slot` are what capacity is counted against; the
+window text beside them is what people read.
+
 **Blackouts** (`blackouts` table, Settings tab) stop a booking starting on a
 day; adding one reports jobs already booked for it. **Lead time**
 (`lead_days`) is what the website needs; the panel can book inside it.

@@ -11,6 +11,7 @@ import { PRICES, EXTRA, quoteCents } from './pricing.js';
 import { rateFor, serviceCity, SERVICE_CITIES } from './tax.js';
 import { availability, canFit, getSettings, stoplights, blackoutOn } from './inventory.js';
 import { today, addDays, addWeeks, isoDate, isSunday, dayDiff, startOfDay } from '../../shared/clock.js';
+import { coverage, claimSlot, isTime } from '../../shared/coverage.js';
 import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
 const json = (body, status = 200) =>
@@ -357,7 +358,7 @@ const RENTAL_COLUMNS = () => `id, request_id, created_at, created_by, status,
   delivery_city, delivery_address, delivery_notes, delivery_street, delivery_unit, delivery_zip,
   pickup_city, pickup_address, pickup_notes, pickup_street, pickup_unit, pickup_zip,
   agreement_signed_at, paid_at, delivered_at, returned_at, notes,
-  delivery_window, pickup_window, reminded_delivery_at, reminded_pickup_at`;
+  delivery_window, pickup_window, delivery_slot, pickup_slot, reminded_delivery_at, reminded_pickup_at`;
 
 /* A kind is a word: lowercase, letters and underscores. "Hand truck" and
    "hand_truck" and "HAND-TRUCK" are the same thing and must land in the same
@@ -615,6 +616,25 @@ async function updateRental(env, user, id, body) {
   const ADDRESS_PARTS = ['delivery_street', 'delivery_unit', 'delivery_city', 'delivery_zip',
     'pickup_street', 'pickup_unit', 'pickup_city', 'pickup_zip'];
 
+  /* Booking into an hour. Checked against who is on and what is already
+     booked; writes the window text alongside, so the run sheet and the
+     customer see the same words. `force` books it anyway — a full hour is a
+     judgement, and the owner may know the second driver is free. */
+  for (const kind of ['delivery', 'pickup']) {
+    const key = `${kind}_slot`;
+    if (!(key in body)) continue;
+    if (body[key] === null || body[key] === '') { patch[key] = null; continue; }
+    const date = kind === 'delivery' ? row.start_date : row.due_date;
+    try {
+      const text = await claimSlot(env, { date, slot: body[key], current: row[key], force: !!body.force });
+      patch[key] = body[key];
+      patch[`${kind}_window`] = text;
+      if (body.force) await audit(env, user.email, 'rental.slot_forced', 'rental', id, `${kind} ${text} on ${date}`);
+    } catch (err) {
+      throw new HttpError(err.status || 400, err.message);
+    }
+  }
+
   // "6–8pm", "after 5", "before noon" — a phrase, not a schedule.
   for (const w of ['delivery_window', 'pickup_window']) {
     if (w in body) {
@@ -691,7 +711,8 @@ async function updateRental(env, user, id, body) {
        agreement_manual_reason=?13,
        delivery_street=?14, delivery_unit=?15, delivery_zip=?16,
        pickup_street=?17, pickup_unit=?18, pickup_zip=?19,
-       delivered_by=?20, returned_by=?21, delivery_window=?23, pickup_window=?24
+       delivered_by=?20, returned_by=?21, delivery_window=?23, pickup_window=?24,
+       delivery_slot=?25, pickup_slot=?26
      WHERE id=?22`,
   ).bind(
     patch.status, patch.agreement_signed_at, patch.paid_at, patch.delivered_at,
@@ -701,7 +722,7 @@ async function updateRental(env, user, id, body) {
     patch.delivery_street, patch.delivery_unit, patch.delivery_zip,
     patch.pickup_street, patch.pickup_unit, patch.pickup_zip,
     patch.delivered_by, patch.returned_by,
-    id, patch.delivery_window, patch.pickup_window,
+    id, patch.delivery_window, patch.pickup_window, patch.delivery_slot, patch.pickup_slot,
   ).run();
 
   // A milestone or a cancellation has already been written up above; only an
@@ -709,7 +730,7 @@ async function updateRental(env, user, id, body) {
   if (body.milestone) {
     await audit(env, user.email, `rental.${body.milestone}`, 'rental', id, `done=${body.done !== false}`);
   } else if (!('status' in body)) {
-    const changed = Object.keys(body).filter(k => ADDRESS_PARTS.includes(k) || k === 'notes' || k.endsWith('_window'));
+    const changed = Object.keys(body).filter(k => ADDRESS_PARTS.includes(k) || k === 'notes' || k.endsWith('_window') || k.endsWith('_slot'));
     if (changed.length) await audit(env, user.email, 'rental.update', 'rental', id, changed.join(', '));
   } else if (body.status !== 'cancelled') {
     await audit(env, user.email, 'rental.reinstate', 'rental', id, null);
@@ -867,7 +888,7 @@ async function schedule(env, from, days) {
             phone, email, contact_pref, delivery_address AS address, delivery_city AS city,
             delivery_unit AS unit, delivery_zip AS zip,
             delivery_notes AS notes, delivered_at AS done_at, delivered_by AS done_by,
-            delivery_window AS window, status, agreement_signed_at, paid_at
+            delivery_window AS window, delivery_slot AS slot, status, agreement_signed_at, paid_at
      FROM rentals
      WHERE status NOT IN ('cancelled') AND start_date IS NOT NULL
        AND date(start_date) BETWEEN date(?1) AND date(?2)`,
@@ -878,7 +899,7 @@ async function schedule(env, from, days) {
             phone, email, contact_pref, pickup_address AS address, pickup_city AS city,
             pickup_unit AS unit, pickup_zip AS zip,
             pickup_notes AS notes, returned_at AS done_at, returned_by AS done_by,
-            pickup_window AS window, status, agreement_signed_at, paid_at
+            pickup_window AS window, pickup_slot AS slot, status, agreement_signed_at, paid_at
      FROM rentals
      WHERE status NOT IN ('cancelled') AND due_date IS NOT NULL
        AND date(due_date) BETWEEN date(?1) AND date(?2)
@@ -889,6 +910,7 @@ async function schedule(env, from, days) {
     'SELECT date, reason FROM blackouts WHERE date BETWEEN ?1 AND ?2').bind(from, to).all();
   const blackout = new Map(closed.map(b => [b.date, b.reason || 'closed']));
 
+  const cov = await coverage(env, from, days);
   const byDay = new Map();
   for (let i = 0; i < days; i++) {
     const date = addDays(from, i);
@@ -896,6 +918,9 @@ async function schedule(env, from, days) {
       date,
       sunday: isSunday(date),
       blackout: blackout.get(date) || null,
+      staff: cov[i].staff,
+      staffNote: cov[i].note,
+      open: cov[i].open,
       jobs: [],
       binsOut: 0,
       binsBack: 0,
@@ -1749,7 +1774,7 @@ async function api(request, env, url) {
     if (method === 'GET') return json(await getSettings(env));
     if (method === 'PATCH') {
       requireOwner(user);
-      const numbers = { turnaround_days: 'turnaroundDays', lead_days: 'leadDays' };
+      const numbers = { turnaround_days: 'turnaroundDays', lead_days: 'leadDays', jobs_per_slot: 'jobsPerSlot', slot_minutes: 'slotMinutes' };
       const texts = { default_window: 'defaultWindow' };
       const put = async (key, value) => {
         await env.DB.prepare(
@@ -1773,6 +1798,61 @@ async function api(request, env, url) {
       }
       return json(await getSettings(env));
     }
+  }
+
+  /* When people can drive. Anyone sets their own; an owner sets anyone's. */
+  if (path === '/shifts') {
+    if (method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT s.id, s.employee_id, e.name, s.weekday, s.date, s.start_time AS start, s.end_time AS end, s.off, s.note, s.created_by
+         FROM shifts s JOIN employees e ON e.id = s.employee_id
+         WHERE s.date IS NULL OR s.date >= ?1
+         ORDER BY e.name, s.weekday, s.date`,
+      ).bind(addDays(today(), -7)).all();
+      return json({ shifts: results });
+    }
+    if (method === 'POST') {
+      const eid = Number(body.employee_id);
+      if (eid !== user.id) requireOwner(user);
+      const emp = await env.DB.prepare('SELECT id, name FROM employees WHERE id = ?1 AND active = 1').bind(eid).first();
+      if (!emp) throw new HttpError(404, 'no such employee');
+      const weekday = body.weekday === undefined || body.weekday === null || body.weekday === '' ? null : Number(body.weekday);
+      const date = body.date ? isoDate(body.date) : null;
+      if ((weekday === null) === (date === null)) throw new HttpError(400, 'A shift is either a weekday pattern or a specific date.');
+      if (weekday !== null && !(Number.isInteger(weekday) && weekday >= 0 && weekday <= 6)) throw new HttpError(400, 'Weekday is 0 (Sunday) to 6 (Saturday).');
+      if (body.date && !date) throw new HttpError(400, 'Date must be YYYY-MM-DD.');
+      const off = !!body.off;
+      let start = null, end = null;
+      if (!off) {
+        start = String(body.start || '').trim(); end = String(body.end || '').trim();
+        if (!isTime(start) || !isTime(end)) throw new HttpError(400, 'Times are HH:MM, like 17:00.');
+        if (end <= start) throw new HttpError(400, 'The shift has to end after it starts.');
+      }
+      // One pattern per person per weekday; one one-off per person per date.
+      await env.DB.prepare(
+        `DELETE FROM shifts WHERE employee_id = ?1 AND ((?2 IS NOT NULL AND weekday = ?2) OR (?3 IS NOT NULL AND date = ?3))`,
+      ).bind(eid, weekday, date).run();
+      const res = await env.DB.prepare(
+        `INSERT INTO shifts (employee_id, weekday, date, start_time, end_time, off, note, created_by) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`,
+      ).bind(eid, weekday, date, start, end, off ? 1 : 0, clean(body.note, 120), user.email).run();
+      await audit(env, user.email, 'shift.set', 'employee', eid,
+        `${emp.name}: ${date || ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][weekday] + 's'} ${off ? 'off' : `${start}–${end}`}`);
+      return json({ id: res.meta.last_row_id }, 201);
+    }
+  }
+  if ((m = match(/^\/shifts\/(\d+)$/)) && method === 'DELETE') {
+    const row = await env.DB.prepare('SELECT id, employee_id FROM shifts WHERE id = ?1').bind(Number(m[1])).first();
+    if (!row) throw new HttpError(404, 'no such shift');
+    if (row.employee_id !== user.id) requireOwner(user);
+    await env.DB.prepare('DELETE FROM shifts WHERE id = ?1').bind(row.id).run();
+    await audit(env, user.email, 'shift.remove', 'employee', row.employee_id, String(row.id));
+    return json({ ok: true });
+  }
+
+  if (path === '/coverage' && method === 'GET') {
+    const from = url.searchParams.get('from') || today();
+    const days = Math.min(62, Math.max(1, parseInt(url.searchParams.get('days') || '7', 10)));
+    return json({ from, days: await coverage(env, from, days) });
   }
 
   /* Days off. Adding one reports any pending job already on that day rather

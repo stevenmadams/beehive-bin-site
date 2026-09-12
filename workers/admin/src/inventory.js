@@ -32,6 +32,7 @@ export async function getSettings(env) {
     defaultWindow: map.default_window ?? '6–8pm',
     // Notice the website needs. The panel can book inside it on purpose.
     leadDays: Math.max(0, parseInt(map.lead_days ?? '1', 10) || 0),
+    jobsPerSlot: Math.max(1, parseInt(map.jobs_per_slot ?? '2', 10) || 2),
   };
 }
 

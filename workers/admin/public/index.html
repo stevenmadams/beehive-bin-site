@@ -286,6 +286,40 @@ tr.late td{background:rgba(163,44,44,.05)}
 .job .warn{color:var(--warn);font-weight:600;font-size:12.5px;margin-top:6px}
 .job .acts{display:flex;flex-direction:column;gap:6px;flex:none}
 
+/* ---- availability ---- */
+.avail{width:100%}
+.avail td.wd{cursor:pointer;text-align:center;font-size:12.5px;line-height:1.25;padding:8px 4px;min-width:58px}
+.avail td.wd:hover{background:rgba(255,196,0,.15)}
+.avail td.wd.on{background:rgba(31,122,76,.10)}
+.avail td.wd b{display:block;font-size:13px}
+.avail td.wd small{color:var(--muted);font-size:11px}
+.avail td.wd .no{color:var(--muted)}
+.avail .oneoffs{font-size:12.5px}
+.oneoff{display:inline-block;background:#FBFAF6;border:1px solid var(--line);border-radius:999px;padding:2px 9px;margin:2px 4px 2px 0}
+.oneoff.off{background:rgba(163,44,44,.08);border-color:rgba(163,44,44,.25)}
+.day .who{font-size:12.5px;color:var(--ok);font-weight:600;font-family:var(--font-body)}
+.slotrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:9px}
+.slotrow label{margin:0 4px 0 0;flex:none}
+.slotbtn{font:inherit;font-size:12.5px;font-weight:600;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--white);cursor:pointer}
+.slotbtn.on{background:var(--yellow);border-color:var(--yellow-deep)}
+.slotbtn.full{opacity:.45;text-decoration:line-through}
+.month .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;padding:0 4px}
+.month .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.month .cell{display:block;min-height:88px;background:var(--white);border:1px solid var(--line);border-radius:10px;padding:8px 9px;text-decoration:none;color:var(--ink);font-size:12px;line-height:1.35}
+.month .cell.pad{background:transparent;border:0}
+.month .cell.past{opacity:.5}
+.month .cell.today{border-color:var(--yellow-deep);box-shadow:0 0 0 2px var(--yellow)}
+.month .cell.closed,.month .cell.nobody{background:#F4F2EC}
+.month .cell.over{border-color:rgba(163,44,44,.45)}
+.month .cell .n{font-weight:700;font-size:14px}
+.month .cell .n small{font-weight:400;color:var(--muted);margin-left:4px;font-size:10px}
+.month .cell .who{color:var(--ok);font-weight:600;margin-top:2px}
+.month .cell .tag{color:var(--muted);margin-top:2px}
+.month .cell .jobs{margin-top:3px}
+.month .cell .free{margin-top:3px;color:var(--muted)}
+.month .cell .free.none{color:var(--bad);font-weight:600}
+@media (max-width:820px){.month .cell{min-height:64px;font-size:11px}.month .cell .who{display:none}}
+
 /* ---- inventory ---- */
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:22px}
 .tile{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:15px}
@@ -1654,7 +1688,7 @@ async function openRental(id) {
               ${(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)
                 ? `<div class="cust"><b>From the customer</b>${
                     esc(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)}</div>` : ''}
-              ${r[col] ? '' : `<div class="win">
+              ${r[col] ? '' : `<div class="win" data-winbox="${kind}">
                 <label for="w-${kind}">Window</label>
                 <input id="w-${kind}" data-window="${kind}_window" value="${esc(r[kind + '_window'] || '')}"
                   placeholder="6–8pm" maxlength="40">
@@ -1986,6 +2020,34 @@ async function openRental(id) {
 
   /* Moving the dates. Only before the bins go out — after that it is an
      extension, and the button is not there to tempt anyone. */
+  /* When hours have been entered, the window is one of tonight's slots with
+     room, not free text — the same list the customer chose from. Free text
+     stays for a rental whose day has nobody on (a favour, a one-off). */
+  for (const kind of ['delivery', 'pickup']) {
+    const box = drawer.querySelector(`[data-winbox="${kind}"]`);
+    if (!box) continue;
+    const date = kind === 'delivery' ? r.start_date : r.due_date;
+    if (!date) continue;
+    api(`/coverage?from=${date}&days=1`).then(({ days: [day] }) => {
+      if (!day.configured || !day.open) return;
+      // A window typed before slots existed still lights its button.
+      const cur = r[`${kind}_slot`] || day.slots.find(sl => sl.label === r[`${kind}_window`])?.start;
+      const opts = day.slots.map(sl => `<button class="slotbtn${sl.start === cur ? ' on' : ''}${sl.free <= 0 && sl.start !== cur ? ' full' : ''}"
+        data-slot="${sl.start}" title="${sl.free} of ${sl.capacity} free">${esc(sl.label)}</button>`).join('');
+      box.replaceChildren($(`<div class="slotrow"><label>Window</label>${opts}<span class="saved" data-winmsg="${kind}"></span></div>`));
+      box.querySelectorAll('.slotbtn').forEach(b => b.addEventListener('click', async () => {
+        const msg = box.querySelector('[data-winmsg]');
+        const full = b.classList.contains('full');
+        if (full && !confirm(`${b.textContent} is full. Book it anyway?`)) return;
+        try {
+          await api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify({ [`${kind}_slot`]: b.dataset.slot, force: full }) });
+          box.querySelectorAll('.slotbtn').forEach(x => x.classList.toggle('on', x === b));
+          msg.textContent = 'Saved';
+        } catch (err) { msg.textContent = err.message; }
+      }));
+    }).catch(() => {});
+  }
+
   /* The window saves itself on the way out of the field — it is one phrase,
      and a Save button for one phrase is a button nobody presses. */
   drawer.querySelectorAll('[data-window]').forEach(inp => inp.addEventListener('change', async () => {
@@ -2009,6 +2071,149 @@ async function openRental(id) {
   });
 }
 
+/* ---------- availability ----------
+
+   When each person can drive: a weekly pattern, and days that differ. Shown
+   on the Employees tab. Staff edit their own row; an owner edits anyone's.
+   What it produces — who is on tonight, which hours have room — is on the
+   Schedule tab and, for customers, on the address step of their link. */
+
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const hhmm = v => /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : null;
+const tlabel = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${h < 12 ? 'am' : 'pm'}`; };
+
+function availabilityPanel(container, employees) {
+  const draw = async () => {
+    let shifts;
+    try { ({ shifts } = await api('/shifts')); }
+    catch (err) { container.replaceChildren(banner(err.message)); return; }
+
+    const canEdit = e => me.role === 'owner' || e.id === me.id;
+    const people = employees.filter(e => e.active);
+    const rows = people.map(e => {
+      const mine = shifts.filter(s => s.employee_id === e.id);
+      const pattern = WD.map((d, wd) => {
+        const s = mine.find(x => x.weekday === wd);
+        return `<td class="wd${s ? ' on' : ''}" data-emp="${e.id}" data-wd="${wd}" title="${d}${s ? ` ${tlabel(s.start)}–${tlabel(s.end)}` : ''}">${
+          s ? `<b>${esc(tlabel(s.start))}</b><small>to ${esc(tlabel(s.end))}</small>` : '<span class="no">—</span>'}</td>`;
+      }).join('');
+      const oneOffs = mine.filter(s => s.date).sort((a, b) => a.date.localeCompare(b.date)).map(s =>
+        `<span class="oneoff${s.off ? ' off' : ''}" title="${esc(s.note || '')}">${esc(niceDate(s.date))}: ${
+          s.off ? `off${s.note ? ` — ${esc(s.note)}` : ''}` : `${esc(tlabel(s.start))}–${esc(tlabel(s.end))}`}${
+          canEdit(e) ? ` <button class="linkish" data-rmshift="${s.id}">×</button>` : ''}</span>`).join('');
+      return `<tr>
+        <td><strong>${esc(e.name || e.email)}</strong>${canEdit(e) ? `<br><button class="linkish" data-addday="${e.id}">+ a day that differs</button>` : ''}</td>
+        ${pattern}
+        <td class="oneoffs">${oneOffs || '<span style="color:var(--muted)">—</span>'}</td>
+      </tr>`;
+    }).join('');
+
+    container.replaceChildren($(`<div>
+      <p class="sub">Click a day to set hours. ${shifts.length ? '' : '<strong>Nothing entered yet</strong> — until someone is, every evening counts as covered.'}</p>
+      <table class="avail"><thead><tr><th>Who</th>${WD.map(d => `<th>${d}</th>`).join('')}<th>Days that differ</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div id="av-msg"></div>
+    </div>`));
+
+    const fail = err => container.querySelector('#av-msg').replaceChildren(banner(err.message));
+    container.querySelectorAll('td.wd').forEach(td => td.addEventListener('click', async () => {
+      const e = people.find(p => p.id === +td.dataset.emp);
+      if (!canEdit(e)) return;
+      const wd = +td.dataset.wd;
+      const cur = shifts.find(s => s.employee_id === e.id && s.weekday === wd);
+      const ans = prompt(`${e.name || e.email} on ${WD[wd]}s — hours as HH:MM-HH:MM (24h), or blank for not working:`, cur ? `${cur.start}-${cur.end}` : '17:00-21:00');
+      if (ans === null) return;
+      try {
+        if (!ans.trim()) { if (cur) await api(`/shifts/${cur.id}`, { method: 'DELETE' }); }
+        else {
+          const [a, b] = ans.split(/\s*[-–]\s*/);
+          if (!hhmm(a) || !hhmm(b)) throw new Error('Use HH:MM-HH:MM, like 17:00-21:00.');
+          await api('/shifts', { method: 'POST', body: JSON.stringify({ employee_id: e.id, weekday: wd, start: a, end: b }) });
+        }
+        draw();
+      } catch (err) { fail(err); }
+    }));
+    container.querySelectorAll('[data-addday]').forEach(b => b.addEventListener('click', async () => {
+      const e = people.find(p => p.id === +b.dataset.addday);
+      const date = prompt('Which date? (YYYY-MM-DD)', todayISO());
+      if (!date) return;
+      const ans = prompt('Hours as HH:MM-HH:MM, or "off" (add a reason after: off Dentist):', 'off');
+      if (ans === null) return;
+      try {
+        const m = /^off\s*(.*)$/i.exec(ans.trim());
+        if (m) await api('/shifts', { method: 'POST', body: JSON.stringify({ employee_id: e.id, date, off: true, note: m[1] }) });
+        else {
+          const [a, c] = ans.split(/\s*[-–]\s*/);
+          if (!hhmm(a) || !hhmm(c)) throw new Error('Use HH:MM-HH:MM, or "off".');
+          await api('/shifts', { method: 'POST', body: JSON.stringify({ employee_id: e.id, date, start: a, end: c }) });
+        }
+        draw();
+      } catch (err) { fail(err); }
+    }));
+    container.querySelectorAll('[data-rmshift]').forEach(b => b.addEventListener('click', async () => {
+      try { await api(`/shifts/${b.dataset.rmshift}`, { method: 'DELETE' }); draw(); } catch (err) { fail(err); }
+    }));
+  };
+  draw();
+}
+
+/* ---------- calendar ----------
+
+   A month at a glance: for each day, who is on, how many jobs are booked,
+   and how many bins are free. The question it answers is "when can we take
+   the next one" — the stoplight, but for a date you have not been asked for
+   yet. */
+async function viewCalendar() {
+  const first = (schedState.month || todayISO()).slice(0, 8) + '01';
+  const d0 = new Date(`${first}T12:00:00Z`);
+  const monthName = d0.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const startPad = d0.getUTCDay();
+  const daysIn = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 0)).getUTCDate();
+  const shift = n => { const d = new Date(d0); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+
+  const view = $(`<div>
+    <div class="head"><h1>Calendar</h1>
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+        <button class="btn sm" id="cal-prev">‹</button><strong style="min-width:150px;text-align:center">${esc(monthName)}</strong><button class="btn sm" id="cal-next">›</button>
+      </div></div>
+    <p class="sub">Who is driving, what is booked, and how many bins are free each day. <a href="#/schedule">Back to tonight</a>.</p>
+    <div class="month" id="month"><div class="empty">Loading…</div></div>
+  </div>`);
+  render('schedule', view);
+  view.querySelector('#cal-prev').addEventListener('click', () => { schedState.month = shift(-1); viewCalendar(); });
+  view.querySelector('#cal-next').addEventListener('click', () => { schedState.month = shift(1); viewCalendar(); });
+
+  try {
+    const [cov, sched, inv] = await Promise.all([
+      api(`/coverage?from=${first}&days=${daysIn}`), api(`/schedule?from=${first}&days=${daysIn}`), api(`/inventory?from=${first}&days=${daysIn}`),
+    ]);
+    const cells = [];
+    for (let i = 0; i < startPad; i++) cells.push('<div class="cell pad"></div>');
+    for (let i = 0; i < daysIn; i++) {
+      const c = cov.days[i], s = sched.days[i], a = inv.days[i];
+      const past = c.date < todayISO();
+      const jobs = s.jobs.length;
+      const free = a.available;
+      const cls = ['cell', past ? 'past' : '', c.date === todayISO() ? 'today' : '',
+        c.blackout ? 'closed' : !c.open && c.configured ? 'nobody' : '', free < 0 ? 'over' : ''].filter(Boolean).join(' ');
+      cells.push(`<a class="${cls}" href="#/schedule/${c.date}">
+        <div class="n">${i + 1}${c.sunday ? '<small>Sun</small>' : ''}</div>
+        ${c.blackout ? `<div class="tag">Closed${c.blackout !== 'closed' ? ` · ${esc(c.blackout)}` : ''}</div>`
+          : c.configured && !c.staff.length ? '<div class="tag">Nobody on</div>'
+          : c.staff.length ? `<div class="who">${c.staff.map(x => esc(x.name.split('@')[0])).join(', ')}</div>` : ''}
+        ${jobs ? `<div class="jobs">${jobs} job${jobs === 1 ? '' : 's'}${s.binsOut ? ` · ${s.binsOut} out` : ''}${s.binsBack ? ` · ${s.binsBack} back` : ''}</div>` : ''}
+        <div class="free${free <= 0 ? ' none' : ''}">${free < 0 ? `${-free} short` : `${free} free`}</div>
+      </a>`);
+    }
+    view.querySelector('#month').replaceChildren($(`<div>
+      <div class="dow">${WD.map(d => `<div>${d}</div>`).join('')}</div>
+      <div class="grid">${cells.join('')}</div>
+    </div>`));
+  } catch (err) {
+    view.querySelector('#month').replaceChildren(banner(err.message));
+  }
+}
+
 /* ---------- employees ---------- */
 async function viewEmployees() {
   const view = $(`<div>
@@ -2017,6 +2222,9 @@ async function viewEmployees() {
     <div id="emsg"></div>
     <div id="emform"></div>
     <div class="card" id="emlist"><div class="empty">Loading…</div></div>
+
+    <div class="head" style="margin-top:34px"><h1 style="font-size:22px">Who drives when</h1></div>
+    <div class="card" id="avail" style="padding:16px 18px"><div class="empty">Loading…</div></div>
 
     <div class="head" style="margin-top:34px"><h1 style="font-size:22px">Recent activity</h1></div>
     <p class="sub">Everything anyone has done, newest first.</p>
@@ -2083,6 +2291,7 @@ async function viewEmployees() {
         } catch (err) { msg.replaceChildren(banner(err.message)); b.disabled = false; }
       }));
       view.querySelector('#emlist').replaceChildren(table);
+      availabilityPanel(view.querySelector('#avail'), employees);
     } catch (err) {
       view.querySelector('#emlist').replaceChildren($(`<div class="empty"><strong>Could not load</strong>${esc(err.message)}</div>`));
     }
@@ -2156,6 +2365,7 @@ async function viewSchedule() {
         `<button data-d="${d}" aria-pressed="${d === schedState.days}">${label}</button>`).join('')}</div>
       <input type="date" id="s-from" value="${from}" style="width:auto">
       ${from !== todayISO() ? '<button class="btn sm" id="s-today">Today</button>' : ''}
+      <a class="btn sm" href="#/schedule/calendar" style="margin-left:auto">Calendar</a>
     </div>
     <div id="slist"><div class="empty">Loading&hellip;</div></div>
   </div>`);
@@ -2211,10 +2421,13 @@ async function viewSchedule() {
           : `<b>${a.committed}</b> of ${a.fleet} in use`) : '',
       ].filter(Boolean).join(' &middot; ');
 
+      const who = day.staff?.length
+        ? `<span class="who">${day.staff.map(x => `${esc(x.name.split('@')[0])} ${esc(tlabel(x.start))}–${esc(tlabel(x.end))}`).join(' · ')}</span>`
+        : day.open === false && !day.blackout ? '<span class="sun">Nobody on</span>' : '';
       const el = $(`<section class="day">
         <h3>${day.date === todayISO() ? 'Tonight' : esc(niceDate(day.date))}
           ${day.sunday ? '<span class="sun">Sunday</span>' : ''}${day.blackout ? `<span class="sun">Closed — ${esc(day.blackout)}</span>` : ''}
-          <span class="load">${load}</span></h3>
+          ${who}<span class="load">${load}</span></h3>
         <div class="jobs"></div>
       </section>`);
 
@@ -2604,6 +2817,9 @@ async function viewSettings() {
           <p class="sub" style="margin:6px 0 0">Days. 1 means the earliest online booking is tomorrow. Phone bookings can go inside this.</p></div>
       </div>
       <div class="frow">
+        <div><label class="fl" for="s-jobs">Jobs per driver per hour</label>
+          <input id="s-jobs" type="number" min="1" max="10" value="${st.jobsPerSlot ?? 2}" ${owner ? '' : 'disabled'}>
+          <p class="sub" style="margin:6px 0 0">How many drop-offs or pickups one person can do in an hour. Sets the room in each time slot.</p></div>
         <div><label class="fl" for="s-turn">Turnaround after a return</label>
           <input id="s-turn" type="number" min="0" max="14" value="${st.turnaroundDays}" ${owner ? '' : 'disabled'}>
           <p class="sub" style="margin:6px 0 0">Days bins are held after they come back, to clean and restack. 0 means the same night.</p></div>
@@ -2638,6 +2854,7 @@ async function viewSettings() {
           defaultWindow: view.querySelector('#s-window').value,
           leadDays: view.querySelector('#s-lead').value,
           turnaroundDays: view.querySelector('#s-turn').value,
+          jobsPerSlot: view.querySelector('#s-jobs').value,
         })});
         msg.textContent = 'Saved.';
       } catch (err) { msg.textContent = err.message; }
@@ -2759,6 +2976,8 @@ function route() {
   if (tab === 'employees') return viewEmployees();
   if (tab === 'rentals') return id ? openRental(id) : viewRentals();
   if (tab === 'requests' && id) return openRequest(id);
+  if (tab === 'schedule' && id === 'calendar') return viewCalendar();
+  if (tab === 'schedule' && id) { schedState.from = id; schedState.days = 1; return viewSchedule(); }
   if (tab === 'schedule') return viewSchedule();
   if (tab === 'inventory') return viewInventory();
   if (tab === 'settings') return viewSettings();

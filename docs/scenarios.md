@@ -107,6 +107,21 @@ was asked of them.
 | I9 | Only an owner can delete an item or add a batch | ✅ | admin/inventory |
 | I10 | Turnaround days is a setting; 0 means same-night reuse | ✅ | admin/inventory |
 
+## Who drives when
+
+| # | Scenario | Status | T |
+|---|---|---|---|
+| A1 | Each person has a weekly pattern ("Mon–Sat 5–9pm") and days that differ (off, or extra hours) | ✅ | admin/availability |
+| A2 | Staff set their own hours; only an owner sets someone else's | ✅ | admin/availability |
+| A3 | A shift must make sense: real times, end after start, a weekday or a date | ✅ | admin/availability |
+| A4 | Until anyone's hours are entered, every evening counts as covered — nothing breaks on day one | ✅ | admin/availability |
+| A5 | Once hours exist, a day nobody is on has no slots, and the website is told | ✅ | admin/availability |
+| A6 | Two drivers double the room in an hour; booked jobs use it up; a full slot is refused unless forced | ✅ | admin/availability |
+| A7 | A day off beats everyone's hours; the run sheet says who is on | ✅ | admin/availability |
+| A8 | Customer picks a drop-off and a pickup hour from the slots with room; a full one is not offered and cannot be posted | ✅ | forms/confirm |
+| A9 | A day nobody is on tells the customer so, with a way out | ✅ | forms/confirm |
+| A10 | The month calendar shows who is on, what is booked, bins free, days closed | ✅ (UI) | — |
+
 ## Who can do what
 
 | # | Scenario | Status | T |

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { rentalWithLink, open, post, card, rental, mail, billing, billingFails, audit, weekday } from './helpers.js';
+import { rentalWithLink, open, post, card, rental, mail, billing, billingFails, audit, weekday, addDays } from './helpers.js';
 
 const address = (over = {}) => ({
   step: 'address', delivery_street: '612 N Sycamore Ave', delivery_unit: 'Apt 4', delivery_city: 'Sunset', delivery_zip: '84015',
@@ -214,5 +214,66 @@ describe('the window', () => {
     const back = await new Mailer({}, env).sendReminder({ to: 'dana@example.com', name: 'Dana', job: 'collect', date: r.due_date, bins: 20, window: null, address: '1 Main St', dueDate: r.due_date });
     expect(back.ok).toBe(true);
     expect((await mail()).at(-1).text).toMatch(/stacked.*front door/i);
+  });
+});
+
+describe('choosing a time', () => {
+  const addr = (over = {}) => ({ step: 'address', delivery_street: '1 Main St', delivery_city: 'Clinton', delivery_zip: '84015', same: 'on', ...over });
+  const dow = iso => new Date(`${iso}T12:00:00Z`).getUTCDay();
+  async function driverOn(days = [1, 2, 3, 4, 5, 6], start = '17:00', end = '20:00') {
+    await env.DB.prepare("INSERT INTO employees (email, name, role, created_by) VALUES ('d@beehivebin.co', 'Driver', 'staff', 'test')").run();
+    const { id } = await env.DB.prepare("SELECT id FROM employees WHERE email = 'd@beehivebin.co'").first();
+    for (const wd of days) await env.DB.prepare("INSERT INTO shifts (employee_id, weekday, start_time, end_time, created_by) VALUES (?1, ?2, ?3, ?4, 'test')").bind(id, wd, start, end).run();
+  }
+
+  it('with nobody\'s hours entered yet, the address step asks for no time and the usual window stands', async () => {
+    const r = await rentalWithLink({ delivery_window: '6–8pm' });
+    await post(r.token, { step: 'review' });
+    const page = await open(r.token);
+    expect(page.html).not.toMatch(/delivery_slot/);
+    await post(r.token, addr());
+    expect((await rental(r.id)).delivery_window).toBe('6–8pm');
+  });
+
+  it('once hours exist, the customer picks from the slots with room, for both visits', async () => {
+    await driverOn();
+    const r = await rentalWithLink();
+    await post(r.token, { step: 'review' });
+    const page = await open(r.token);
+    expect(page.html).toMatch(/When should we drop off/);
+    expect(page.html).toMatch(/name="delivery_slot" value="17:00"/);
+    expect(page.html).toMatch(/5–6pm/);
+    expect(page.html).toMatch(/name="pickup_slot" value="19:00"/);
+    // Must choose.
+    const none = await post(r.token, addr());
+    expect(none.html).toMatch(/pick a time/i);
+    await post(r.token, addr({ delivery_slot: '18:00', pickup_slot: '17:00' }));
+    const row = await rental(r.id);
+    expect([row.delivery_slot, row.delivery_window, row.pickup_slot, row.pickup_window]).toEqual(['18:00', '6–7pm', '17:00', '5–6pm']);
+  });
+
+  it('a full slot is not offered, and cannot be posted', async () => {
+    await driverOn();
+    const r = await rentalWithLink();
+    // Two others already in the 6–7 hour on the same date (default jobs per slot is 2).
+    for (let i = 0; i < 2; i++) await rentalWithLink({ start_date: r.start_date, delivery_slot: '18:00', email: `x${i}@example.com` });
+    await post(r.token, { step: 'review' });
+    const page = await open(r.token);
+    expect(page.html).not.toMatch(/name="delivery_slot" value="18:00"/);
+    expect(page.html).toMatch(/name="delivery_slot" value="17:00"/);
+    const sneaky = await post(r.token, addr({ delivery_slot: '18:00', pickup_slot: '17:00' }));
+    expect(sneaky.html).toMatch(/full|no longer/i);
+    expect((await rental(r.id)).delivery_slot).toBeNull();
+  });
+
+  it('a day nobody is on says so, and points at email rather than a dead end', async () => {
+    await driverOn([1]);   // Mondays only
+    let notMon = weekday(3);
+    while (dow(notMon) === 1 || dow(notMon) === 0) notMon = addDays(notMon, 1);
+    const r = await rentalWithLink({ start_date: notMon });
+    await post(r.token, { step: 'review' });
+    const page = await open(r.token);
+    expect(page.html).toMatch(/nobody.*scheduled|no one.*available|not scheduled/i);
+    expect(page.html).toMatch(/support@beehivebin.co/);
   });
 });

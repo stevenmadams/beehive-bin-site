@@ -9,6 +9,7 @@
 import { AGREEMENT_HTML, AGREEMENT_TEXT, AGREEMENT_VERSION, renderAgreement } from './agreement.js';
 import { sendEmail, INBOX } from './mail.js';
 import { SERVICE_CITIES, canonicalCity } from './service-area.js';
+import { coverage, claimSlot } from '../../shared/coverage.js';
 import { rateFor } from './tax.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
@@ -108,6 +109,13 @@ h1,h2,h3{font-family:var(--font-display);font-weight:400;letter-spacing:-.02em;l
 .logo .tag{display:block;font-family:var(--font-body);font-weight:600;font-size:10px;
   letter-spacing:.08em;color:var(--yellow);text-transform:uppercase;margin-top:3px}
 h1{font-size:clamp(28px,5vw,38px);margin-bottom:8px}
+.slots{margin-top:16px}
+.slotgrid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.slot{position:relative}
+.slot input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.slot span{display:block;padding:9px 14px;border:1px solid var(--line);border-radius:10px;background:var(--white);font-weight:600;font-size:15px}
+.slot input:checked+span{background:var(--yellow);border-color:var(--yellow-deep)}
+.slot input:focus-visible+span{outline:2px solid var(--ink);outline-offset:2px}
 .sub{color:var(--muted);margin:0 0 26px}
 .card{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:20px}
 .card h2{font-size:19px;margin-bottom:14px}
@@ -378,7 +386,31 @@ const reviewStep = r => page('Your rental', `
    different visits: dropped at a house, collected from a storage unit across
    town is entirely normal, and one set of instructions made the second visit
    guess. */
-const addressStep = r => page('Where are we going?', `
+/* "When should we come?" — only asked once the business has entered who
+   drives when. Until then the usual window stands and the question would be
+   a promise nobody can keep. A day with no one on says so plainly, with the
+   way out (email), rather than a list with nothing in it. */
+const slotPicker = (kind, day, chosen) => {
+  if (!day.configured) return '';
+  const name = `${kind}_slot`;
+  const verb = kind === 'delivery' ? 'drop off' : 'pick up';
+  if (!day.open || !day.slots.some(sl => sl.free > 0)) {
+    return `<div class="slots">
+      <label class="fl">When should we ${verb}?</label>
+      <p class="help" style="display:block">Nobody is scheduled to drive on ${esc(niceDate(day.date))}${
+        day.blackout ? ` (${esc(day.blackout)})` : ''}. Email
+      <a href="mailto:support@beehivebin.co">support@beehivebin.co</a> and we&rsquo;ll find a time
+      &mdash; or carry on and we&rsquo;ll be in touch.</p></div>`;
+  }
+  return `<div class="slots">
+    <label class="fl">When should we ${verb}? <span class="help">${esc(niceDate(day.date))}</span></label>
+    <div class="slotgrid">${day.slots.filter(sl => sl.free > 0).map(sl => `
+      <label class="slot"><input type="radio" name="${name}" value="${sl.start}"${chosen === sl.start ? ' checked' : ''} required>
+        <span>${esc(sl.label)}</span></label>`).join('')}</div>
+  </div>`;
+};
+
+const addressStep = (r, days = {}) => page('Where are we going?', `
   <h1>Where are we going?</h1>
   <p class="sub">Where we drop the bins off, and where we collect them from.</p>
   ${progress('address')}
@@ -387,6 +419,7 @@ const addressStep = r => page('Where are we going?', `
     <div class="card">
       <h2>Delivery</h2>
       ${addressFields('delivery', r)}
+      ${days.delivery ? slotPicker('delivery', days.delivery, r.delivery_slot) : ''}
       <label class="fl" for="dnotes">Anything we should know?</label>
       <textarea id="dnotes" name="delivery_notes"
         placeholder="Stairs, gate code, parking, where to leave them&hellip;">${esc(r.delivery_notes || '')}</textarea>
@@ -410,6 +443,7 @@ const addressStep = r => page('Where are we going?', `
           placeholder="Different gate code, storage unit number, a different contact&hellip;">${esc(r.pickup_notes || '')}</textarea>
       </div>
       <span class="help">Moving out of one place and into another? Tell us both.</span>
+      ${days.pickup ? slotPicker('pickup', days.pickup, r.pickup_slot) : ''}
     </div>
 
     <button class="btn" type="submit">Continue to the agreement</button>
@@ -587,7 +621,7 @@ const COLUMNS = `id, confirm_token, status, details_confirmed_at, signed_on_beha
   start_date, due_date, total_cents, delivery_city, pickup_city,
   delivery_address, pickup_address, delivery_notes, pickup_notes,
   agreement_signed_at, agreement_name, paid_at, square_invoice_url, square_status,
-  delivery_window, pickup_window`;
+  delivery_window, pickup_window, delivery_slot, pickup_slot`;
 
 const load = (env, token) => env.DB.prepare(
   `SELECT ${COLUMNS} FROM rentals WHERE confirm_token = ?1`).bind(token).first();
@@ -659,11 +693,16 @@ export async function handleConfirm(request, env, url) {
 
   // Going back to fix something is allowed; skipping ahead is not.
   const back = url.searchParams.get('step');
-  if (back === 'address' && at !== 'done') return addressStep(r);
+  const slotDays = async () => {
+    const [d] = await coverage(env, r.start_date, 1);
+    const [p] = await coverage(env, r.due_date, 1);
+    return { delivery: d, pickup: p };
+  };
+  if (back === 'address' && at !== 'done') return addressStep(r, await slotDays());
   if (back === 'review' && at !== 'done') return reviewStep(r);
 
   return at === 'review' ? reviewStep(r)
-    : at === 'address' ? addressStep(r)
+    : at === 'address' ? addressStep(r, await slotDays())
     : at === 'agreement' ? agreementStep(r)
     : at === 'card' ? cardStep(r, env)
     : payStep(r);
@@ -716,11 +755,31 @@ async function saveAddress(env, r, form) {
     if (pProblem) return pProblem;
   }
 
+  /* The time. Required only when there are times to choose from — and
+     checked again here, because the slot that had room when the page was
+     drawn may have been taken since. */
+  const slots = {};
+  for (const [kind, date] of [['delivery', r.start_date], ['pickup', r.due_date]]) {
+    const [day] = await coverage(env, date, 1);
+    if (!day.configured || !day.open || !day.slots.some(sl => sl.free > 0)) continue;
+    const picked = String(form.get(`${kind}_slot`) || '').trim();
+    if (!picked) return `Please pick a time for the ${kind === 'delivery' ? 'delivery' : 'pickup'}.`;
+    try {
+      slots[kind] = { slot: picked, window: await claimSlot(env, { date, slot: picked, current: r[`${kind}_slot`] }) };
+    } catch (err) {
+      return /full/.test(err.message)
+        ? `That ${kind} time is no longer free — someone took it while you were typing. Please pick another.`
+        : err.message;
+    }
+  }
+
   await env.DB.prepare(
     `UPDATE rentals SET
        delivery_street=?1, delivery_unit=?2, delivery_city=?3, delivery_zip=?4, delivery_address=?5,
        pickup_street=?6,  pickup_unit=?7,  pickup_city=?8,  pickup_zip=?9,  pickup_address=?10,
-       delivery_notes=?11, pickup_notes=?12
+       delivery_notes=?11, pickup_notes=?12,
+       delivery_slot=coalesce(?14, delivery_slot), delivery_window=coalesce(?15, delivery_window),
+       pickup_slot=coalesce(?16, pickup_slot),     pickup_window=coalesce(?17, pickup_window)
      WHERE id=?13`,
   ).bind(
     d.street, d.unit, d.city, d.zip, composeAddress(d),
@@ -728,6 +787,8 @@ async function saveAddress(env, r, form) {
     String(form.get('delivery_notes') || '').trim().slice(0, 2000) || null,
     same ? null : String(form.get('pickup_notes') || '').trim().slice(0, 2000) || null,
     r.id,
+    slots.delivery?.slot ?? null, slots.delivery?.window ?? null,
+    slots.pickup?.slot ?? null, slots.pickup?.window ?? null,
   ).run();
 
   const daddr = composeAddress(d);

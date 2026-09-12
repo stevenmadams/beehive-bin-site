@@ -22,13 +22,14 @@ export const reserveForm = (over = {}) => ({
 export async function rentalWithLink(over = {}) {
   const token = crypto.randomUUID();
   const r = { first_name: 'Dana', last_name: 'Whitfield', email: 'dana@example.com', phone: '801-555-0100',
-    bins: 20, weeks: 1, start_date: weekday(4), total_cents: 7900, delivery_city: 'Clinton', status: 'pending', ...over };
+    bins: 20, weeks: 1, start_date: weekday(4), total_cents: 7900, delivery_city: 'Clinton', status: 'pending',
+    delivery_window: null, delivery_slot: null, ...over };
   const res = await env.DB.prepare(
     `INSERT INTO rentals (created_by, first_name, last_name, email, phone, bins, weeks, start_date, due_date,
-       total_cents, delivery_city, pickup_city, status, confirm_token, confirm_sent_at)
-     VALUES ('test', ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?10,?11,?12, strftime('%Y-%m-%dT%H:%M:%SZ','now'))`,
+       total_cents, delivery_city, pickup_city, status, confirm_token, confirm_sent_at, delivery_window, delivery_slot)
+     VALUES ('test', ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?10,?11,?12, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?13, ?14)`,
   ).bind(r.first_name, r.last_name, r.email, r.phone, r.bins, r.weeks, r.start_date, addDays(r.start_date, 7 * r.weeks),
-         r.total_cents, r.delivery_city, r.status, token).run();
+         r.total_cents, r.delivery_city, r.status, token, r.delivery_window, r.delivery_slot).run();
   return { id: res.meta.last_row_id, token, ...r };
 }
 
