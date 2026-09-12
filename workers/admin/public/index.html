@@ -2201,8 +2201,8 @@ const invState = { condition: 'all', kind: 'all' };
 const CONDITIONS = [['all', 'All'], ['good', 'In service'], ['damaged', 'Damaged'],
   ['retired', 'Retired'], ['lost', 'Lost']];
 // Suggested kinds. Anything typed becomes a kind; these just save the typing.
-const KIND_SUGGEST = ['bin', 'dolly', 'hand_truck', 'blanket', 'strap'];
-const KIND_PREFIX = { bin: 'B', dolly: 'D', hand_truck: 'HT', blanket: 'MB', strap: 'S' };
+const KIND_SUGGEST = ['bin', 'dolly', 'hand_truck', 'moving_blanket', 'strap'];
+const KIND_PREFIX = { bin: 'B', dolly: 'D', hand_truck: 'HT', moving_blanket: 'MB', strap: 'S' };
 const kindLabel = k => k === 'bin' ? 'Bin' : k.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
 const kindPlural = (k, n) => {
   const l = kindLabel(k);
@@ -2231,7 +2231,8 @@ async function viewInventory() {
     invState.condition = b.dataset.c;
     viewInventory();
   }));
-  view.querySelector('#i-add')?.addEventListener('click', openAddItems);
+  let knownKinds = [];
+  view.querySelector('#i-add')?.addEventListener('click', () => openAddItems(knownKinds));
 
   const list = view.querySelector('#ilist');
   try {
@@ -2244,6 +2245,7 @@ async function viewInventory() {
     // One tab per kind that exists, bins first. A kind with nothing in it has
     // no tab: the list is what you own, not what you might own.
     const kindNames = Object.keys(kinds).sort((a, b) => (a === 'bin' ? -1 : b === 'bin' ? 1 : a.localeCompare(b)));
+    knownKinds = kindNames;
     if (kindNames.length > 1) {
       const seg = $(`<div class="seg">
         <button data-k="all" aria-pressed="${invState.kind === 'all'}">Everything</button>
@@ -2405,8 +2407,11 @@ function openItem(item) {
   });
 }
 
-function openAddItems() {
+function openAddItems(existingKinds = []) {
   closeAnyDrawer();
+  // The suggested kinds, plus anything already on the list that is not one of
+  // them — a kind typed once should be a pick from then on.
+  const kinds = [...new Set([...KIND_SUGGEST, ...existingKinds])];
   const scrim = $('<div class="scrim"></div>');
   const drawer = $('<div class="drawer" role="dialog" aria-modal="true"></div>');
   const close = () => { scrim.remove(); drawer.remove(); document.removeEventListener('keydown', onKey); };
@@ -2423,10 +2428,14 @@ function openAddItems() {
     <div class="dbody">
       <div class="frow">
         <div><label class="fl" for="a-kind">What</label>
-          <input id="a-kind" list="a-kinds" value="bin" placeholder="bin, dolly, hand truck…">
-          <datalist id="a-kinds">${KIND_SUGGEST.map(k => `<option value="${k}">${esc(kindLabel(k))}</option>`).join('')}</datalist></div>
+          <select id="a-kind">${kinds.map(k => `<option value="${esc(k)}">${esc(kindLabel(k))}</option>`).join('')}
+            <option value="">Something else…</option></select></div>
         <div><label class="fl" for="a-count">How many</label>
           <input id="a-count" type="number" min="1" max="500" value="20"></div>
+      </div>
+      <div class="frow one" id="a-otherwrap" hidden>
+        <div><label class="fl" for="a-other">What are they?</label>
+          <input id="a-other" placeholder="e.g. furniture pads"></div>
       </div>
       <div class="frow">
         <div><label class="fl" for="a-prefix">Label prefix</label>
@@ -2449,7 +2458,13 @@ function openAddItems() {
 
   document.body.append(scrim, drawer);
   const q = id => drawer.querySelector('#' + id);
-  const norm = () => q('a-kind').value.trim().toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z_]/g, '');
+  const rawKind = () => q('a-kind').value || q('a-other').value;
+  const norm = () => rawKind().trim().toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z_]/g, '');
+  q('a-kind').addEventListener('change', () => {
+    const other = q('a-kind').value === '';
+    q('a-otherwrap').hidden = !other;
+    if (other) q('a-other').focus();
+  });
   let prefixTouched = false;
   const preview = () => {
     const n = Math.max(1, Math.min(500, +q('a-count').value || 1));
@@ -2461,7 +2476,7 @@ function openAddItems() {
     q('a-note').textContent = '· numbering continues past any that already exist';
   };
   q('a-prefix').addEventListener('input', () => { prefixTouched = true; preview(); });
-  ['a-count', 'a-kind'].forEach(id => q(id).addEventListener('input', preview));
+  ['a-count', 'a-kind', 'a-other'].forEach(id => q(id).addEventListener('input', preview));
   preview();
 
   drawer.querySelector('.x').addEventListener('click', close);

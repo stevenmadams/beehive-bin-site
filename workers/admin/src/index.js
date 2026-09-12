@@ -346,7 +346,7 @@ const itemKind = v => {
   const k = String(v ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z_]/g, '');
   return k.slice(0, 24) || null;
 };
-const DEFAULT_PREFIX = { bin: 'B', dolly: 'D', hand_truck: 'HT', blanket: 'MB', strap: 'S' };
+const DEFAULT_PREFIX = { bin: 'B', dolly: 'D', hand_truck: 'HT', moving_blanket: 'MB', strap: 'S' };
 
 const RENTAL_STATUSES = ['pending', 'confirmed', 'out', 'returned', 'cancelled'];
 const now = () => new Date().toISOString().replace(/\.\d+/, '');
