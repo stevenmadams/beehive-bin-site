@@ -1,19 +1,18 @@
-"""Generate the round "Property of Beehive Bin Co." bin sticker.
+"""Generate the round Beehive Bin Co. bin sticker.
 
-Ring text is emitted as outlined glyph paths (Archivo Black, the site display
-face) so the SVG needs no fonts installed at the print shop. Re-run after any
-copy change:
+Text is emitted as outlined glyph paths (Archivo Black, the site display face)
+so the SVG needs no fonts installed at the print shop. Re-run after any copy
+change:
 
     python3 assets/stickers/make-sticker.py
     rsvg-convert -w 1200 -h 1200 assets/stickers/bin-sticker-round.svg \
         -o assets/stickers/bin-sticker-round-1200.png
 """
-import math, os, re, urllib.request
+import math, os, urllib.request
 from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(os.path.dirname(HERE))
 FONT = os.path.join(HERE, "ArchivoBlack.ttf")          # OFL, fetched on demand
 FONT_URL = "https://fonts.gstatic.com/s/archivoblack/v23/HTxqL289NzCGg4MzN6KJ7eW6OYs.ttf"
 OUT = os.path.join(HERE, "bin-sticker-round.svg")
@@ -27,16 +26,26 @@ WHITE  = "#FFFFFF"
 
 CX = CY = 600.0
 # Canvas is 1200 px = 4.0945 in (4 in sticker + bleed). Printer cuts at 4 in,
-# safety line sits near r=525 -- keep every glyph inside r=495.
+# safety line sits near r=525 -- keep every glyph inside r=500.
 PX_PER_IN = 1200 / 4.0945
 R_OUTER = 600.0                         # yellow: bleed + visible rim after the cut
 R_CUT   = 4.0 / 2 * PX_PER_IN           # ~586: where the printer cuts
 R_INK   = R_CUT - 0.10 * PX_PER_IN      # ~557: 0.1 in yellow border stays visible
-R_WHITE = R_INK - 0.14 * PX_PER_IN      # ~516: ink frame band
-FINE_OUTER_R = 492.0  # baseline of the outer fine-print arc (caps grow inward)
-FINE_INNER_R = 458.0
-FINE_SIZE = 24.0
-CAP = 0.73          # cap-height as fraction of em (Archivo Black)
+CAP = 0.73                              # cap-height as fraction of em (Archivo Black)
+
+# Wordmark arc over the icon (caps grow outward from the baseline)
+NAME = "BEEHIVE BIN CO."
+NAME_SIZE = 98.0
+NAME_R = 498.0 - CAP * NAME_SIZE        # outermost glyph edge lands at r=498
+
+# Fine print along the bottom (caps grow inward from the baseline)
+FINE = "PROPERTY OF BEEHIVE BIN CO.  •  IF FOUND PLEASE CONTACT SUPPORT@BEEHIVEBIN.CO"
+FINE_SIZE = 23.0
+FINE_R = 498.0
+
+# Icon: hex is 26 wide x 29 tall in a 32-unit box
+ICON_SCALE = 21.0
+ICON_CY = CY + 34.0
 
 font = TTFont(FONT)
 upem = font["head"].unitsPerEm
@@ -58,14 +67,13 @@ def path_for(gname):
     gset[gname].draw(pen)
     return pen.getCommands()
 
-def arc_text(text, center_deg, span_deg, baseline_r, direction, track_em=0.06, color=YELLOW, size=None):
+def arc_text(text, center_deg, baseline_r, direction, size, track_em, color):
     """Lay `text` along a circular arc as outlined glyph paths.
     direction=+1 -> angle increases with reading order (top arc, glyphs face outward)
-    direction=-1 -> angle decreases with reading order (bottom arc, glyphs face inward)"""
+    direction=-1 -> angle decreases with reading order (bottom arc, glyphs face inward)
+    Returns (svg, span_deg)."""
     gl = glyphs(text)
     em_width = sum(a for _, a in gl) + track_em * (len(gl) - 1)
-    if size is None:
-        size = math.radians(span_deg) * baseline_r / em_width
     k = size / upem
     track = track_em * size
 
@@ -86,50 +94,34 @@ def arc_text(text, center_deg, span_deg, baseline_r, direction, track_em=0.06, c
                 f'<path d="{d}"/></g>'
             )
         s += adv + track
-    return f'<g fill="{color}">' + "".join(parts) + "</g>", size
+    span = math.degrees(em_width * size / baseline_r)
+    return f'<g fill="{color}">' + "".join(parts) + "</g>", span
 
-def hexagon(cx, cy, r, fill):
-    pts = []
-    for i in range(6):
-        ang = math.radians(-90 + i * 60)     # pointy top, matches the brand mark
-        pts.append(f"{cx + r*math.cos(ang):.2f},{cy + r*math.sin(ang):.2f}")
-    return f'<polygon points="{" ".join(pts)}" fill="{fill}"/>'
+# ---- icon: the brand hex, same geometry as assets/logo/beehive-icon.svg -------
+# Drawn as one even-odd path so the bin shows the ink field through it.
+ICON_D = ("M16 1.5 29 9v14L16 30.5 3 23V9z "
+          "M9 10.6H23V13.2H21.47L20.3 21.5H11.7L10.53 13.2H9Z")
+icon = (f'<path transform="translate({CX - 16*ICON_SCALE:.2f},{ICON_CY - 16*ICON_SCALE:.2f}) '
+        f'scale({ICON_SCALE})" d="{ICON_D}" fill="{YELLOW}" fill-rule="evenodd"/>')
 
-# ---- centre logo: reuse the real stacked lockup, scaled up as the focal point
-raw = open(os.path.join(REPO, "assets", "logo", "beehive-stacked.svg")).read()
-inner = re.sub(r"^.*?<title>.*?</title>", "", raw, flags=re.S).replace("</svg>", "")
-LOGO_W, LOGO_H = 514.0, 355.0
-target_w = 750.0
-sc = target_w / LOGO_W
-logo_cy = CY + 6.0    # optically centred above the fine-print footer
-logo = (f'<g transform="translate({CX - target_w/2:.2f},{logo_cy - LOGO_H*sc/2:.2f}) '
-        f'scale({sc:.6f})">{inner}</g>')
+name_svg, name_span = arc_text(NAME, -90, NAME_R, +1, NAME_SIZE, 0.03, YELLOW)
+fine_svg, fine_span = arc_text(FINE, 90, FINE_R, -1, FINE_SIZE, 0.06, WHITE)
 
-# ---- fine print: two short arcs under the logo, ink on white -----------------
-LINE1 = "PROPERTY OF BEEHIVE BIN CO."
-LINE2 = "IF FOUND PLEASE CONTACT SUPPORT@BEEHIVEBIN.CO"
-# LINE1 sits on the inner (upper) arc, LINE2 on the outer (lower) arc
-line1_svg, _ = arc_text(LINE1, 90, 0, FINE_INNER_R, -1, track_em=0.08, color=INK, size=FINE_SIZE)
-line2_svg, _ = arc_text(LINE2, 90, 0, FINE_OUTER_R, -1, track_em=0.06, color=INK, size=FINE_SIZE)
-
-def span_deg(text, r, track_em):
-    gl = glyphs(text)
-    w = (sum(a for _, a in gl) + track_em * (len(gl) - 1)) * FINE_SIZE
-    return math.degrees(w / r)
-print(f"fine print: line1 {span_deg(LINE1, FINE_INNER_R, 0.08):.0f}deg, "
-      f"line2 {span_deg(LINE2, FINE_OUTER_R, 0.06):.0f}deg, "
-      f"outermost glyph r={FINE_OUTER_R:.0f}, logo corner r="
-      f"{math.hypot(target_w/2, LOGO_H*sc/2 + (logo_cy - CY)):.0f}")
+hex_top = ICON_CY - 14.5 * ICON_SCALE
+hex_bot = ICON_CY + 14.5 * ICON_SCALE
+print(f"name arc {name_span:.0f}deg, baseline r={NAME_R:.0f}, caps to r=498")
+print(f"fine arc {fine_span:.0f}deg, caps in to r={FINE_R - CAP*FINE_SIZE:.0f}")
+print(f"hex {26*ICON_SCALE:.0f}w x {29*ICON_SCALE:.0f}h, top y={hex_top:.0f} "
+      f"(name baseline y={CY - NAME_R:.0f}), bottom r={hex_bot - CY:.0f}")
 
 svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width="1200" height="1200" role="img" aria-label="Beehive Bin Co. Property of Beehive Bin Co. If found please contact support@beehivebin.co">
 <title>Beehive Bin Co. bin sticker</title>
 <desc>Round die-cut sticker. Canvas 4.0945 in incl. bleed, cut at 4 in, 0.1 in yellow border. Text is outlined (no fonts required).</desc>
 <circle cx="600" cy="600" r="{R_OUTER}" fill="{YELLOW}"/>
-<circle cx="600" cy="600" r="{R_INK}" fill="{INK}"/>
-<circle cx="600" cy="600" r="{R_WHITE}" fill="{WHITE}"/>
-{logo}
-{line1_svg}
-{line2_svg}
+<circle cx="600" cy="600" r="{R_INK:.2f}" fill="{INK}"/>
+{icon}
+{name_svg}
+{fine_svg}
 </svg>
 """
 open(OUT, "w").write(svg)

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { submit, reserveForm, requests, mail, today, weekday, addDays } from './helpers.js';
+import { env } from 'cloudflare:test';
 
 describe('the reserve form', () => {
   it('C1 a reservation is stored and the inbox is told, with a link to the panel', async () => {
@@ -98,9 +99,31 @@ describe('after 6pm Mountain', () => {
     vi.setSystemTime(new Date('2026-09-13T01:30:00Z'));   // 7:30pm MDT, Saturday 12 Sep
     try {
       expect((await submit(reserveForm({ start: '2026-09-14' }))).ok).toBe(true);        // Monday
-      expect((await submit(reserveForm({ start: '2026-09-12' }))).ok).toBe(true);        // tonight, still today
+      expect((await submit(reserveForm({ start: '2026-09-12' }))).error).toMatch(/notice/); // tonight: a day's notice
       expect((await submit(reserveForm({ start: '2026-09-11' }))).error).toMatch(/passed/);
       expect((await submit(reserveForm({ start: '2026-09-13' }))).error).toMatch(/Sunday/);
     } finally { vi.useRealTimers(); }
+  });
+});
+
+describe('notice and days off', () => {
+  it('the website needs the lead time the owner set — a day by default', async () => {
+    const { vi } = await import('vitest');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-14T15:00:00Z'));   // 9am Monday 14th
+    try {
+      expect((await submit(reserveForm({ start: '2026-09-14' }))).error).toMatch(/earliest.*Tuesday|notice/i);
+      expect((await submit(reserveForm({ start: '2026-09-15' }))).ok).toBe(true);
+      await env.DB.prepare("INSERT INTO settings (key, value) VALUES ('lead_days', '3')").run();
+      expect((await submit(reserveForm({ start: '2026-09-16' }))).error).toMatch(/earliest/i);
+      expect((await submit(reserveForm({ start: '2026-09-17' }))).ok).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('a blacked-out day cannot be booked, and says why', async () => {
+    const day = weekday(5);
+    await env.DB.prepare("INSERT INTO blackouts (date, reason, created_by) VALUES (?1, 'Pioneer Day', 'test')").bind(day).run();
+    expect((await submit(reserveForm({ start: day }))).error).toMatch(/Pioneer Day/);
+    expect((await submit(reserveForm({ start: addDays(day, 1) }))).ok).toBe(true);
   });
 });

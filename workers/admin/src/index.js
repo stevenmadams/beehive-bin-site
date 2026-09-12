@@ -9,7 +9,7 @@ import { WorkerEntrypoint } from 'cloudflare:workers';
 import { createInvoice, fetchInvoice, ping as squarePing, storeCard, ensureCustomer, SquareError } from './square.js';
 import { PRICES, EXTRA, quoteCents } from './pricing.js';
 import { rateFor, serviceCity, SERVICE_CITIES } from './tax.js';
-import { availability, canFit, getSettings, stoplights } from './inventory.js';
+import { availability, canFit, getSettings, stoplights, blackoutOn } from './inventory.js';
 import { today, addDays, addWeeks, isoDate, isSunday, dayDiff, startOfDay } from '../../shared/clock.js';
 import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
@@ -203,6 +203,8 @@ async function createRequest(env, user, body) {
     if (!Number.isFinite(weeks) || weeks < 1 || weeks > 26) throw new HttpError(400, 'Weeks must be between 1 and 26.');
     if (!start) throw new HttpError(400, 'A start date is required.');
     if (isSunday(start)) throw new HttpError(400, 'We do not deliver on Sundays.');
+    const closed = await blackoutOn(env, start);
+    if (closed) throw new HttpError(400, `We are not delivering on ${start} — ${closed}.`);
     if (!dcity) throw new HttpError(400, 'A delivery city is required.');
     // The city decides the tax rate and whether we go there at all. A typo
     // here becomes an invoice that cannot be raised three weeks from now.
@@ -354,7 +356,8 @@ const RENTAL_COLUMNS = () => `id, request_id, created_at, created_by, status,
   bins, bins_returned, weeks, start_date, due_date, total_cents,
   delivery_city, delivery_address, delivery_notes, delivery_street, delivery_unit, delivery_zip,
   pickup_city, pickup_address, pickup_notes, pickup_street, pickup_unit, pickup_zip,
-  agreement_signed_at, paid_at, delivered_at, returned_at, notes`;
+  agreement_signed_at, paid_at, delivered_at, returned_at, notes,
+  delivery_window, pickup_window, reminded_delivery_at, reminded_pickup_at`;
 
 /* A kind is a word: lowercase, letters and underscores. "Hand truck" and
    "hand_truck" and "HAND-TRUCK" are the same thing and must land in the same
@@ -407,15 +410,18 @@ async function createRentalFromRequest(env, user, req, forceOverbook = false) {
       : `Only ${fit.availableThen} bins are free on ${fit.tightestDay} — this needs ${req.bins}, short by ${fit.shortBy}. Move the date, cut the package, or approve anyway.`);
   }
 
+  // The usual window, stamped now so it is a fact about this rental rather
+  // than whatever the setting says later.
+  const { defaultWindow } = await getSettings(env);
   const res = await env.DB.prepare(
     `INSERT INTO rentals (request_id, created_by, first_name, last_name, email, phone,
        contact_pref, bins, weeks, start_date, due_date, total_cents,
-       delivery_city, pickup_city)
-     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)`,
+       delivery_city, pickup_city, delivery_window, pickup_window)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?15)`,
   ).bind(
     req.id, user.email, req.first_name, req.last_name, req.email, req.phone,
     req.contact_pref, req.bins, req.weeks, req.start_date, due, req.quoted_total_cents,
-    req.delivery_city, req.pickup_city || req.delivery_city,
+    req.delivery_city, req.pickup_city || req.delivery_city, defaultWindow,
   ).run();
 
   const id = res.meta.last_row_id;
@@ -609,6 +615,15 @@ async function updateRental(env, user, id, body) {
   const ADDRESS_PARTS = ['delivery_street', 'delivery_unit', 'delivery_city', 'delivery_zip',
     'pickup_street', 'pickup_unit', 'pickup_city', 'pickup_zip'];
 
+  // "6–8pm", "after 5", "before noon" — a phrase, not a schedule.
+  for (const w of ['delivery_window', 'pickup_window']) {
+    if (w in body) {
+      const v = clean(body[w], 40);
+      if (body[w] && String(body[w]).trim().length > 40) throw new HttpError(400, 'A window is a short phrase like "6–8pm".');
+      patch[w] = v;
+    }
+  }
+
   /* After the visit the address is a record of where the bins actually went,
      not a field. Editing it then rewrites history — and it is the address the
      photo was taken at. */
@@ -676,7 +691,7 @@ async function updateRental(env, user, id, body) {
        agreement_manual_reason=?13,
        delivery_street=?14, delivery_unit=?15, delivery_zip=?16,
        pickup_street=?17, pickup_unit=?18, pickup_zip=?19,
-       delivered_by=?20, returned_by=?21
+       delivered_by=?20, returned_by=?21, delivery_window=?23, pickup_window=?24
      WHERE id=?22`,
   ).bind(
     patch.status, patch.agreement_signed_at, patch.paid_at, patch.delivered_at,
@@ -686,7 +701,7 @@ async function updateRental(env, user, id, body) {
     patch.delivery_street, patch.delivery_unit, patch.delivery_zip,
     patch.pickup_street, patch.pickup_unit, patch.pickup_zip,
     patch.delivered_by, patch.returned_by,
-    id,
+    id, patch.delivery_window, patch.pickup_window,
   ).run();
 
   // A milestone or a cancellation has already been written up above; only an
@@ -694,7 +709,7 @@ async function updateRental(env, user, id, body) {
   if (body.milestone) {
     await audit(env, user.email, `rental.${body.milestone}`, 'rental', id, `done=${body.done !== false}`);
   } else if (!('status' in body)) {
-    const changed = Object.keys(body).filter(k => ADDRESS_PARTS.includes(k) || k === 'notes');
+    const changed = Object.keys(body).filter(k => ADDRESS_PARTS.includes(k) || k === 'notes' || k.endsWith('_window'));
     if (changed.length) await audit(env, user.email, 'rental.update', 'rental', id, changed.join(', '));
   } else if (body.status !== 'cancelled') {
     await audit(env, user.email, 'rental.reinstate', 'rental', id, null);
@@ -723,6 +738,8 @@ async function rescheduleRental(env, user, id, body) {
   if (!start) throw new HttpError(400, 'A new start date is required.');
     if (start < today()) throw new HttpError(400, 'That date has already passed.');
   if (isSunday(start)) throw new HttpError(400, 'We do not deliver on Sundays.');
+  const closed = await blackoutOn(env, start);
+  if (closed) throw new HttpError(400, `We are not delivering on ${start} — ${closed}.`);
   if (start === rental.start_date) throw new HttpError(400, 'That is already the start date.');
 
   const due = addWeeks(start, rental.weeks);
@@ -850,7 +867,7 @@ async function schedule(env, from, days) {
             phone, email, contact_pref, delivery_address AS address, delivery_city AS city,
             delivery_unit AS unit, delivery_zip AS zip,
             delivery_notes AS notes, delivered_at AS done_at, delivered_by AS done_by,
-            status, agreement_signed_at, paid_at
+            delivery_window AS window, status, agreement_signed_at, paid_at
      FROM rentals
      WHERE status NOT IN ('cancelled') AND start_date IS NOT NULL
        AND date(start_date) BETWEEN date(?1) AND date(?2)`,
@@ -861,19 +878,24 @@ async function schedule(env, from, days) {
             phone, email, contact_pref, pickup_address AS address, pickup_city AS city,
             pickup_unit AS unit, pickup_zip AS zip,
             pickup_notes AS notes, returned_at AS done_at, returned_by AS done_by,
-            status, agreement_signed_at, paid_at
+            pickup_window AS window, status, agreement_signed_at, paid_at
      FROM rentals
      WHERE status NOT IN ('cancelled') AND due_date IS NOT NULL
        AND date(due_date) BETWEEN date(?1) AND date(?2)
        AND delivered_at IS NOT NULL`,
   ).bind(from, to).all();
 
+  const { results: closed } = await env.DB.prepare(
+    'SELECT date, reason FROM blackouts WHERE date BETWEEN ?1 AND ?2').bind(from, to).all();
+  const blackout = new Map(closed.map(b => [b.date, b.reason || 'closed']));
+
   const byDay = new Map();
   for (let i = 0; i < days; i++) {
     const date = addDays(from, i);
     byDay.set(date, {
       date,
-      sunday: new Date(`${date}T12:00:00Z`).getUTCDay() === 0,
+      sunday: isSunday(date),
+      blackout: blackout.get(date) || null,
       jobs: [],
       binsOut: 0,
       binsBack: 0,
@@ -890,8 +912,19 @@ async function schedule(env, from, days) {
 
   // Collections before deliveries within a day: bins coming back can go
   // straight out again, and an empty van is easier to load than a full one.
+  // Within a kind, by the window promised — "4–5pm" before "7–8pm" — read
+  // off the first number in it; a window with no number goes last.
+  const hour = w => {
+    const m = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(w || '');
+    if (!m) return 99;
+    let h = parseInt(m[1], 10);
+    if (m[3]?.toLowerCase() === 'pm' && h < 12) h += 12;
+    if (!m[3] && h < 9) h += 12;   // "6–8" on an evening run means pm
+    return h + (m[2] ? parseInt(m[2], 10) / 60 : 0);
+  };
   for (const day of byDay.values()) {
-    day.jobs.sort((a, b) => (a.job === b.job ? a.id - b.id : a.job === 'collect' ? -1 : 1));
+    day.jobs.sort((a, b) => a.job !== b.job ? (a.job === 'collect' ? -1 : 1)
+      : hour(a.window) - hour(b.window) || a.id - b.id);
   }
 
   return [...byDay.values()];
@@ -1279,6 +1312,45 @@ async function sweepPhotos(env) {
          `${deleted} photo(s) past ${RETENTION_DAYS} days`).run();
 
   return { deleted };
+}
+
+/* ---------- reminders ----------
+
+   The day before: "we're coming tomorrow between 6 and 8, have them at the
+   door". Sent once per visit, in the morning, only for rentals that are
+   actually going ahead — a reminder for an unsigned, unpaid booking would be
+   a promise nobody made. */
+async function sendReminders(env) {
+  const tomorrow = addDays(today(), 1);
+  const { results: drops } = await env.DB.prepare(
+    `SELECT ${RENTAL_COLUMNS()} FROM rentals
+     WHERE status != 'cancelled' AND agreement_signed_at IS NOT NULL AND paid_at IS NOT NULL
+       AND delivered_at IS NULL AND start_date = ?1 AND reminded_delivery_at IS NULL AND email IS NOT NULL`,
+  ).bind(tomorrow).all();
+  const { results: collects } = await env.DB.prepare(
+    `SELECT ${RENTAL_COLUMNS()} FROM rentals
+     WHERE status != 'cancelled' AND delivered_at IS NOT NULL AND returned_at IS NULL
+       AND due_date = ?1 AND reminded_pickup_at IS NULL AND email IS NOT NULL`,
+  ).bind(tomorrow).all();
+
+  let sent = 0;
+  for (const [job, rows] of [['deliver', drops], ['collect', collects]]) {
+    for (const r of rows) {
+      const res = await env.MAILER.sendReminder({
+        to: r.email, name: r.first_name, job, date: tomorrow, bins: r.bins,
+        window: job === 'deliver' ? r.delivery_window : r.pickup_window,
+        address: job === 'deliver' ? r.delivery_address : r.pickup_address,
+        dueDate: r.due_date,
+      }).catch(err => ({ ok: false, error: err.message }));
+      if (!res?.ok) { console.log('reminder failed', r.id, res?.error); continue; }
+      await env.DB.prepare(
+        `UPDATE rentals SET ${job === 'deliver' ? 'reminded_delivery_at' : 'reminded_pickup_at'} = ?1 WHERE id = ?2`,
+      ).bind(now(), r.id).run();
+      await audit(env, 'reminders', `rental.reminded_${job}`, 'rental', r.id, r.email);
+      sent++;
+    }
+  }
+  return { sent, for: tomorrow };
 }
 
 /* ---------- extensions ----------
@@ -1677,20 +1749,65 @@ async function api(request, env, url) {
     if (method === 'GET') return json(await getSettings(env));
     if (method === 'PATCH') {
       requireOwner(user);
-      const allowed = { turnaround_days: 'turnaroundDays' };
-      for (const [key, field] of Object.entries(allowed)) {
-        if (!(field in body)) continue;
-        const n = parseInt(body[field], 10);
-        if (!Number.isFinite(n) || n < 0 || n > 100000) throw new HttpError(400, `${field} must be a whole number.`);
+      const numbers = { turnaround_days: 'turnaroundDays', lead_days: 'leadDays' };
+      const texts = { default_window: 'defaultWindow' };
+      const put = async (key, value) => {
         await env.DB.prepare(
           `INSERT INTO settings (key, value, updated_by) VALUES (?1,?2,?3)
            ON CONFLICT(key) DO UPDATE SET value = ?2, updated_by = ?3,
              updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')`,
-        ).bind(key, String(n), user.email).run();
-        await audit(env, user.email, 'settings.update', 'settings', 0, `${key}=${n}`);
+        ).bind(key, value, user.email).run();
+        await audit(env, user.email, 'settings.update', 'settings', 0, `${key}=${value}`);
+      };
+      for (const [key, field] of Object.entries(numbers)) {
+        if (!(field in body)) continue;
+        const n = parseInt(body[field], 10);
+        if (!Number.isFinite(n) || n < 0 || n > 100000) throw new HttpError(400, `${field} must be a whole number.`);
+        await put(key, String(n));
+      }
+      for (const [key, field] of Object.entries(texts)) {
+        if (!(field in body)) continue;
+        const v = clean(body[field], 40);
+        if (!v) throw new HttpError(400, `${field} cannot be blank.`);
+        await put(key, v);
       }
       return json(await getSettings(env));
     }
+  }
+
+  /* Days off. Adding one reports any pending job already on that day rather
+     than quietly leaving it there. */
+  if (path === '/blackouts') {
+    if (method === 'GET') {
+      const { results } = await env.DB.prepare(
+        'SELECT date, reason, created_by FROM blackouts WHERE date >= ?1 ORDER BY date').bind(addDays(today(), -30)).all();
+      return json({ blackouts: results });
+    }
+    if (method === 'POST') {
+      requireOwner(user);
+      const date = isoDate(body.date);
+      if (!date) throw new HttpError(400, 'A date is required.');
+      const reason = clean(body.reason, 80);
+      await env.DB.prepare('INSERT OR REPLACE INTO blackouts (date, reason, created_by) VALUES (?1,?2,?3)')
+        .bind(date, reason, user.email).run();
+      await audit(env, user.email, 'blackout.add', 'blackout', 0, `${date}${reason ? ` — ${reason}` : ''}`);
+      const { results } = await env.DB.prepare(
+        `SELECT id, first_name, last_name, CASE WHEN start_date = ?1 THEN 'deliver' ELSE 'collect' END AS job
+         FROM rentals WHERE status NOT IN ('cancelled','returned') AND (start_date = ?1 OR (due_date = ?1 AND delivered_at IS NOT NULL))`,
+      ).bind(date).all();
+      return json({ ok: true, affected: results.map(r => ({ id: r.id, name: [r.first_name, r.last_name].filter(Boolean).join(' '), job: r.job })) }, 201);
+    }
+  }
+  if ((m = match(/^\/blackouts\/(\d{4}-\d{2}-\d{2})$/)) && method === 'DELETE') {
+    requireOwner(user);
+    await env.DB.prepare('DELETE FROM blackouts WHERE date = ?1').bind(m[1]).run();
+    await audit(env, user.email, 'blackout.remove', 'blackout', 0, m[1]);
+    return json({ ok: true });
+  }
+
+  if (path === '/reminders/run' && method === 'POST') {
+    requireOwner(user);
+    return json(await sendReminders(env));
   }
 
   /* The inventory. Bins, dollies, hand trucks — anything with a label on it.
@@ -1906,7 +2023,17 @@ export class Billing extends WorkerEntrypoint {
 export default {
   /* Retention runs itself. Anything that depends on someone remembering to run
      it is a promise the business will eventually break. */
+  /* Two crons. 09:00 UTC (small hours Mountain) sweeps photos; 15:00 UTC
+     (9am Mountain, give or take DST) sends tomorrow's reminders — late
+     enough to be read over breakfast, early enough to act on. */
   async scheduled(event, env, ctx) {
+    if (event.cron === '0 15 * * *') {
+      ctx.waitUntil(sendReminders(env).then(
+        r => console.log('reminders sent', r.sent, 'for', r.for),
+        err => console.log('reminders failed', err.message),
+      ));
+      return;
+    }
     ctx.waitUntil(sweepPhotos(env).then(
       r => console.log('photo retention swept', r.deleted),
       err => console.log('photo retention failed', err.message),

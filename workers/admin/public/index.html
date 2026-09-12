@@ -276,6 +276,7 @@ tr.late td{background:rgba(163,44,44,.05)}
   padding:4px 9px;border-radius:999px;white-space:nowrap;flex:none;margin-top:2px}
 .job .tag.deliver{background:var(--yellow);color:var(--ink)}
 .job .tag.collect{background:var(--ink);color:var(--yellow)}
+.job .tag b{display:block;font-weight:600;text-transform:none;letter-spacing:0;font-size:12px;margin-top:2px}
 .job .body{flex:1;min-width:0}
 .job .who{font-weight:700;font-size:15px}
 .job .addr{font-size:14px;margin-top:2px}
@@ -301,6 +302,7 @@ tr.late td{background:rgba(163,44,44,.05)}
 .cal .d.over .av{color:var(--bad)}
 .binrow td{font-variant-numeric:tabular-nums}
 .light{margin-right:7px;cursor:help;font-size:13px;vertical-align:-1px}
+#sform input{width:100%;max-width:260px}
 .seg button .n{opacity:.55;margin-left:4px;font-weight:400}
 .cond{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
   padding:3px 9px;border-radius:999px}
@@ -319,6 +321,9 @@ tr.late td{background:rgba(163,44,44,.05)}
   text-transform:uppercase;color:var(--muted);margin-bottom:3px}
 .step.photorow .addr .saverow{display:flex;gap:8px;align-items:center;margin-top:8px}
 .step.photorow .addr .saved{font-size:12px;color:var(--muted)}
+.step.photorow .addr .win{display:flex;align-items:center;gap:8px;margin-top:9px}
+.step.photorow .addr .win label{margin:0;flex:none}
+.step.photorow .addr .win input{width:120px;padding:6px 9px}
 /* Shown, not offered for editing. The customer supplies this when they confirm;
    staff correcting it is the exception, and an open box invites overwriting
    what they wrote. */
@@ -504,6 +509,9 @@ async function api(path, opts = {}) {
 }
 
 /* ---------- formatting ---------- */
+/* Mountain Time, like the Worker: the panel is open at 7pm on the drive and
+   UTC has already moved on to tomorrow. */
+const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const money = c => (c == null ? '—' : '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: c % 100 ? 2 : 0 }));
 const fullName = r => [r.first_name, r.last_name].filter(Boolean).join(' ') || '(no name)';
 
@@ -544,7 +552,7 @@ const NAV = [
   { id: 'inventory', label: 'Inventory', ico: '▤', live: true },
   { id: 'customers', label: 'Customers', ico: '☺' },
   { id: 'employees', label: 'Employees', ico: '⚑', live: true },
-  { id: 'settings',  label: 'Settings',  ico: '⚙' },
+  { id: 'settings',  label: 'Settings',  ico: '⚙', live: true },
 ];
 
 function shell(active) {
@@ -1260,7 +1268,7 @@ function openNewRequest() {
   scrim.addEventListener('click', close);
   document.addEventListener('keydown', onKey);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
 
   drawer.append($(`
     <div class="dhead">
@@ -1394,7 +1402,7 @@ const rentState = { status: 'active' };
 const RENT_FILTERS = [['active','Active'],['stalled','Stalled'],['pending','Pending'],
   ['out','Out'],['returned','Returned'],['all','All']];
 
-const isLate = r => r.status === 'out' && r.due_date && r.due_date < new Date().toISOString().slice(0, 10);
+const isLate = r => r.status === 'out' && r.due_date && r.due_date < todayISO();
 
 async function viewRentals() {
   const view = $(`<div>
@@ -1594,7 +1602,7 @@ async function openRental(id) {
              the evening before, or collect early when someone finishes — and
              the history records that you did. Both ends behave the same way;
              two cards that look identical should not follow different rules. */
-          const today = new Date().toISOString().slice(0, 10);
+          const today = todayISO();
           const notDue = !done && (
             (key === 'delivered' && !r.delivery_unlocked_at && r.start_date && r.start_date > today) ||
             (key === 'returned' && !waiting && !r.pickup_unlocked_at && r.due_date && r.due_date > today));
@@ -1646,6 +1654,12 @@ async function openRental(id) {
               ${(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)
                 ? `<div class="cust"><b>From the customer</b>${
                     esc(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)}</div>` : ''}
+              ${r[col] ? '' : `<div class="win">
+                <label for="w-${kind}">Window</label>
+                <input id="w-${kind}" data-window="${kind}_window" value="${esc(r[kind + '_window'] || '')}"
+                  placeholder="6–8pm" maxlength="40">
+                <span class="saved" data-winmsg="${kind}"></span>
+              </div>`}
             </div>
             <div class="ev">
               ${notDue
@@ -1972,6 +1986,17 @@ async function openRental(id) {
 
   /* Moving the dates. Only before the bins go out — after that it is an
      extension, and the button is not there to tempt anyone. */
+  /* The window saves itself on the way out of the field — it is one phrase,
+     and a Save button for one phrase is a button nobody presses. */
+  drawer.querySelectorAll('[data-window]').forEach(inp => inp.addEventListener('change', async () => {
+    const msg = drawer.querySelector(`[data-winmsg="${inp.dataset.window.split('_')[0]}"]`);
+    try {
+      await api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify({ [inp.dataset.window]: inp.value }) });
+      msg.textContent = 'Saved';
+      r[inp.dataset.window] = inp.value.trim() || null;
+    } catch (err) { msg.textContent = err.message; }
+  }));
+
   drawer.querySelector('#r-move')?.addEventListener('click', async () => {
     const to = prompt(`New delivery date (currently ${r.start_date}). The return date moves with it — ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'} stays ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'}.\n\nYYYY-MM-DD:`, r.start_date);
     if (to === null || !to.trim() || to.trim() === r.start_date) return;
@@ -2114,7 +2139,6 @@ function contactActions(r) {
 
 const schedState = { days: 1, from: null };
 const SCHED_RANGES = [[1, 'Tonight'], [7, 'This week'], [30, 'Next 30 days']];
-const todayISO = () => new Date().toISOString().slice(0, 10);
 
 function mapsHref(j) {
   const line = [j.address, j.city && `${j.city}, UT`, j.zip].filter(Boolean).join(', ');
@@ -2189,7 +2213,7 @@ async function viewSchedule() {
 
       const el = $(`<section class="day">
         <h3>${day.date === todayISO() ? 'Tonight' : esc(niceDate(day.date))}
-          ${day.sunday ? '<span class="sun">Sunday</span>' : ''}
+          ${day.sunday ? '<span class="sun">Sunday</span>' : ''}${day.blackout ? `<span class="sun">Closed — ${esc(day.blackout)}</span>` : ''}
           <span class="load">${load}</span></h3>
         <div class="jobs"></div>
       </section>`);
@@ -2206,7 +2230,8 @@ async function viewSchedule() {
         const addr = [esc(j.address), j.unit ? esc(j.unit) : ''].filter(Boolean).join(', ');
 
         const card = $(`<article class="job${j.done_at ? ' done' : ''}" data-id="${j.id}">
-          <span class="tag ${j.job}">${j.job === 'deliver' ? 'Drop off' : 'Pick up'}</span>
+          <span class="tag ${j.job}">${j.job === 'deliver' ? 'Drop off' : 'Pick up'}${
+            j.window ? `<b>${esc(j.window)}</b>` : ''}</span>
           <div class="body">
             <div class="who">${esc(fullName(j))} <span style="font-weight:400;color:var(--muted)">&middot; ${j.bins} bins</span></div>
             <div class="addr">${addr
@@ -2544,10 +2569,101 @@ function openAddItems(existingKinds = []) {
   });
 }
 
+/* ---------- settings ----------
+
+   The few numbers that shape every booking, and the days the van stays home.
+   Owners change them; everyone can see them, because "why did the website
+   refuse Tuesday?" is a question staff get asked. */
+
+async function viewSettings() {
+  const owner = me.role === 'owner';
+  const view = $(`<div>
+    <div class="head"><h1>Settings</h1></div>
+    <p class="sub">${owner ? 'Changes take effect immediately, on the website too.' : 'Only an owner can change these.'}</p>
+    <div class="card" style="padding:20px 22px;margin-bottom:22px" id="sform"><div class="empty">Loading…</div></div>
+    <div class="head" style="margin-top:8px"><h1 style="font-size:22px">Days off</h1></div>
+    <p class="sub">No deliveries start on these days. Pickups already booked for one are flagged on the schedule.</p>
+    <div class="card" id="sblack"><div class="empty">Loading…</div></div>
+  </div>`);
+  render('settings', view);
+
+  const form = view.querySelector('#sform');
+  const black = view.querySelector('#sblack');
+  const draw = async () => {
+    let st, bl;
+    try { [st, bl] = await Promise.all([api('/settings'), api('/blackouts')]); }
+    catch (err) { form.replaceChildren(banner(err.message)); return; }
+
+    form.replaceChildren($(`<div>
+      <div class="frow">
+        <div><label class="fl" for="s-window">Usual delivery window</label>
+          <input id="s-window" value="${esc(st.defaultWindow)}" maxlength="40" ${owner ? '' : 'disabled'}>
+          <p class="sub" style="margin:6px 0 0">Stamped on each new rental; change it per rental on the Rentals tab. Goes in the day-before email.</p></div>
+        <div><label class="fl" for="s-lead">Notice the website needs</label>
+          <input id="s-lead" type="number" min="0" max="30" value="${st.leadDays}" ${owner ? '' : 'disabled'}>
+          <p class="sub" style="margin:6px 0 0">Days. 1 means the earliest online booking is tomorrow. Phone bookings can go inside this.</p></div>
+      </div>
+      <div class="frow">
+        <div><label class="fl" for="s-turn">Turnaround after a return</label>
+          <input id="s-turn" type="number" min="0" max="14" value="${st.turnaroundDays}" ${owner ? '' : 'disabled'}>
+          <p class="sub" style="margin:6px 0 0">Days bins are held after they come back, to clean and restack. 0 means the same night.</p></div>
+        <div><label class="fl">Bookable fleet</label>
+          <div style="font-family:var(--font-display);font-size:28px;line-height:1.2">${st.fleetTotal}</div>
+          <p class="sub" style="margin:6px 0 0">Bins in service on the Inventory tab${st.outOfService ? ` · ${st.outOfService} out of service` : ''}.</p></div>
+      </div>
+      ${owner ? `<div class="actions" style="margin-top:6px"><button class="btn primary" id="s-save">Save</button><span id="s-msg" class="saved" style="font-size:13px;color:var(--muted)"></span></div>` : ''}
+    </div>`));
+
+    const rows = bl.blackouts.map(b => `<tr>
+      <td class="nowrap"><strong>${esc(niceDate(b.date))}</strong> <span style="color:var(--muted)">${esc(b.date)}</span></td>
+      <td>${esc(b.reason || '')}</td>
+      <td class="hide-sm" style="color:var(--muted)">${esc(b.created_by)}</td>
+      <td style="text-align:right">${owner ? `<button class="linkish" data-unblack="${b.date}">Remove</button>` : ''}</td>
+    </tr>`).join('');
+    black.replaceChildren($(`<div>
+      ${owner ? `<div style="display:flex;gap:8px;align-items:flex-end;padding:16px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap">
+        <div><label class="fl" for="b-date">Date</label><input id="b-date" type="date" min="${todayISO()}"></div>
+        <div style="flex:1;min-width:160px"><label class="fl" for="b-why">Why (optional)</label><input id="b-why" placeholder="Thanksgiving, away, van in the shop" maxlength="80"></div>
+        <button class="btn primary" id="b-add">Add day off</button>
+      </div>` : ''}
+      ${rows ? `<table><thead><tr><th>Day</th><th>Why</th><th class="hide-sm">Added by</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+        : '<div class="empty">No days off on the calendar.</div>'}
+      <div id="b-msg" style="padding:0 18px 14px"></div>
+    </div>`));
+
+    view.querySelector('#s-save')?.addEventListener('click', async () => {
+      const msg = view.querySelector('#s-msg');
+      try {
+        await api('/settings', { method: 'PATCH', body: JSON.stringify({
+          defaultWindow: view.querySelector('#s-window').value,
+          leadDays: view.querySelector('#s-lead').value,
+          turnaroundDays: view.querySelector('#s-turn').value,
+        })});
+        msg.textContent = 'Saved.';
+      } catch (err) { msg.textContent = err.message; }
+    });
+    view.querySelector('#b-add')?.addEventListener('click', async () => {
+      const date = view.querySelector('#b-date').value;
+      if (!date) return;
+      try {
+        const res = await api('/blackouts', { method: 'POST', body: JSON.stringify({ date, reason: view.querySelector('#b-why').value }) });
+        if (res.affected?.length) {
+          alert(`Added. Already booked that day:\n\n${res.affected.map(a => `• ${a.name} — ${a.job === 'deliver' ? 'delivery' : 'pickup'} (rental #${a.id})`).join('\n')}\n\nMove or contact them.`);
+        }
+        draw();
+      } catch (err) { view.querySelector('#b-msg').replaceChildren(banner(err.message)); }
+    });
+    view.querySelectorAll('[data-unblack]').forEach(b => b.addEventListener('click', async () => {
+      try { await api(`/blackouts/${b.dataset.unblack}`, { method: 'DELETE' }); draw(); }
+      catch (err) { view.querySelector('#b-msg').replaceChildren(banner(err.message)); }
+    }));
+  };
+  draw();
+}
+
 /* ---------- stubs ---------- */
 const SOON = {
   customers: ['One record per renter, merged across requests', 'Rental history and repeat business', 'Notes that outlive a single rental'],
-  settings:  ['Package pricing and extra-week rates', 'Service area and blackout dates', 'Reply-to address and notification preferences'],
 };
 
 function viewSoon(id) {
@@ -2645,6 +2761,7 @@ function route() {
   if (tab === 'requests' && id) return openRequest(id);
   if (tab === 'schedule') return viewSchedule();
   if (tab === 'inventory') return viewInventory();
+  if (tab === 'settings') return viewSettings();
   if (SOON[tab]) return viewSoon(tab);
   return viewRequests();
 }

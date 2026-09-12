@@ -191,3 +191,28 @@ describe('paying', () => {
     expect(page.html).toMatch(/Pay/);
   });
 });
+
+describe('the window', () => {
+  it('is shown to the customer once they are all set, and in the day-before reminder', async () => {
+    const r = await rentalWithLink();
+    await env.DB.prepare("UPDATE rentals SET delivery_window = '6–8pm', pickup_window = 'after 5' WHERE id = ?1").bind(r.id).run();
+    await post(r.token, { step: 'review' });
+    await post(r.token, { step: 'address', delivery_street: '1 Main St', delivery_city: 'Clinton', delivery_zip: '84015', same: 'on' });
+    await post(r.token, { step: 'agreement', agreement_name: 'Dana Whitfield', accept: 'on' });
+    await card(r.token, { sourceId: 'cnon:ok' });
+    const page = await open(r.token);
+    expect(page.html).toContain('6–8pm');
+    expect(page.html).toContain('after 5');
+
+    const { Mailer } = await import('../src/index.js');
+    const res = await new Mailer({}, env).sendReminder({ to: 'dana@example.com', name: 'Dana', job: 'deliver', date: r.start_date, bins: 20, window: '6–8pm', address: '1 Main St, Clinton UT 84015', dueDate: r.due_date });
+    expect(res.ok).toBe(true);
+    const m = (await mail()).at(-1);
+    expect(m.subject).toMatch(/tomorrow/i);
+    expect(m.text).toContain('between 6–8pm');
+    expect(m.text).toContain('1 Main St');
+    const back = await new Mailer({}, env).sendReminder({ to: 'dana@example.com', name: 'Dana', job: 'collect', date: r.due_date, bins: 20, window: null, address: '1 Main St', dueDate: r.due_date });
+    expect(back.ok).toBe(true);
+    expect((await mail()).at(-1).text).toMatch(/stacked.*front door/i);
+  });
+});

@@ -199,8 +199,9 @@ const allDone = r => page('You&rsquo;re all set', `
     <h1>You&rsquo;re all set, ${esc(r.first_name || 'there')}</h1>
     <p class="sub">${esc(r.bins)} bins arriving <strong>${esc(niceDate(r.start_date))}</strong>,
     back by <strong>${esc(niceDate(r.due_date))}</strong>. Paid ${esc(totalLabel(r))}.</p>
-    <p style="color:var(--muted);font-size:14.5px">We&rsquo;ll confirm your delivery window
-    closer to the day. Nothing else is needed from you.</p>
+    <p style="color:var(--muted);font-size:14.5px">${r.delivery_window
+      ? `Delivery is <strong>${esc(r.delivery_window)}</strong>; pickup <strong>${esc(r.pickup_window || r.delivery_window)}</strong>. We&rsquo;ll email you the day before each.`
+      : 'We&rsquo;ll confirm your delivery window closer to the day.'} Nothing else is needed from you.</p>
     ${r.square_invoice_url ? `<a class="btn" href="${esc(r.square_invoice_url)}">View your receipt</a>` : ''}
   </div>`);
 
@@ -585,7 +586,8 @@ const COLUMNS = `id, confirm_token, status, details_confirmed_at, signed_on_beha
   delivery_street, delivery_unit, delivery_zip, pickup_street, pickup_unit, pickup_zip, first_name, last_name, email, phone, bins, weeks,
   start_date, due_date, total_cents, delivery_city, pickup_city,
   delivery_address, pickup_address, delivery_notes, pickup_notes,
-  agreement_signed_at, agreement_name, paid_at, square_invoice_url, square_status`;
+  agreement_signed_at, agreement_name, paid_at, square_invoice_url, square_status,
+  delivery_window, pickup_window`;
 
 const load = (env, token) => env.DB.prepare(
   `SELECT ${COLUMNS} FROM rentals WHERE confirm_token = ?1`).bind(token).first();

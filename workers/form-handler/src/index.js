@@ -3,7 +3,7 @@ import { handleConfirm } from './confirm.js';
 import { sendEmail, FROM, INBOX } from './mail.js';
 import { serviceCity } from './tax.js';
 import { quoteCents } from './pricing.js';
-import { today, isoDate, isSunday } from '../../shared/clock.js';
+import { today, isoDate, isSunday, addDays } from '../../shared/clock.js';
 
 /* Beehive Bin Co. — form handler.
    Receives reserve/contact form POSTs from beehivebin.co and emails them to
@@ -79,7 +79,7 @@ const contactPref = v => {
    POST can say anything. Each refusal names the field so the form can show
    it, and each is something the panel would otherwise choke on later — an
    unservable city cannot be invoiced, a Sunday cannot be delivered. */
-function reserveProblem(data) {
+async function reserveProblem(env, data) {
   const bins = int(data.bins);
   const weeks = int(data.weeks);
   if (quoteCents(bins, 1) == null) return 'bins: pick one of our packages';
@@ -88,6 +88,19 @@ function reserveProblem(data) {
   if (!start) return 'start: pick a date';
   if (start < today()) return 'start: that date has already passed';
   if (isSunday(start)) return 'start: we do not deliver on Sundays';
+
+  // Notice. The owner sets it; the website honours it; the panel can book
+  // inside it when someone rings and the van happens to be free.
+  const lead = await env.DB.prepare("SELECT value FROM settings WHERE key = 'lead_days'").first();
+  const leadDays = Math.max(0, parseInt(lead?.value ?? '1', 10) || 0);
+  let earliest = addDays(today(), leadDays);
+  while (isSunday(earliest)) earliest = addDays(earliest, 1);
+  if (start < earliest) {
+    const day = new Date(`${earliest}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    return `start: we need a little notice — the earliest delivery is ${day}`;
+  }
+  const closed = await env.DB.prepare('SELECT reason FROM blackouts WHERE date = ?1').bind(start).first();
+  if (closed) return `start: we are not delivering that day — ${closed.reason || 'closed'}. Pick another date`;
   if (!serviceCity(data.dcity)) return `dcity: we don't serve "${trim(data.dcity, 60) || ''}" yet`;
   if (trim(data.pcity) && !serviceCity(data.pcity)) return `pcity: we don't serve "${trim(data.pcity, 60)}" yet`;
   if (!isEmail(data.email)) return 'email: that address looks wrong';
@@ -386,6 +399,51 @@ support@beehivebin.co`;
 
     return sendEmail(this.env, { to, subject: `Your bin delivery is now ${day(startDate)}`, text });
   }
+
+  /* The day before. Two sentences the reader needs, then the address, so a
+     wrong one gets caught while there is still time. */
+  async sendReminder({ to, name, job, date, bins, window, address, dueDate }) {
+    if (!to) return { ok: false, error: 'missing recipient' };
+    const day = iso => {
+      const d = new Date(`${iso}T12:00:00`);
+      return isNaN(d) ? iso : d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    };
+    const when = window ? `between ${window}` : 'in the evening';
+    const text = job === 'deliver'
+      ? `Hi ${name || 'there'},
+
+Your ${bins} bins arrive tomorrow, ${day(date)}, ${when}.
+
+We'll leave them by the front door at:
+
+  ${address || '(no address on file — please reply with one)'}
+
+You don't need to be home. They're yours until ${day(dueDate)}.
+
+If anything about that is wrong, reply to this email today.
+
+Beehive Bin Co.
+support@beehivebin.co`
+      : `Hi ${name || 'there'},
+
+We're collecting your ${bins} bins tomorrow, ${day(date)}, ${when}.
+
+Please have them emptied, stacked, and by the front door at:
+
+  ${address || '(the address we delivered to)'}
+
+You don't need to be home. If you need them longer, reply to this email today and we'll add a week.
+
+Thanks for using us,
+Beehive Bin Co.
+support@beehivebin.co`;
+
+    return sendEmail(this.env, {
+      to,
+      subject: job === 'deliver' ? `Your bins arrive tomorrow ${when}` : `We're collecting your bins tomorrow ${when}`,
+      text,
+    });
+  }
 }
 
 export default {
@@ -422,7 +480,7 @@ export default {
       if (!String(data[f] || '').trim()) return json({ ok: false, error: `missing ${f}` }, 400, origin);
     }
     if (data.form === 'reserve') {
-      const problem = reserveProblem(data);
+      const problem = await reserveProblem(env, data);
       if (problem) return json({ ok: false, error: problem }, 400, origin);
     }
 

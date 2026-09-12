@@ -35,7 +35,9 @@ was asked of them.
 | C17 | Asks for more weeks → extension invoice, return date moves | ✅ | admin/changes |
 | C18 | Extension would overbook the bins for someone else → refused | ✅ | admin/changes |
 | C19 | Is late / loses bins / damages bins → charged only what §4 allows, itemised | ✅ | admin/charges |
-| C20 | Gets a reminder the day before delivery and the day before pickup | ❌ | — (see notes) |
+| C20 | Gets a reminder the day before delivery and the day before pickup, with the window and address | ✅ | admin/time, forms/confirm |
+| C21 | Books online for today → told the earliest day; books a day off → told why | ✅ | forms/submit |
+| C22 | Sees the delivery and pickup window once all set | ✅ | forms/confirm |
 
 ## Staff, day to day
 
@@ -71,6 +73,10 @@ was asked of them.
 | S28 | Counts bins back, marks damaged ones → charges proposed, invoiced together | ✅ | admin/charges |
 | S29 | Waives a charge → reason recorded; not proposed again | ✅ | admin/charges |
 | S30 | Photo retention: deleted after 90 days unless a dispute hold is on | ✅ | admin/photos |
+| S31 | Sees a stoplight on each request: green fits, yellow tight, red short (by how many, which day) | ✅ | admin/stoplight |
+| S32 | Sets a delivery or pickup window per rental; the usual one is a setting | ✅ | admin/time |
+| S33 | Blocks a day off; bookings onto it refused; jobs already on it reported | ✅ | admin/time |
+| S34 | Sets the notice the website needs; phone bookings can go inside it | ✅ | admin/time |
 
 ## Staff, the evening run
 
@@ -83,6 +89,8 @@ was asked of them.
 | R5 | A delivery that isn't signed or paid says so | ✅ | admin/schedule |
 | R6 | Sunday jobs are flagged | ✅ | admin/schedule |
 | R7 | Bins out / back / in use per day; over-committed days shout | ✅ | admin/schedule |
+| R8 | Jobs carry their window and are ordered by it; a day off says so | ✅ | admin/time |
+| R9 | At 7:30pm, "tonight" is still tonight — nothing is late, locked, lapsed or refused because UTC rolled over | ✅ | admin/clock, forms/submit |
 
 ## Inventory
 
@@ -112,9 +120,5 @@ was asked of them.
 
 ## Not built, on purpose for now
 
-- **C20 reminders.** Needs a mail template pair and a daily cron. Worth doing;
-  parked until the Square charge is confirmed working end to end, because a
-  reminder that says "we'll charge your card" should be true.
 - **Customers tab.** One record per renter across requests. Nothing depends on
   it yet.
-- **Settings tab.** Only `turnaround_days` exists and it has an API.

@@ -19,10 +19,10 @@ routes = [
 # the first deploy — the Worker rejects requests without a valid Access JWT, so
 # an unprotected deploy fails closed rather than open, but don't leave it that way.
 
-# Photo retention. Daily at 09:00 UTC — early morning Mountain, well away from
-# anyone working a delivery.
+# 09:00 UTC: photo retention, small hours Mountain, away from any delivery.
+# 15:00 UTC: tomorrow's reminders — 9am Mountain (8am during standard time).
 [triggers]
-crons = ["0 9 * * *"]
+crons = ["0 9 * * *", "0 15 * * *"]
 
 [assets]
 directory = "./public"

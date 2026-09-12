@@ -28,7 +28,17 @@ export async function getSettings(env) {
     fleetTotal: usable,
     outOfService: unusable,
     turnaroundDays: Math.max(0, parseInt(map.turnaround_days ?? '1', 10) || 0),
+    // "We'll confirm an exact window with you" — this is the one most nights use.
+    defaultWindow: map.default_window ?? '6–8pm',
+    // Notice the website needs. The panel can book inside it on purpose.
+    leadDays: Math.max(0, parseInt(map.lead_days ?? '1', 10) || 0),
   };
+}
+
+/* Days off. Returns the reason if `date` is blacked out, else null. */
+export async function blackoutOn(env, date) {
+  const row = await env.DB.prepare('SELECT reason FROM blackouts WHERE date = ?1').bind(date).first();
+  return row ? (row.reason || 'closed') : null;
 }
 
 /* Which rentals hold bins, and over what span. Cancelled ones hold nothing;

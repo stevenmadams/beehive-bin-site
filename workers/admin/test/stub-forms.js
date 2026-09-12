@@ -8,6 +8,7 @@ const sent = [];
 export class Mailer extends WorkerEntrypoint {
   async sendConfirmLink(msg) { sent.push({ kind: 'confirm', ...msg }); return { ok: true }; }
   async sendRescheduled(msg) { sent.push({ kind: 'rescheduled', ...msg }); return { ok: true }; }
+  async sendReminder(msg) { sent.push({ kind: 'reminder', ...msg }); return { ok: true }; }
 
   // The binding points at this class, so the test-side read-back goes here too.
   fetch(request) {

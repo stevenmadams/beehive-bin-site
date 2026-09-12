@@ -153,6 +153,28 @@ the panel is not exposed — it rejects every request that arrives without a val
 Access JWT, so an unprotected deploy fails closed. Don't rely on that as your
 security model; it is a backstop, not the plan.
 
+## Time
+
+**The business day is Mountain Time.** `workers/shared/clock.js` is the only
+thing that decides what "today" is, and SQL never uses `date('now')`. The
+platform clock is UTC, which rolls over at 6pm Mountain — when the van is
+out. Before this, the run sheet showed tomorrow at 6:01pm, that evening's
+collections went overdue, and the website refused tomorrow as past.
+
+**Windows.** `delivery_window` / `pickup_window` are short phrases per rental
+("6–8pm"), stamped from the `default_window` setting when the rental is made.
+The run sheet orders jobs by them; the customer sees them once all set and in
+the day-before reminder.
+
+**Reminders** go out from the 15:00 UTC cron (9am Mountain) for tomorrow's
+deliveries (signed and paid) and pickups (out), once each —
+`reminded_delivery_at` / `reminded_pickup_at`. The 09:00 UTC cron is photo
+retention.
+
+**Blackouts** (`blackouts` table, Settings tab) stop a booking starting on a
+day; adding one reports jobs already booked for it. **Lead time**
+(`lead_days`) is what the website needs; the panel can book inside it.
+
 ## Tests
 
 ```bash
