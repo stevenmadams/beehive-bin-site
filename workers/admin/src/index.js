@@ -110,8 +110,13 @@ async function authenticate(request, env) {
   return { id: row.id, email: row.email, name: row.name, role: row.role };
 }
 
-const requireOwner = user => {
-  if (user.role !== 'owner') throw new HttpError(403, 'Only an owner can change the staff list.');
+/* Two roles. Staff do the evening run — photos, milestones, addresses,
+   counting, notes, their own hours. Everything that moves money or makes a
+   promise to a customer is an owner's: approving, sending the link,
+   cancelling, moving dates, extending, charging. To delegate any of that,
+   make the person an owner. */
+const requireOwner = (user, what = 'do that') => {
+  if (user.role !== 'owner') throw new HttpError(403, `Only an owner can ${what}.`);
 };
 
 const audit = (env, actor, action, entity, entityId, detail = null) =>
@@ -670,6 +675,7 @@ async function updateRental(env, user, id, body) {
   }
   let refund = null;
   if ('status' in body) {
+    requireOwner(user, 'cancel or reinstate a rental');
     if (!RENTAL_STATUSES.includes(body.status)) throw new HttpError(400, 'unknown status');
 
     if (body.status === 'cancelled') {
@@ -1556,6 +1562,7 @@ async function api(request, env, url) {
   }
 
   if ((m = match(/^\/requests\/(\d+)\/decision$/)) && method === 'POST') {
+    requireOwner(user, 'approve or decline a request');
     return json(await decideRequest(env, user, Number(m[1]), body));
   }
 
@@ -1595,10 +1602,12 @@ async function api(request, env, url) {
     return json(refundFor(r));
   }
   if ((m = match(/^\/rentals\/(\d+)\/reschedule$/)) && method === 'POST') {
+    requireOwner(user, 'move a rental');
     return json(await rescheduleRental(env, user, Number(m[1]), body));
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/invoice$/)) && method === 'POST') {
+    requireOwner(user, 'start a rental');
     return json({ rental: await invoiceRental(env, user, Number(m[1])) });
   }
   if ((m = match(/^\/rentals\/(\d+)\/photos$/))) {
@@ -1649,6 +1658,7 @@ async function api(request, env, url) {
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/send$/)) && method === 'POST') {
+    requireOwner(user, 'send the confirmation link');
     const rid = Number(m[1]);
     await sendConfirmLink(env, user, rid);
     return json({ rental: await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(rid).first() });
@@ -1669,14 +1679,16 @@ async function api(request, env, url) {
           ? { brand: rental.card_brand, last4: rental.card_last4, exp: rental.card_exp } : null,
       });
     }
-    if (method === 'POST') return json({ charges: await addCharge(env, user, rid, body) }, 201);
+    if (method === 'POST') { requireOwner(user, 'add a charge'); return json({ charges: await addCharge(env, user, rid, body) }, 201); }
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/charges\/invoice$/)) && method === 'POST') {
+    requireOwner(user, 'charge a customer');
     return json({ charges: await invoiceCharges(env, user, Number(m[1])) });
   }
 
   if ((m = match(/^\/charges\/(\d+)\/waive$/)) && method === 'POST') {
+    requireOwner(user, 'waive a charge');
     return json({ charges: await waiveCharge(env, user, Number(m[1]), body) });
   }
 
@@ -1687,7 +1699,7 @@ async function api(request, env, url) {
   if ((m = match(/^\/rentals\/(\d+)\/extensions$/))) {
     const rid = Number(m[1]);
     if (method === 'GET') return json({ extensions: await listExtensions(env, rid) });
-    if (method === 'POST') return json({ extensions: await extendRental(env, user, rid, body) }, 201);
+    if (method === 'POST') { requireOwner(user, 'extend a rental'); return json({ extensions: await extendRental(env, user, rid, body) }, 201); }
   }
 
   /* Diagnostic: the invoice exactly as Square holds it. Read-only, owner only.
@@ -1722,19 +1734,20 @@ async function api(request, env, url) {
 
   if (path === '/employees') {
     if (method === 'GET') {
+      requireOwner(user, 'see the staff list');
       const { results } = await env.DB.prepare(
         'SELECT id, email, name, role, active, created_at, created_by, last_seen_at FROM employees ORDER BY active DESC, role, email',
       ).all();
       return json({ employees: results, domain: env.ALLOWED_EMAIL_DOMAIN });
     }
     if (method === 'POST') {
-      requireOwner(user);
+      requireOwner(user, 'add to the staff list');
       return json({ employee: await addEmployee(env, user, body) }, 201);
     }
   }
 
   if ((m = match(/^\/employees\/(\d+)$/)) && method === 'PATCH') {
-    requireOwner(user);
+    requireOwner(user, 'change the staff list');
     return json({ employee: await updateEmployee(env, user, Number(m[1]), body) });
   }
 
@@ -1806,9 +1819,9 @@ async function api(request, env, url) {
       const { results } = await env.DB.prepare(
         `SELECT s.id, s.employee_id, e.name, s.weekday, s.date, s.start_time AS start, s.end_time AS end, s.off, s.note, s.created_by
          FROM shifts s JOIN employees e ON e.id = s.employee_id
-         WHERE s.date IS NULL OR s.date >= ?1
+         WHERE (s.date IS NULL OR s.date >= ?1) AND (?2 = 'owner' OR s.employee_id = ?3)
          ORDER BY e.name, s.weekday, s.date`,
-      ).bind(addDays(today(), -7)).all();
+      ).bind(addDays(today(), -7), user.role, user.id).all();
       return json({ shifts: results });
     }
     if (method === 'POST') {
@@ -2004,6 +2017,7 @@ async function api(request, env, url) {
   }
 
   if (path === '/audit' && method === 'GET') {
+    requireOwner(user, 'see the activity log');
     const { results } = await env.DB.prepare(
       'SELECT at, actor_email, action, entity, entity_id, detail FROM audit_log ORDER BY at DESC LIMIT 100',
     ).all();

@@ -589,8 +589,12 @@ const NAV = [
   { id: 'settings',  label: 'Settings',  ico: '⚙', live: true },
 ];
 
+const isOwner = () => me?.role === 'owner';
+
 function shell(active) {
   const links = NAV.map(n => {
+    // Staff have one thing to do on the Employees page — their own hours.
+    if (n.id === 'employees' && !isOwner()) n = { ...n, label: 'My hours', ico: '◷' };
     let badge = '';
     if (n.id === 'requests' && counts.new) badge = `<span class="badge">${counts.new}</span>`;
     // Overdue is the only rental number worth interrupting someone for.
@@ -858,7 +862,7 @@ function chargesPanel(container, rentalId, r) {
         </div>
         <div class="r">
           <strong>${esc(money(c.amount_cents))}</strong>
-          ${cls === 'draft' ? `<button class="linkish" data-waive="${c.id}">Waive</button>` : ''}
+          ${cls === 'draft' && isOwner() ? `<button class="linkish" data-waive="${c.id}">Waive</button>` : ''}
           ${c.square_invoice_url && cls !== 'waived'
             ? `<a class="linkish" href="${esc(c.square_invoice_url)}" target="_blank" rel="noopener">Invoice</a>` : ''}
         </div>
@@ -874,7 +878,7 @@ function chargesPanel(container, rentalId, r) {
            <div class="meta">${esc(p.note)}</div>
          </div>
          <div class="r"><strong>${esc(money(p.amount_cents))}</strong>
-           <button class="btn sm primary" data-prop="${i}">Add</button></div></div>`).join('');
+           ${isOwner() ? `<button class="btn sm primary" data-prop="${i}">Add</button>` : ''}</div></div>`).join('');
 
     container.replaceChildren($(`<div class="chgwrap">
       <label class="fl">If something went wrong</label>
@@ -898,11 +902,12 @@ function chargesPanel(container, rentalId, r) {
             ? `Charges to the card on file &mdash; ${esc(card.brand || 'card')} &bull;&bull;${esc(card.last4 || '')}, as §4 allows. Plus tax.`
             : 'No card on file &mdash; this raises an invoice they have to pay themselves. Plus tax.'}</div>
         </div>
-        <button class="btn primary" id="c-invoice">${card ? 'Charge the card' : 'Send an invoice'}</button>
+        ${isOwner() ? `<button class="btn primary" id="c-invoice">${card ? 'Charge the card' : 'Send an invoice'}</button>`
+          : '<span class="meta">An owner charges this.</span>'}
       </div>` : owed_cents > 0 ? `<div class="chgfoot"><div class="meta">All settled &mdash;
         ${esc(money(owed_cents))} charged on this rental.</div></div>` : ''}
 
-      <details class="manual"><summary>Add something by hand</summary>
+      ${isOwner() ? `<details class="manual"><summary>Add something by hand</summary>
         <div class="frow">
           <div><label class="fl" for="c-kind">Kind</label>
             <select id="c-kind">
@@ -922,7 +927,7 @@ function chargesPanel(container, rentalId, r) {
         <label class="fl" for="c-why">What the customer sees on the invoice</label>
         <input id="c-why" placeholder="Two bins returned with tape residue">
         <div style="margin-top:12px"><button class="btn sm" id="c-add">Add charge</button></div>
-      </details>
+      </details>` : ''}
 
       <div id="c-msg"></div>
     </div>`));
@@ -1010,7 +1015,7 @@ function extensionsPanel(container, rentalId, r) {
     </div>`));
 
     const slot = container.querySelector('#ext-slot');
-    if (!canExtend) {
+    if (!canExtend || !isOwner()) {
       if (!exts.length) container.replaceChildren();
       return;
     }
@@ -1093,7 +1098,7 @@ function notesPanel(container, entity, id) {
           ${n.deleted_at ? `<span>· deleted by ${esc(n.deleted_by || '—')}</span>` : `
             <button data-pin="${n.id}" data-to="${n.pinned ? 0 : 1}" class="pin">${
               n.pinned ? 'Unpin' : 'Pin'}</button>
-            <button data-del="${n.id}">Delete</button>`}
+            ${n.author === me.email || isOwner() ? `<button data-del="${n.id}">Delete</button>` : ''}`}
         </div>
       </div>`).join('');
 
@@ -1557,8 +1562,8 @@ async function openRental(id) {
             : ' — not sent yet'}</h4>
           <code>${esc(`https://${bookingHost}/${r.confirm_token}`)}</code>
           <div class="row">
-            <button class="btn sm${r.confirm_sent_at ? '' : ' primary'}" id="r-send">${
-              r.confirm_sent_at ? 'Resend email' : 'Email it to them'}</button>
+            ${isOwner() ? `<button class="btn sm${r.confirm_sent_at ? '' : ' primary'}" id="r-send">${
+              r.confirm_sent_at ? 'Resend email' : 'Email it to them'}</button>` : ''}
             <button class="btn sm" id="r-copy">Copy link</button>
             <a class="btn sm" href="${esc(`https://${bookingHost}/${r.confirm_token}`)}" target="_blank" rel="noopener">Preview</a>
           </div>
@@ -1583,9 +1588,10 @@ async function openRental(id) {
         <p>Nothing else can happen until the customer has their link &mdash; they
         confirm the details, sign the agreement, put a card on file and pay from
         it. The invoice is raised and charged when they do.</p>
-        <button class="btn primary" id="r-invoice"${r.email ? '' : ' disabled'}>
+        ${isOwner() ? `<button class="btn primary" id="r-invoice"${r.email ? '' : ' disabled'}>
           ${r.email ? 'Email them the link' : 'No email address on this rental'}</button>
-        <span class="to">${esc(money(r.total_cents))} + tax${r.email ? ` &rarr; ${esc(r.email)}` : ''}</span>
+        <span class="to">${esc(money(r.total_cents))} + tax${r.email ? ` &rarr; ${esc(r.email)}` : ''}</span>`
+        : '<span class="to">An owner sends the link.</span>'}
       </div>` : `
       <div class="steps">${STEPS.map(([key, col, label]) => {
         const done = r[col] ? 1 : 0;
@@ -1746,7 +1752,8 @@ async function openRental(id) {
 
       <div id="r-msg" style="margin-top:14px"></div>
       <div class="actions" style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
-        ${r.status === 'cancelled'
+        ${!isOwner() ? ''
+          : r.status === 'cancelled'
           ? '<button class="btn" data-status="pending">Reinstate</button>'
           : r.returned_at
           /* Finished. Offering "cancel" on a rental that ran its course invites
@@ -2214,8 +2221,23 @@ async function viewCalendar() {
   }
 }
 
+/* ---------- my hours ----------
+
+   The staff view of the Employees page: one row, theirs. The list, roles and
+   the activity log are the owner's business. */
+async function viewMyHours() {
+  const view = $(`<div>
+    <div class="head"><h1>My hours</h1></div>
+    <p class="sub">When you can drive. Click a day to set hours; add a day that differs for time off or extra shifts.</p>
+    <div class="card" id="avail" style="padding:16px 18px"><div class="empty">Loading…</div></div>
+  </div>`);
+  render('employees', view);
+  availabilityPanel(view.querySelector('#avail'), [{ id: me.id, name: me.name, email: me.email, active: 1 }]);
+}
+
 /* ---------- employees ---------- */
 async function viewEmployees() {
+  if (!isOwner()) return viewMyHours();
   const view = $(`<div>
     <div class="head"><h1>Employees</h1></div>
     <p class="sub">Who can sign in to this panel.</p>

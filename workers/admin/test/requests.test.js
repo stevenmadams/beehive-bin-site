@@ -94,13 +94,12 @@ describe('requests', () => {
     expect((await ok('/requests?status=all&q=example.com')).requests).toHaveLength(2);
   });
 
-  it('staff can take and approve requests too', async () => {
+  it('staff can take a request, and the record says who took it', async () => {
     await fleet(40);
-    const req = await request();
-    const d = await ok(`/requests/${req.id}/decision`, { method: 'POST', body: { action: 'approve' }, as: STAFF });
-    expect(d.rental_id).toBeTruthy();
-    const h = await ok(`/rentals/${d.rental_id}/history`);
-    expect(h.history.some(e => e.action === 'rental.create' && e.actor_email === STAFF)).toBe(true);
+    await ok('/me');
+    const r = await ok('/requests', { method: 'POST', as: STAFF, body: { kind: 'reserve', first_name: 'B', bins: 10, weeks: 1, start_date: weekday(3), delivery_city: 'Clinton', phone: '801' } });
+    const h = await ok(`/requests/${r.request.id}/history`);
+    expect(h.history.find(e => e.action === 'request.create').actor_email).toBe(STAFF);
   });
 });
 

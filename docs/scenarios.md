@@ -132,6 +132,10 @@ was asked of them.
 | P4 | Staff can't add employees, delete items, change settings | ✅ | admin/auth |
 | P5 | The last active owner can't be demoted or deactivated | ✅ | admin/auth |
 | P6 | Request through Cloudflare's edge ignores the dev-bypass var | ✅ | admin/auth |
+| P7 | Staff do the evening run: photos, milestones, addresses, windows, counting, damage, notes, own hours | ✅ | admin/roles |
+| P8 | Staff take a phone booking but cannot approve it | ✅ | admin/roles |
+| P9 | Staff cannot send the link, cancel, move, extend, or add/waive/charge fees | ✅ | admin/roles |
+| P10 | Staff see no staff list or activity log, and only their own hours ("My hours") | ✅ | admin/roles |
 
 ## Not built, on purpose for now
 

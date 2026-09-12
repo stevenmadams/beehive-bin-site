@@ -60,6 +60,17 @@ exception is `cancelled`, which is a decision rather than an event and sticks
 until someone reinstates it. Milestones toggle both ways: the commonest
 correction is marking the wrong rental delivered and needing to undo it.
 
+## Who can do what
+
+Two roles. **Staff** do the evening run: photos, marking delivered and
+returned, addresses and windows, counting bins back, flagging damage, notes,
+and their own hours. Everything that moves money or makes a promise to a
+customer is an **owner's**: approving and declining, sending the link,
+cancelling, moving dates, extending, charging and waiving, the staff list,
+settings, days off, inventory batches, the activity log. To delegate any of
+that, make the person an owner. Enforced in the Worker (`requireOwner`);
+the panel hides what it will refuse.
+
 ## Who can sign in
 
 Two layers, and they do different jobs:
