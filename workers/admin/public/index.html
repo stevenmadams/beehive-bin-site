@@ -1205,7 +1205,7 @@ async function openRental(id) {
 
   const settle = {
     label: 'Settled',
-    done: at > 4 || (stage === 'settled' && settled),
+    done: stage === 'settled' && settled,
     summary: () => !charges ? '' : charges.owed_cents === 0 ? 'nothing owed'
       : charges.outstanding_cents ? `<span class="warn">${money(charges.outstanding_cents)} outstanding</span>`
       : `${money(charges.owed_cents)} charged`,
@@ -1217,8 +1217,11 @@ async function openRental(id) {
   /* ---- the page ---- */
   const stageRows = STAGE_ORDER.map((key, i) => {
     const st = stages[key];
-    const state = stage === 'cancelled' ? 'dim' : i < at ? 'done' : i === at ? 'now' : 'dim';
+    // Done is a fact about the stage, not its position: Settled with nothing
+    // owed is done, and stays open below as the record of what was decided.
+    const state = stage === 'cancelled' ? 'dim' : st.done ? 'done' : i === at ? 'now' : 'dim';
     const undoable = state === 'done' && i === at - 1 && key !== 'booked';
+    const open = state === 'now' || (key === 'settled' && state === 'done');
     return `<section class="stage ${state}" data-stage="${key}">
       <header>
         <span class="n">${state === 'done' ? '✓' : i + 1}</span>
@@ -1226,7 +1229,7 @@ async function openRental(id) {
         <span class="sum">${st.summary()}</span>
         ${undoable ? `<button class="linkish" data-undo="${key}">undo</button>` : ''}
       </header>
-      ${state === 'now' ? `<div class="stagebody">${st.body()}</div>` : ''}
+      ${open ? `<div class="stagebody">${st.body()}</div>` : ''}
     </section>`;
   }).join('');
 
