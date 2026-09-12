@@ -13,6 +13,7 @@ import { availability, canFit, getSettings, stoplights, blackoutOn } from './inv
 import { today, addDays, addWeeks, isoDate, dayDiff, startOfDay } from '../../shared/clock.js';
 import { coverage, claimSlot, isTime, closedDayName, closedWeekdays } from '../../shared/coverage.js';
 import { HOLIDAYS, holidaysIn } from '../../shared/holidays.js';
+import { itemsOn, whereabouts, assign as assignBins, unassign as unassignBin, inspect as inspectBins, resolveRest, release as releaseBins } from './binlink.js';
 import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
 const json = (body, status = 200) =>
@@ -365,7 +366,8 @@ const RENTAL_COLUMNS = () => `id, request_id, created_at, created_by, status,
   delivery_city, delivery_address, delivery_notes, delivery_street, delivery_unit, delivery_zip,
   pickup_city, pickup_address, pickup_notes, pickup_street, pickup_unit, pickup_zip,
   agreement_signed_at, paid_at, delivered_at, returned_at, notes,
-  delivery_window, pickup_window, delivery_slot, pickup_slot, reminded_delivery_at, reminded_pickup_at`;
+  delivery_window, pickup_window, delivery_slot, pickup_slot, reminded_delivery_at, reminded_pickup_at,
+  inspected_at, inspected_by`;
 
 /* A kind is a word: lowercase, letters and underscores. "Hand truck" and
    "hand_truck" and "HAND-TRUCK" are the same thing and must land in the same
@@ -482,6 +484,9 @@ const PREREQ = {
   returned: [
     { col: 'delivered_at',        soft: false, msg: 'These bins have not been delivered yet, so they cannot come back.' },
   ],
+  inspected: [
+    { col: 'returned_at',         soft: false, msg: 'The bins are not marked back yet — inspection comes after.' },
+  ],
 };
 
 function checkPrereqs(milestone, state, body) {
@@ -497,6 +502,7 @@ const MILESTONES = {
   paid: 'paid_at',
   delivered: 'delivered_at',
   returned: 'returned_at',
+  inspected: 'inspected_at',
 };
 
 /* §8 of the agreement: cancel 48 hours or more before delivery for a full
@@ -608,6 +614,22 @@ async function updateRental(env, user, id, body) {
     // actually reads when a customer says the bins never turned up.
     if (body.milestone === 'delivered') patch.delivered_by = body.done === false ? null : user.email;
     if (body.milestone === 'returned') patch.returned_by = body.done === false ? null : user.email;
+    if (body.milestone === 'inspected') patch.inspected_by = body.done === false ? null : user.email;
+    if (body.done === false && body.milestone === 'returned' && row.inspected_at) {
+      throw new HttpError(409, 'This rental has been inspected. Undo that first.');
+    }
+
+    /* Going out with nothing assigned: pick the free bins now, so the rental
+       knows what it has without anyone typing labels. Adjustable afterwards. */
+    if (body.milestone === 'delivered' && patch.delivered_at && !row.delivered_at) {
+      const have = await itemsOn(env, id);
+      if (!have.length) {
+        try { await assignBins(env, user, row, { auto: true }); }
+        catch (err) { if (!/No free bins/.test(err.message)) throw new HttpError(err.status || 400, err.message); }
+      }
+    }
+    // Inspected with the list untouched: everything unresolved came back fine.
+    if (body.milestone === 'inspected' && patch.inspected_at) await resolveRest(env, user, row);
 
     if (body.milestone === 'delivered' && patch.delivered_at) {
       const why = await requirePhoto(env, id, 'delivery', body.photo_reason);
@@ -704,6 +726,7 @@ async function updateRental(env, user, id, body) {
             refund.hours_before >= 48 ? '48h or more' : 'under 48h'} before delivery`);
       }
       await audit(env, user.email, 'rental.cancel', 'rental', id, why);
+      await releaseBins(env, id);
     }
 
     patch.status = body.status;
@@ -720,7 +743,7 @@ async function updateRental(env, user, id, body) {
        delivery_street=?14, delivery_unit=?15, delivery_zip=?16,
        pickup_street=?17, pickup_unit=?18, pickup_zip=?19,
        delivered_by=?20, returned_by=?21, delivery_window=?23, pickup_window=?24,
-       delivery_slot=?25, pickup_slot=?26
+       delivery_slot=?25, pickup_slot=?26, inspected_at=?27, inspected_by=?28
      WHERE id=?22`,
   ).bind(
     patch.status, patch.agreement_signed_at, patch.paid_at, patch.delivered_at,
@@ -731,6 +754,7 @@ async function updateRental(env, user, id, body) {
     patch.pickup_street, patch.pickup_unit, patch.pickup_zip,
     patch.delivered_by, patch.returned_by,
     id, patch.delivery_window, patch.pickup_window, patch.delivery_slot, patch.pickup_slot,
+    patch.inspected_at, patch.inspected_by,
   ).run();
 
   // A milestone or a cancellation has already been written up above; only an
@@ -1533,7 +1557,9 @@ async function api(request, env, url) {
       `SELECT COUNT(*) AS count FROM rentals WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`,
     ).first();
 
-    return json({ counts, rentals: { active: activeRentals, overdue, stalled } });
+    const { count: toInspect } = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM rentals WHERE status = 'returned' AND inspected_at IS NULL").first();
+    return json({ counts, rentals: { active: activeRentals, overdue, stalled, to_inspect: toInspect } });
   }
 
   if (path === '/requests') {
@@ -1693,6 +1719,22 @@ async function api(request, env, url) {
   if ((m = match(/^\/charges\/(\d+)\/waive$/)) && method === 'POST') {
     requireOwner(user, 'waive a charge');
     return json({ charges: await waiveCharge(env, user, Number(m[1]), body) });
+  }
+
+  /* Which bins are on this rental. */
+  if ((m = match(/^\/rentals\/(\d+)\/items(?:\/(inspect|\d+))?$/))) {
+    const rid = Number(m[1]);
+    const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(rid).first();
+    if (!rental) throw new HttpError(404, 'no such rental');
+    try {
+      if (!m[2] && method === 'GET') return json({ items: await itemsOn(env, rid) });
+      if (!m[2] && method === 'POST') return json(await assignBins(env, user, rental, body), 201);
+      if (m[2] === 'inspect' && method === 'POST') return json(await inspectBins(env, user, rental, body));
+      if (m[2] && m[2] !== 'inspect' && method === 'DELETE') return json({ items: await unassignBin(env, user, rental, Number(m[2])) });
+    } catch (err) {
+      if (err.status) throw new HttpError(err.status, err.message);
+      throw err;
+    }
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/counted$/)) && method === 'POST') {
@@ -1944,6 +1986,12 @@ async function api(request, env, url) {
          FROM items ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
          ORDER BY kind = 'bin' DESC, kind, label LIMIT 2000`,
       ).bind(...binds).all();
+      // Where each one is tonight, and a filter for it.
+      const out = await whereabouts(env);
+      const where_ = url.searchParams.get('where');
+      const listed = results
+        .map(i => ({ ...i, out_with: out[i.id] || null }))
+        .filter(i => where_ === 'out' ? i.out_with : where_ === 'in' ? !i.out_with : true);
       // Counts are for the whole list, not the filtered view: the tiles and the
       // kind tabs need to know what exists even while one slice is showing.
       const { results: counts } = await env.DB.prepare(
@@ -1954,7 +2002,7 @@ async function api(request, env, url) {
         byKind[c.kind][c.condition] = c.n;
         byKind[c.kind].total += c.n;
       }
-      return json({ items: results, kinds: byKind });
+      return json({ items: listed, kinds: byKind, out: Object.keys(out).length });
     }
 
     if (method === 'POST') {

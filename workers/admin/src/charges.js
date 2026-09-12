@@ -105,9 +105,11 @@ export async function proposals(env, rental) {
     });
   }
 
-  // Counted a shortfall but nothing on the bin list says which ones — the
-  // charge stands, but the fleet is now wrong and will over-promise bookings.
-  if (short > 0 && bins.lost.length !== short) {
+  // Counted a shortfall by hand, with no bin list behind it — the charge
+  // stands, but the fleet is now wrong and will over-promise bookings. A
+  // rental with its bins assigned never gets here: inspection marks them.
+  const { n: tracked } = await env.DB.prepare('SELECT COUNT(*) AS n FROM rental_items WHERE rental_id = ?1').bind(rental.id).first();
+  if (short > 0 && !tracked && bins.lost.length !== short) {
     out.push({ kind: 'note', blocked:
       `${short} bin${short === 1 ? ' is' : 's are'} unaccounted for but ${
         bins.lost.length === 0 ? 'none are' : `only ${bins.lost.length} are`} marked lost on the bin list. ` +
