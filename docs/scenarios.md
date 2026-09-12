@@ -132,6 +132,9 @@ was asked of them.
 | K1 | One customer per person, merged by email (or phone when there is no email), across requests and rentals | ✅ | admin/customers |
 | K2 | Declined and lapsed people are leads, filterable; past renters too | ✅ | admin/customers |
 | K3 | Notes live on the person; an owner can fix details | ✅ | admin/customers |
+| K4 | Statuses match the stages: booked → confirmed → out → back → settling → done; list filters by each | ✅ | admin/customers |
+| K5 | Clean and on time is done at inspection; late, damaged or lost is settling until decided | ✅ | admin/customers |
+| K6 | The activity log filters by who, when and what; owner only | ✅ | admin/roles |
 
 ## Who drives when
 

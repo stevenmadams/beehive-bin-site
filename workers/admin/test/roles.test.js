@@ -69,3 +69,20 @@ describe('what staff can do', () => {
     expect(s.user.role).toBe('staff');
   });
 });
+
+describe('the activity log', () => {
+  it('filters by who, when and what; owner only', async () => {
+    await fleet(40);
+    await ok('/me', { as: STAFF });
+    const r = await rental();
+    await ok(`/rentals/${r.id}/notes`, { method: 'POST', body: { body: 'x' }, as: STAFF });
+    const all = await ok('/audit');
+    expect(all.actors).toContain(OWNER);
+    const mine = await ok(`/audit?actor=${STAFF}`);
+    expect(mine.entries.every(e => e.actor_email === STAFF)).toBe(true);
+    const rentalOnly = await ok(`/audit?q=${r.id}&entity=rental`);
+    expect(rentalOnly.entries.every(e => e.entity === 'rental')).toBe(true);
+    expect((await ok(`/audit?from=${today(1)}`)).entries).toHaveLength(0);
+    expect((await api('/audit', { as: STAFF })).status).toBe(403);
+  });
+});

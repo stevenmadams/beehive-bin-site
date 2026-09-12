@@ -94,7 +94,7 @@ describe('which bins are on a rental', () => {
     await fleet(20);
     const r = await rental({ bins: 10, start_date: today() });
     await deliver(r.id);
-    await sql("UPDATE rentals SET returned_at = 'x', status = 'returned' WHERE id = ?1", r.id);
+    await sql("UPDATE rentals SET returned_at = 'x', status = 'back' WHERE id = ?1", r.id);
     const { items } = await onRental(r.id);
     const all = items.map(i => ({ id: i.id, back: true }));
     await ok(`/rentals/${r.id}/items/inspect`, { method: 'POST', body: { items: [...all.slice(0, 9), { id: items[9].id, back: false }] } });

@@ -39,7 +39,7 @@ describe('requests', () => {
     expect(d.request.status).toBe('converted');
     expect(d.rental_id).toBeTruthy();
     const { rental } = await ok(`/rentals/${d.rental_id}`);
-    expect(rental.status).toBe('pending');
+    expect(rental.status).toBe('booked');
     expect(rental.bins).toBe(20);
     expect(rental.due_date).toBe(addWeeks(req.start_date, 1));
     expect(rental.total_cents).toBe(7900);

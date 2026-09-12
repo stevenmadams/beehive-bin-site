@@ -109,10 +109,13 @@ tbody tr.clickable:hover{background:rgba(255,196,0,.09)}
 .pill.approved{background:rgba(31,122,76,.14);color:var(--ok)}
 .pill.declined{background:rgba(163,44,44,.12);color:var(--bad)}
 .pill.converted{background:rgba(31,122,76,.14);color:var(--ok)}
-.pill.pending{background:rgba(255,196,0,.25);color:#7A5B00}
+.pill.booked{background:rgba(255,196,0,.25);color:#7A5B00}
 .pill.confirmed{background:rgba(31,122,76,.14);color:var(--ok)}
 .pill.out{background:rgba(21,19,15,.85);color:var(--yellow)}
-.pill.returned{background:rgba(21,19,15,.1);color:var(--char)}
+.pill.back{background:rgba(21,19,15,.1);color:var(--char)}
+.pill.settling{background:rgba(180,83,26,.16);color:var(--warn)}
+.pill.done{background:rgba(31,122,76,.14);color:var(--ok)}
+.pill.inspected{background:rgba(21,19,15,.1);color:var(--char)}
 .pill.cancelled{background:rgba(163,44,44,.12);color:var(--bad)}
 .pill.overdue{background:var(--bad);color:#fff}
 .pill.lapsed{background:rgba(21,19,15,.75);color:var(--yellow)}
@@ -286,6 +289,25 @@ tr.late td{background:rgba(163,44,44,.05)}
   margin-top:8px;font-size:13px;white-space:pre-wrap}
 .job .warn{color:var(--warn);font-weight:600;font-size:12.5px;margin-top:6px}
 .job .acts{display:flex;flex-direction:column;gap:6px;flex:none}
+
+/* ---- board ---- */
+.viewseg{margin-left:auto;align-self:center}
+tr.dayhead td{background:#F4F2EC;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 14px}
+.board{display:grid;grid-template-columns:repeat(5,minmax(180px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px}
+.board .col{background:rgba(21,19,15,.04);border-radius:12px;padding:10px;min-height:140px}
+.board h4{margin:0 0 10px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
+.board h4 .n{color:var(--muted);font-weight:400;margin-left:4px}
+.board h4 small{display:block;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11.5px;margin-top:2px}
+.kcard{display:block;background:var(--white);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;text-decoration:none;color:var(--ink);font-size:13px;line-height:1.4}
+.kcard:hover{border-color:var(--yellow-deep)}
+.kcard b{display:block;font-size:14px}
+.kcard span{display:block;color:var(--muted)}
+.kcard .when{color:var(--ink)}
+.kcard .flags{margin-top:5px}
+.kcard.overdue{border-color:rgba(163,44,44,.5)}
+.kcard.stalled{border-color:rgba(180,83,26,.5)}
+.board .none{color:var(--muted);text-align:center;padding:20px 0;font-size:13px}
+@media (max-width:980px){.board{grid-template-columns:repeat(5,220px)}}
 
 /* ---- sheet ---- */
 .sheet-scrim{position:fixed;inset:0;background:rgba(21,19,15,.45);z-index:60;display:grid;place-items:center;padding:20px}
@@ -714,6 +736,7 @@ const ICONS = {
   inventory: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="4" cy="6" r="0.5"/></svg>',
   customers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
   employees: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><circle cx="17" cy="9" r="3"/><path d="M17 15c3 0 5 2 5 5"/></svg>',
+  activity:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
   settings:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   hours:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
 };
@@ -724,13 +747,14 @@ const NAV = [
   { id: 'inventory', label: 'Inventory', live: true },
   { id: 'customers', label: 'Customers', live: true },
   { id: 'employees', label: 'Employees', live: true },
+  { id: 'activity',  label: 'Activity',  live: true, owner: true },
   { id: 'settings',  label: 'Settings',  live: true },
 ];
 
 const isOwner = () => me?.role === 'owner';
 
 function shell(active) {
-  const links = NAV.map(n => {
+  const links = NAV.filter(n => !n.owner || isOwner()).map(n => {
     // Staff have one thing to do on the Employees page — their own hours.
     const ico = ICONS[n.id === 'employees' && !isOwner() ? 'hours' : n.id];
     if (n.id === 'employees' && !isOwner()) n = { ...n, label: 'My hours' };
@@ -1239,7 +1263,7 @@ async function openRental(id) {
       <div class="title"><h1>${esc(fullName(r))}</h1>
         <div class="meta">Rental #${r.id} · ${r.bins} bins · ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'} · ${esc(niceDate(r.start_date))} &rarr; ${esc(niceDate(r.due_date))}${
           r.customer_id ? ` · <a href="#/customers/${r.customer_id}">customer</a>` : ''}</div></div>
-      <span class="pill ${r.status}">${stage === 'cancelled' ? 'cancelled' : stage === 'settled' && settled ? 'done' : r.status}</span>
+      <span class="pill ${r.phase}">${r.phase}</span>
     </div>
     ${stage === 'cancelled' ? '<div class="banner err">This rental is cancelled.</div>' : ''}
     <div class="rgrid">
@@ -2114,63 +2138,95 @@ function openNewRequest() {
 }
 
 /* ---------- rentals ---------- */
-const rentState = { status: 'active' };
-const RENT_FILTERS = [['active','Active'],['stalled','Stalled'],['pending','Pending'],
-  ['out','Out'],['to_inspect','To inspect']];
+let savedView = 'list';
+try { savedView = localStorage.getItem('rentals.view') || 'list'; } catch {}
+const rentState = { status: 'active', view: savedView };
+const RENT_FILTERS = [['active','Active'],['booked','Booked'],['confirmed','Confirmed'],['out','Out'],
+  ['back','Back'],['settling','Settling'],['stalled','Stalled']];
+/* The board's columns: the live phases, in order, with what each is waiting on. */
+const PHASE_COLS = [
+  ['booked',    'Booked',    'waiting on the customer'],
+  ['confirmed', 'Confirmed', 'waiting for delivery day'],
+  ['out',       'Out',       'at their house'],
+  ['back',      'Back',      'to inspect and clean'],
+  ['settling',  'Settling',  'to decide and charge'],
+];
 
 const isLate = r => r.status === 'out' && r.due_date && r.due_date < todayISO();
 
 async function viewRentals() {
+  const board = rentState.view === 'board';
   const view = $(`<div>
-    <div class="head"><h1>Rentals</h1><span class="count" id="ncount"></span></div>
-    <p class="sub">Live jobs, from agreement through inspection. Finished ones live on the customer.</p>
-    <div class="toolbar">
-      <div class="seg">${RENT_FILTERS.map(([f, label]) =>
-        `<button data-f="${f}" aria-pressed="${f === rentState.status}">${label}</button>`).join('')}</div>
-    </div>
-    <div class="card" id="nlist"><div class="empty">Loading…</div></div>
+    <div class="head"><h1>Rentals</h1><span class="count" id="ncount"></span>
+      <div class="seg viewseg"><button data-v="list" aria-pressed="${!board}">List</button><button data-v="board" aria-pressed="${board}">Board</button></div></div>
+    <p class="sub">Live jobs, booked through settled. Finished ones live on the customer.</p>
+    ${board ? '' : `<div class="toolbar"><div class="seg">${RENT_FILTERS.map(([f, label]) =>
+        `<button data-f="${f}" aria-pressed="${f === rentState.status}">${label}</button>`).join('')}</div></div>`}
+    <div id="nlist" class="${board ? '' : 'card'}"><div class="empty">Loading…</div></div>
   </div>`);
   render('rentals', view);
 
-  view.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  view.querySelectorAll('.viewseg button').forEach(b => b.addEventListener('click', () => {
+    rentState.view = b.dataset.v;
+    try { localStorage.setItem('rentals.view', rentState.view); } catch {}
+    viewRentals();
+  }));
+  view.querySelectorAll('.seg:not(.viewseg) button').forEach(b => b.addEventListener('click', () => {
     rentState.status = b.dataset.f;
     viewRentals();
   }));
 
   const list = view.querySelector('#nlist');
   try {
-    const { rentals } = await api(`/rentals?status=${rentState.status}`);
+    const { rentals } = await api(`/rentals?status=${board ? 'active' : rentState.status}`);
     view.querySelector('#ncount').textContent = rentals.length || '';
 
     if (!rentals.length) {
+      list.classList.add('card');
       list.replaceChildren($(`<div class="empty"><strong>Nothing here</strong>${
-        rentState.status === 'active'
-          ? 'No active rentals. Approve a request to start one.'
-          : 'No rentals in this list.'}</div>`));
+        rentState.status === 'active' || board ? 'No live rentals. Approve a request to start one.' : 'No rentals in this list.'}</div>`));
       return;
     }
 
-    const rows = rentals.map(r => `<tr class="clickable${isLate(r) ? ' late' : r.stalled ? ' stale' : ''}" data-id="${r.id}">
-      <td><span class="pill ${r.status}">${r.status}</span>${
-        r.status === 'returned' && !r.inspected_at ? ' <span class="pill stalled" title="Back, not yet inspected">inspect</span>'
-        : isLate(r) ? ' <span class="pill overdue">late</span>'
-        : r.stalled ? ' <span class="pill stalled" title="Never confirmed and the start date has passed">stalled</span>' : ''}</td>
+    const flags = r => [
+      r.overdue ? '<span class="pill overdue">overdue</span>' : '',
+      r.stalled ? '<span class="pill stalled" title="Not confirmed, and the start date has passed">stalled</span>' : '',
+    ].filter(Boolean).join(' ');
+
+    if (board) {
+      /* One column per live phase. Cards are the rental in a glance and a
+         click through; they do not drag, because every stage has a rule —
+         a photo, a date, an inspection — that a drag would go around. */
+      const cols = PHASE_COLS.map(([phase, label, hint]) => {
+        const cards = rentals.filter(r => r.phase === phase).sort((a, b) =>
+          (phase === 'out' ? a.due_date.localeCompare(b.due_date) : a.start_date.localeCompare(b.start_date)));
+        return `<div class="col">
+          <h4>${label} <span class="n">${cards.length}</span><small>${hint}</small></h4>
+          ${cards.map(r => `<a class="kcard${r.overdue ? ' overdue' : r.stalled ? ' stalled' : ''}" href="#/rentals/${r.id}">
+            <b>${esc(fullName(r))}</b>
+            <span>${r.bins} bins · ${esc(r.delivery_city || '')}</span>
+            <span class="when">${phase === 'out' || phase === 'back' ? `back ${esc(niceDate(r.due_date))}` : phase === 'booked' || phase === 'confirmed' ? `out ${esc(niceDate(r.start_date))}` : esc(niceDate(r.due_date))}${
+              (phase === 'confirmed' && r.delivery_window) ? `, ${esc(r.delivery_window)}` : (phase === 'out' && r.pickup_window) ? `, ${esc(r.pickup_window)}` : ''}</span>
+            ${flags(r) ? `<span class="flags">${flags(r)}</span>` : ''}
+          </a>`).join('') || '<div class="none">—</div>'}
+        </div>`;
+      }).join('');
+      list.replaceChildren($(`<div class="board">${cols}</div>`));
+      return;
+    }
+
+    const rows = rentals.map(r => `<tr class="clickable${r.overdue ? ' late' : r.stalled ? ' stale' : ''}" data-id="${r.id}">
+      <td><span class="pill ${r.phase}">${r.phase}</span> ${flags(r)}</td>
       <td><div class="who">${esc(fullName(r))}<small>${esc(r.delivery_city || '—')}</small></div></td>
       <td class="nowrap">${r.bins} bins · ${r.weeks === 1 ? '1 wk' : r.weeks + ' wks'}</td>
       <td class="nowrap num">${esc(niceDate(r.start_date))}</td>
       <td class="nowrap num">${esc(niceDate(r.due_date))}</td>
       <td class="nowrap num hide-sm">${esc(money(r.total_cents))}</td>
-      <td class="nowrap hide-sm">${[
-        r.agreement_signed_at ? 'signed' : '', r.paid_at ? 'paid' : '',
-      ].filter(Boolean).join(' · ') || '<span style="color:var(--muted)">—</span>'}</td>
     </tr>`).join('');
-
     const table = $(`<table><thead><tr>
-      <th>Status</th><th>Who</th><th>Package</th><th>Out</th><th>Back</th>
-      <th class="hide-sm">Total</th><th class="hide-sm">Steps</th>
+      <th>Status</th><th>Who</th><th>Package</th><th>Out</th><th>Back</th><th class="hide-sm">Total</th>
     </tr></thead><tbody>${rows}</tbody></table>`);
-    table.querySelectorAll('tbody tr').forEach(tr =>
-      tr.addEventListener('click', () => { location.hash = `#/rentals/${tr.dataset.id}`; }));
+    table.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', () => { location.hash = `#/rentals/${tr.dataset.id}`; }));
     list.replaceChildren(table);
   } catch (err) {
     list.replaceChildren($(`<div class="empty"><strong>Could not load rentals</strong>${esc(err.message)}</div>`));
@@ -2406,7 +2462,7 @@ async function viewCustomer(id) {
   const spent = past.filter(r => r.paid_at && r.status !== 'cancelled').reduce((n, r) => n + (r.total_cents || 0), 0);
 
   const rentalRow = r => `<tr class="clickable" data-rental="${r.id}">
-    <td><span class="pill ${r.status}">${r.inspected_at ? 'done' : r.status}</span></td>
+    <td><span class="pill ${r.phase}">${r.phase}</span></td>
     <td class="nowrap">${r.bins} bins · ${r.weeks === 1 ? '1 wk' : r.weeks + ' wks'}</td>
     <td class="nowrap num">${esc(niceDate(r.start_date))} → ${esc(niceDate(r.due_date))}</td>
     <td class="hide-sm">${esc(r.delivery_city || '')}</td>
@@ -2468,6 +2524,80 @@ async function viewCustomer(id) {
   });
 }
 
+/* ---------- activity ----------
+
+   Who did what, when. The audit log is append-only and every write in the
+   Worker leaves a line here; this is the page that reads it. Owner only. */
+
+const actState = { actor: '', from: '', to: '', q: '' };
+const ACTION_WORDS = {
+  'request.create': 'took a request', 'request.approve': 'approved', 'request.decline': 'declined', 'request.reopen': 'reopened', 'request.redated': 're-dated',
+  'rental.create': 'made a rental', 'rental.confirm_sent': 'sent the link', 'rental.agreement': 'agreement', 'rental.paid': 'payment',
+  'rental.delivered': 'delivered', 'rental.returned': 'collected', 'rental.inspected': 'inspected', 'rental.cancel': 'cancelled', 'rental.reinstate': 'reinstated',
+  'rental.reschedule': 'moved the date', 'rental.bins_assigned': 'loaded bins', 'rental.bin_removed': 'took a bin off', 'rental.inspection_flags': 'flagged bins',
+  'rental.photo_delivery': 'delivery photo', 'rental.photo_pickup': 'pickup photo', 'rental.delivered_no_photo': 'delivered, no photo', 'rental.returned_no_photo': 'collected, no photo',
+  'rental.delivery_unlocked': 'unlocked delivery', 'rental.pickup_unlocked': 'unlocked pickup', 'rental.overbooked': 'approved over the fleet',
+  'charge.add': 'added a charge', 'charge.waive': 'waived a charge', 'charge.invoice': 'charged', 'rental.counted': 'counted bins',
+  'employee.add': 'added staff', 'employee.update': 'changed staff', 'employee.auto_enroll': 'first sign-in', 'shift.set': 'set hours', 'shift.remove': 'removed hours',
+  'items.add': 'added inventory', 'item.condition': 'changed a bin', 'item.remove': 'removed an item', 'settings.update': 'changed a setting',
+  'blackout.add': 'added a day off', 'blackout.remove': 'removed a day off', 'photos.swept': 'photo retention', 'customer.update': 'edited a customer',
+  'rental.reminded_deliver': 'delivery reminder', 'rental.reminded_collect': 'pickup reminder', 'rental.slot_forced': 'booked a full slot',
+};
+const actionWord = a => ACTION_WORDS[a] || a.replace(/^square\./, 'Square: ').replace(/[._]/g, ' ');
+
+async function viewActivity() {
+  const view = $(`<div>
+    <div class="head"><h1>Activity</h1><span class="count" id="acount"></span></div>
+    <p class="sub">Everything anyone — or Square, or the overnight jobs — has done. Append-only.</p>
+    <div class="toolbar" style="flex-wrap:wrap;gap:8px">
+      <select id="a-actor"><option value="">Everyone</option></select>
+      <input type="date" id="a-from" value="${esc(actState.from)}" title="From">
+      <input type="date" id="a-to" value="${esc(actState.to)}" title="To">
+      <input class="search" id="a-q" placeholder="Rental #, bin, word…" value="${esc(actState.q)}" style="flex:1;min-width:160px">
+    </div>
+    <div class="card" id="alist"><div class="empty">Loading…</div></div>
+  </div>`);
+  render('activity', view);
+  const list = view.querySelector('#alist');
+  const load = async () => {
+    const qs = new URLSearchParams({ actor: actState.actor, from: actState.from, to: actState.to, q: actState.q });
+    try {
+      const { entries, actors } = await api(`/audit?${qs}`);
+      const sel = view.querySelector('#a-actor');
+      if (sel.options.length === 1) {
+        for (const a of actors) sel.append(new Option(a.includes('@') ? a.split('@')[0] : a, a));
+        sel.value = actState.actor;
+      }
+      view.querySelector('#acount').textContent = entries.length || '';
+      if (!entries.length) { list.replaceChildren($('<div class="empty">Nothing matches.</div>')); return; }
+      let lastDay = '';
+      const rows = entries.map(e => {
+        const day = businessDay(e.at);
+        const head = day !== lastDay ? `<tr class="dayhead"><td colspan="4">${esc(day)}</td></tr>` : '';
+        lastDay = day;
+        const link = e.entity === 'rental' ? `<a href="#/rentals/${e.entity_id}">rental #${e.entity_id}</a>`
+          : e.entity === 'request' ? `<a href="#/requests/${e.entity_id}">request #${e.entity_id}</a>`
+          : e.entity === 'customer' ? `<a href="#/customers/${e.entity_id}">customer</a>`
+          : e.entity ? `${esc(e.entity)} ${esc(e.entity_id || '')}` : '';
+        return head + `<tr>
+          <td class="nowrap" style="color:var(--muted)">${esc(stamp(e.at).replace(/^\w+, \w+ \d+, /, ''))}</td>
+          <td class="nowrap"><strong>${esc(e.actor_email.includes('@') ? e.actor_email.split('@')[0] : e.actor_email)}</strong></td>
+          <td class="nowrap">${esc(actionWord(e.action))}${link ? ` · ${link}` : ''}</td>
+          <td style="color:var(--muted)">${esc(e.detail || '')}</td>
+        </tr>`;
+      }).join('');
+      list.replaceChildren($(`<table><tbody>${rows}</tbody></table>`));
+    } catch (err) { list.replaceChildren($(`<div class="empty">${esc(err.message)}</div>`)); }
+  };
+  const businessDay = iso => new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Denver' });
+  let t;
+  view.querySelector('#a-actor').addEventListener('change', e => { actState.actor = e.target.value; load(); });
+  view.querySelector('#a-from').addEventListener('change', e => { actState.from = e.target.value; load(); });
+  view.querySelector('#a-to').addEventListener('change', e => { actState.to = e.target.value; load(); });
+  view.querySelector('#a-q').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { actState.q = e.target.value; load(); }, 200); });
+  load();
+}
+
 /* ---------- employees ---------- */
 async function viewEmployees() {
   if (!isOwner()) return viewMyHours();
@@ -2481,9 +2611,7 @@ async function viewEmployees() {
     <div class="head" style="margin-top:34px"><h1 style="font-size:22px">Who drives when</h1></div>
     <div class="card" id="avail" style="padding:16px 18px"><div class="empty">Loading…</div></div>
 
-    <div class="head" style="margin-top:34px"><h1 style="font-size:22px">Recent activity</h1></div>
-    <p class="sub">Everything anyone has done, newest first.</p>
-    <div class="card" id="activity"><div class="empty">Loading…</div></div>
+
   </div>`);
   render('employees', view);
 
@@ -2535,8 +2663,7 @@ async function viewEmployees() {
       const table = $(`<table><thead><tr>
         <th>Person</th><th>Role</th><th>Access</th><th class="hide-sm">Last seen</th><th></th>
       </tr></thead><tbody>${rows}</tbody></table>`);
-      loadActivity(view.querySelector('#activity'));
-
+    
       table.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', async () => {
         msg.replaceChildren();
         b.disabled = true;
@@ -2556,28 +2683,6 @@ async function viewEmployees() {
 
 /* The same log the per-item history reads, unfiltered — "who is doing what"
    across the business rather than within one rental. */
-async function loadActivity(container) {
-  if (!container) return;
-  try {
-    const { entries } = await api('/audit');
-    if (!entries.length) {
-      container.replaceChildren($('<div class="empty">Nothing yet.</div>'));
-      return;
-    }
-    const rows = entries.map(e => `<tr>
-      <td class="nowrap" style="color:var(--muted)" title="${esc(e.at)}">${esc(ago(e.at))}</td>
-      <td><span class="who">${esc(ACTION_LABELS[e.action] || e.action)}</span></td>
-      <td class="nowrap">${esc(e.actor_email)}</td>
-      <td class="nowrap hide-sm">${e.entity ? `${esc(e.entity)} #${esc(e.entity_id)}` : '—'}</td>
-      <td class="hide-sm" style="color:var(--muted)">${esc(String(e.detail || '').slice(0, 60))}</td>
-    </tr>`).join('');
-    container.replaceChildren($(`<table><thead><tr>
-      <th>When</th><th>What</th><th>Who</th><th class="hide-sm">Item</th><th class="hide-sm">Detail</th>
-    </tr></thead><tbody>${rows}</tbody></table>`));
-  } catch (err) {
-    container.replaceChildren($(`<div class="empty">${esc(err.message)}</div>`));
-  }
-}
 
 /* Text / Call / Email, with whichever they asked for highlighted. The same
    three buttons belong on the rental drawer and on the run sheet: a phone
@@ -3230,6 +3335,8 @@ function updateBadges() {
     setBadge('#/rentals', rentalCounts.overdue, 'overdue', 'overdue — past the return date and still out');
   } else if (rentalCounts.stalled) {
     setBadge('#/rentals', rentalCounts.stalled, 'warn', 'stalled — never confirmed and the start date has passed');
+  } else if (rentalCounts.to_inspect || rentalCounts.settling) {
+    setBadge('#/rentals', (rentalCounts.to_inspect || 0) + (rentalCounts.settling || 0), 'warn', 'back — to inspect or settle');
   } else {
     setBadge('#/rentals', rentalCounts.active || 0, 'quiet', 'active rentals');
   }
@@ -3282,6 +3389,7 @@ function route() {
   if (tab === 'schedule') return viewSchedule();
   if (tab === 'inventory') return viewInventory();
   if (tab === 'settings') return viewSettings();
+  if (tab === 'activity') return viewActivity();
   if (tab === 'customers') return id ? viewCustomer(id) : viewCustomers();
   if (SOON[tab]) return viewSoon(tab);
   return viewRequests();

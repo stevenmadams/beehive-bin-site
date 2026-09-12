@@ -13,7 +13,7 @@ async function lateRental({ bins = 20, outDays = 10, dueDaysAgo = 3, returned = 
              ${card ? ", square_card_id = 'card_9', card_brand = 'VISA', card_last4 = '4242'" : ''}
              WHERE id = ?3`, today(-dueDaysAgo), today(-outDays), r.id);
   if (returned) {
-    await sql("UPDATE rentals SET returned_at = ?1 || 'T19:00:00Z', status = 'returned' WHERE id = ?2", today(), r.id);
+    await sql("UPDATE rentals SET returned_at = ?1 || 'T19:00:00Z', status = 'back' WHERE id = ?2", today(), r.id);
   }
   return (await ok(`/rentals/${r.id}`)).rental;
 }

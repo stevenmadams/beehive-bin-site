@@ -365,8 +365,20 @@ async function updateEmployee(env, user, id, body) {
 /* ---------- rentals ---------- */
 
 const RENTAL_COLUMNS = () => `id, request_id, created_at, created_by, status,
-  CASE WHEN status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')
+  CASE WHEN status = 'booked' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')
        THEN 1 ELSE 0 END AS stalled,
+  CASE WHEN status = 'out' AND due_date < date('${today()}') THEN 1 ELSE 0 END AS overdue,
+  /* Inspected is two things to a person: settling, while a charge is drafted
+     or unpaid or a flagged bin has no decision yet; done, once nothing is. */
+  CASE WHEN status = 'inspected' AND (
+         EXISTS (SELECT 1 FROM charges c WHERE c.rental_id = rentals.id AND c.waived_at IS NULL AND c.paid_at IS NULL)
+      OR EXISTS (SELECT 1 FROM rental_items ri WHERE ri.rental_id = rentals.id AND ri.back_condition = 'damaged'
+                 AND NOT EXISTS (SELECT 1 FROM charges c WHERE c.rental_id = rentals.id AND c.kind = 'damage'))
+      OR EXISTS (SELECT 1 FROM rental_items ri WHERE ri.rental_id = rentals.id AND ri.back_condition = 'lost'
+                 AND NOT EXISTS (SELECT 1 FROM charges c WHERE c.rental_id = rentals.id AND c.kind = 'missing'))
+      OR (date(substr(returned_at, 1, 10)) > date(due_date)
+                 AND NOT EXISTS (SELECT 1 FROM charges c WHERE c.rental_id = rentals.id AND c.kind = 'late')))
+       THEN 'settling' WHEN status = 'inspected' THEN 'done' ELSE status END AS phase,
   photo_hold, delivered_by, returned_by, delivery_unlocked_at, delivery_unlocked_by,
   pickup_unlocked_at, pickup_unlocked_by,
   signed_on_behalf, agreement_manual, agreement_manual_by,
@@ -390,7 +402,8 @@ const itemKind = v => {
 };
 const DEFAULT_PREFIX = { bin: 'B', dolly: 'D', hand_truck: 'HT', moving_blanket: 'MB', strap: 'S' };
 
-const RENTAL_STATUSES = ['pending', 'confirmed', 'out', 'returned', 'cancelled'];
+const RENTAL_STATUSES = ['booked', 'confirmed', 'out', 'back', 'inspected', 'cancelled'];
+const PHASES = ['booked', 'confirmed', 'out', 'back', 'settling', 'done', 'cancelled'];
 const now = () => new Date().toISOString().replace(/\.\d+/, '');
 const dollars = c => `$${(c / 100).toFixed(2)}`;
 
@@ -399,10 +412,11 @@ const dollars = c => `$${(c / 100).toFixed(2)}`;
    therefore sticks until someone un-cancels. */
 function statusFrom(r) {
   if (r.status === 'cancelled') return 'cancelled';
-  if (r.returned_at) return 'returned';
+  if (r.inspected_at) return 'inspected';
+  if (r.returned_at) return 'back';
   if (r.delivered_at) return 'out';
   if (r.agreement_signed_at && r.paid_at) return 'confirmed';
-  return 'pending';
+  return 'booked';
 }
 
 /* Turning a request into a rental copies the agreed terms across. If the
@@ -438,8 +452,8 @@ async function createRentalFromRequest(env, user, req, forceOverbook = false) {
   const res = await env.DB.prepare(
     `INSERT INTO rentals (request_id, created_by, first_name, last_name, email, phone,
        contact_pref, bins, weeks, start_date, due_date, total_cents,
-       delivery_city, pickup_city, delivery_window, pickup_window, customer_id)
-     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?15,?16)`,
+       delivery_city, pickup_city, delivery_window, pickup_window, customer_id, status)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?15,?16,'booked')`,
   ).bind(
     req.id, user.email, req.first_name, req.last_name, req.email, req.phone,
     req.contact_pref, req.bins, req.weeks, req.start_date, due, req.quoted_total_cents,
@@ -463,15 +477,15 @@ async function listRentals(env, url) {
   const binds = [];
   let where = '';
 
-  if (status === 'active') {
-    // Everything with work left in it — including bins that are back but
-    // not yet looked at. Inspected and cancelled are history, on the customer.
-    where = "WHERE status IN ('pending','confirmed','out') OR (status = 'returned' AND inspected_at IS NULL)";
-  } else if (status === 'to_inspect') {
-    where = "WHERE status = 'returned' AND inspected_at IS NULL";
-  } else if (status === 'stalled') {
-    // Never confirmed, and the day it was meant to go out has passed.
-    where = `WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`;
+  /* Filters are by phase — what a person means by the word. Done and
+     cancelled are history and live on the customer, so "active" is
+     everything else. Phase is computed per row, so it is filtered after. */
+  if (status === 'stalled') {
+    where = `WHERE status = 'booked' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`;
+  } else if (status === 'active') {
+    where = "WHERE status NOT IN ('cancelled') AND NOT (status = 'inspected')";
+  } else if (status === 'settling' || status === 'done') {
+    where = "WHERE status = 'inspected'";
   } else if (status !== 'all') {
     if (!RENTAL_STATUSES.includes(status)) throw new HttpError(400, 'unknown status');
     binds.push(status);
@@ -482,7 +496,15 @@ async function listRentals(env, url) {
     `SELECT ${RENTAL_COLUMNS()} FROM rentals ${where}
      ORDER BY start_date, id LIMIT 300`,
   ).bind(...binds).all();
+  if (status === 'active') return results.concat(await settlingRows(env));
+  if (status === 'settling' || status === 'done') return results.filter(r => r.phase === status);
   return results;
+}
+
+async function settlingRows(env) {
+  const { results } = await env.DB.prepare(
+    `SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE status = 'inspected' ORDER BY start_date, id LIMIT 300`).all();
+  return results.filter(r => r.phase === 'settling');
 }
 
 /* Milestones happen in an order that reflects what physically happened. Bins
@@ -1563,19 +1585,19 @@ async function api(request, env, url) {
     counts.lapsed = lapsed;
     counts.new = Math.max(0, counts.new - lapsed);   // the badge should count live work
 
-    const { count: activeRentals } = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM rentals WHERE status IN ('pending','confirmed','out') OR (status = 'returned' AND inspected_at IS NULL)",
-    ).first();
+    const active = await listRentals(env, new URL('http://x/?status=active'));
+    const activeRentals = active.length;
     const { count: overdue } = await env.DB.prepare(
       `SELECT COUNT(*) AS count FROM rentals WHERE status = 'out' AND due_date < date('${today()}')`,
     ).first();
     const { count: stalled } = await env.DB.prepare(
-      `SELECT COUNT(*) AS count FROM rentals WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`,
+      `SELECT COUNT(*) AS count FROM rentals WHERE status = 'booked' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`,
     ).first();
 
     const { count: toInspect } = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM rentals WHERE status = 'returned' AND inspected_at IS NULL").first();
-    return json({ counts, rentals: { active: activeRentals, overdue, stalled, to_inspect: toInspect } });
+      "SELECT COUNT(*) AS count FROM rentals WHERE status = 'back'").first();
+    const settling = active.filter(r => r.phase === 'settling').length;
+    return json({ counts, rentals: { active: activeRentals, overdue, stalled, to_inspect: toInspect, settling } });
   }
 
   if (path === '/requests') {
@@ -2055,7 +2077,7 @@ async function api(request, env, url) {
       const { results } = await env.DB.prepare(
         `SELECT id, first_name, last_name, start_date, due_date,
                 CASE WHEN start_date BETWEEN ?1 AND ?2 THEN 'deliver' ELSE 'collect' END AS job
-         FROM rentals WHERE status NOT IN ('cancelled','returned')
+         FROM rentals WHERE status NOT IN ('cancelled','back','inspected')
            AND (start_date BETWEEN ?1 AND ?2 OR (due_date BETWEEN ?1 AND ?2 AND delivered_at IS NOT NULL))
          ORDER BY start_date`,
       ).bind(from, to).all();
@@ -2200,12 +2222,30 @@ async function api(request, env, url) {
       excludeRentalId: url.searchParams.get('exclude') ? Number(url.searchParams.get('exclude')) : undefined }));
   }
 
+  /* The activity log: who did what, filterable. Owner only — it is
+     everyone's actions. Actors include the machines (square-webhook,
+     retention, reminders) so a payment or a sweep is findable too. */
   if (path === '/audit' && method === 'GET') {
     requireOwner(user, 'see the activity log');
+    const where = [], binds = [];
+    const actor = url.searchParams.get('actor');
+    const from = isoDate(url.searchParams.get('from'));
+    const to = isoDate(url.searchParams.get('to'));
+    const q = String(url.searchParams.get('q') || '').trim().toLowerCase();
+    const entity = url.searchParams.get('entity');
+    if (actor) { binds.push(actor); where.push(`actor_email = ?${binds.length}`); }
+    if (from) { binds.push(from); where.push(`at >= ?${binds.length}`); }
+    if (to) { binds.push(to + 'T23:59:59Z'); where.push(`at <= ?${binds.length}`); }
+    if (entity) { binds.push(entity); where.push(`entity = ?${binds.length}`); }
+    if (q) { binds.push(`%${q}%`); where.push(`(lower(action) LIKE ?${binds.length} OR lower(detail) LIKE ?${binds.length} OR entity_id LIKE ?${binds.length})`); }
+    const limit = Math.min(1000, Math.max(1, parseInt(url.searchParams.get('limit') || '200', 10)));
     const { results } = await env.DB.prepare(
-      'SELECT at, actor_email, action, entity, entity_id, detail FROM audit_log ORDER BY at DESC LIMIT 100',
-    ).all();
-    return json({ entries: results });
+      `SELECT id, at, actor_email, action, entity, entity_id, detail FROM audit_log
+       ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY at DESC, id DESC LIMIT ${limit}`,
+    ).bind(...binds).all();
+    const { results: actors } = await env.DB.prepare(
+      'SELECT actor_email, COUNT(*) AS n FROM audit_log GROUP BY actor_email ORDER BY n DESC').all();
+    return json({ entries: results, actors: actors.map(a => a.actor_email) });
   }
 
   throw new HttpError(404, 'no such endpoint');

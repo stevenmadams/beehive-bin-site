@@ -75,8 +75,16 @@ a later edit to the request cannot silently rewrite what a driver is delivering
 tomorrow. A contact-form enquiry cannot be approved into a rental; it has no
 package or dates, and the panel says so.
 
-Rental status is **derived from its milestone timestamps** — agreement signed,
-paid, delivered, returned — so status and history can never disagree. The one
+Rental status is **derived from its milestone timestamps** so status and
+history can never disagree: `booked` (approved; not yet signed and paid),
+`confirmed`, `out`, `back` (collected, not inspected), `inspected`, and
+`cancelled`. What a person sees is the **phase**: the same, except `inspected`
+reads as `settling` while a charge is drafted or unpaid, a flagged bin has no
+charge decided, or a late return has no late charge — and `done` once nothing
+is. `stalled` (booked past its start date) and `overdue` (out past due) are
+flags on top. The Rentals tab is a list or a board — one column per live
+phase; cards click through and do not drag, since every stage has a rule a
+drag would go around. The one
 exception is `cancelled`, which is a decision rather than an event and sticks
 until someone reinstates it. Milestones toggle both ways: the commonest
 correction is marking the wrong rental delivered and needing to undo it.

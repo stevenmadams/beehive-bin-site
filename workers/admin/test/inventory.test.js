@@ -87,7 +87,7 @@ describe('availability', () => {
     const r = await rental({ bins: 20, weeks: 2, start_date: today(-3) });
     await sql("UPDATE rentals SET delivered_at = ?1 || 'T20:00:00Z', status = 'out' WHERE id = ?2", today(-3), r.id);
     expect((await avail(today(), 1))[0].available).toBe(20);
-    await sql("UPDATE rentals SET returned_at = ?1 || 'T20:00:00Z', status = 'returned' WHERE id = ?2", today(-1), r.id);
+    await sql("UPDATE rentals SET returned_at = ?1 || 'T20:00:00Z', status = 'back' WHERE id = ?2", today(-1), r.id);
     // Returned yesterday, one day turnaround: today they are on the shelf.
     expect((await avail(today(), 1))[0].available).toBe(20);
     expect((await avail(today(1), 1))[0].available).toBe(40);

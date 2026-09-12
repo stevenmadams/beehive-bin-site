@@ -14,7 +14,7 @@ async function finished(daysAgo) {
   await fleet(40);
   const r = await rental({ start_date: today() });
   const p = await upload(r.id, 'delivery');
-  await sql("UPDATE rentals SET delivered_at = 'x', returned_at = ?1 || 'T20:00:00Z', status = 'returned' WHERE id = ?2", today(-daysAgo), r.id);
+  await sql("UPDATE rentals SET delivered_at = 'x', returned_at = ?1 || 'T20:00:00Z', status = 'back' WHERE id = ?2", today(-daysAgo), r.id);
   return { r, photo: p.photos[0] };
 }
 

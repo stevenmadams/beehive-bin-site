@@ -62,12 +62,12 @@ describe('agreement and payment', () => {
     expect(undo.error).toMatch(/Refund it in Square/);
   });
 
-  it('status is derived: signed + paid = confirmed, delivered = out, returned = returned', async () => {
+  it('status is derived: signed + paid = confirmed, delivered = out, returned = back', async () => {
     await fleet(40);
     const r = await rental({ start_date: today() });
-    expect(r.status).toBe('pending');
+    expect(r.status).toBe('booked');
     await patch(r.id, { milestone: 'agreement', done: true, reason: 'paper' });
-    expect((await ok(`/rentals/${r.id}`)).rental.status).toBe('pending');
+    expect((await ok(`/rentals/${r.id}`)).rental.status).toBe('booked');
     await patch(r.id, { milestone: 'paid', done: true });
     expect((await ok(`/rentals/${r.id}`)).rental.status).toBe('confirmed');
     await photo(r.id, 'delivery');
@@ -168,7 +168,7 @@ describe('return', () => {
     expect((await photo(r.id, 'pickup')).status).toBe(201);
     const back = await patch(r.id, { milestone: 'returned', done: true, force: true });
     expect(back.status).toBe(200);
-    expect(back.rental.status).toBe('returned');
+    expect(back.rental.status).toBe('back');
     expect(back.rental.returned_by).toBe(OWNER);
   });
 });
@@ -180,8 +180,8 @@ describe('cancelling', () => {
     expect((await patch(r.id, { status: 'cancelled' })).status).toBe(428);
     const c = await patch(r.id, { status: 'cancelled', reason: 'Move fell through' });
     expect(c.rental.status).toBe('cancelled');
-    const back = await patch(r.id, { status: 'pending' });
-    expect(back.rental.status).toBe('pending');
+    const back = await patch(r.id, { status: 'booked' });
+    expect(back.rental.status).toBe('booked');
   });
 
   it('S21 not while the bins are out, and not after they are back', async () => {

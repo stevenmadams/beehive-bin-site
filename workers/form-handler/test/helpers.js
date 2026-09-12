@@ -22,7 +22,7 @@ export const reserveForm = (over = {}) => ({
 export async function rentalWithLink(over = {}) {
   const token = crypto.randomUUID();
   const r = { first_name: 'Dana', last_name: 'Whitfield', email: 'dana@example.com', phone: '801-555-0100',
-    bins: 20, weeks: 1, start_date: weekday(4), total_cents: 7900, delivery_city: 'Clinton', status: 'pending',
+    bins: 20, weeks: 1, start_date: weekday(4), total_cents: 7900, delivery_city: 'Clinton', status: 'booked',
     delivery_window: null, delivery_slot: null, ...over };
   const res = await env.DB.prepare(
     `INSERT INTO rentals (created_by, first_name, last_name, email, phone, bins, weeks, start_date, due_date,

@@ -61,7 +61,7 @@ describe('a rental is a job; when it is done it leaves the list', () => {
 
     const active = (await ok('/rentals?status=active')).rentals.map(r => r.id).sort();
     expect(active).toEqual([pending.id, back.id].sort());
-    expect((await ok('/rentals?status=to_inspect')).rentals.map(r => r.id)).toEqual([back.id]);
+    expect((await ok('/rentals?status=back')).rentals.map(r => r.id)).toEqual([back.id]);
     expect((await ok('/stats')).rentals.active).toBe(2);
   });
 });
@@ -120,5 +120,52 @@ describe('a customer is a person', () => {
     expect(fixed.customer.last_name).toBe('Whitfield-Ng');
     expect((await api(`/customers/${c.id}`, { method: 'PATCH', body: { email: 'x' }, as: 'staff@beehivebin.co' })).status).toBe(403);
     expect(r.customer_id).toBe(c.id);
+  });
+});
+
+describe('statuses match the stages', () => {
+  it('P1 booked → confirmed → out → back → settling → done, and the list filters by each', async () => {
+    await fleet(60);
+    const r = await rental({ bins: 10, start_date: today() });
+    const phase = async () => (await ok(`/rentals/${r.id}`)).rental.phase;
+    expect((await ok(`/rentals/${r.id}`)).rental.status).toBe('booked');
+    await patch(r.id, { milestone: 'agreement', done: true, reason: 'paper' });
+    await patch(r.id, { milestone: 'paid', done: true });
+    expect(await phase()).toBe('confirmed');
+    await patch(r.id, { milestone: 'delivered', done: true, force: true, photo_reason: 'x' });
+    expect(await phase()).toBe('out');
+    await ok(`/rentals/${r.id}/unlock`, { method: 'POST', body: { step: 'returned' } });
+    await patch(r.id, { milestone: 'returned', done: true, force: true, photo_reason: 'x' });
+    expect(await phase()).toBe('back');
+    expect((await ok('/rentals?status=back')).rentals.map(x => x.id)).toEqual([r.id]);
+    // Flag one bin lost at inspection: there is something to settle.
+    const { items } = await ok(`/rentals/${r.id}/items`);
+    await ok(`/rentals/${r.id}/items/inspect`, { method: 'POST', body: { items: [{ id: items[0].id, back: false }] } });
+    await patch(r.id, { milestone: 'inspected', done: true });
+    expect(await phase()).toBe('settling');
+    expect((await ok('/rentals?status=settling')).rentals.map(x => x.id)).toEqual([r.id]);
+    expect((await ok('/rentals?status=active')).rentals.map(x => x.id)).toEqual([r.id]);   // still work to do
+    expect((await ok('/stats')).rentals.settling).toBe(1);
+    // Decide it — add the charge and waive it — and it is done.
+    const { proposals } = await ok(`/rentals/${r.id}/charges`);
+    const m = proposals.find(p => p.kind === 'missing');
+    const c = await ok(`/rentals/${r.id}/charges`, { method: 'POST', body: { kind: 'missing', qty: m.qty, unit_cents: m.unit_cents, reason: m.reason } });
+    expect(await phase()).toBe('settling');   // drafted, not yet charged
+    await ok(`/charges/${c.charges[0].id}/waive`, { method: 'POST', body: { reason: 'Turned up later' } });
+    expect(await phase()).toBe('done');
+    expect((await ok('/rentals?status=active')).rentals).toHaveLength(0);
+    expect((await ok('/rentals?status=done')).rentals.map(x => x.id)).toEqual([r.id]);
+  });
+
+  it('P2 a clean rental is done the moment it is inspected; a late one is settling until the late week is decided', async () => {
+    await fleet(60);
+    const clean = await rental({ bins: 10, start_date: today(-7), email: 'c@example.com' });
+    await sql("UPDATE rentals SET due_date = ?1, agreement_signed_at='x', paid_at='x', delivered_at='x', returned_at=?1 || 'T20:00:00Z', status='back' WHERE id = ?2", today(), clean.id);
+    await patch(clean.id, { milestone: 'inspected', done: true });
+    expect((await ok(`/rentals/${clean.id}`)).rental.phase).toBe('done');
+    const late = await rental({ bins: 10, start_date: today(-10), email: 'l@example.com' });
+    await sql("UPDATE rentals SET due_date = ?1, agreement_signed_at='x', paid_at='x', delivered_at='x', returned_at=?2 || 'T20:00:00Z', status='back' WHERE id = ?3", today(-3), today(), late.id);
+    await patch(late.id, { milestone: 'inspected', done: true });
+    expect((await ok(`/rentals/${late.id}`)).rental.phase).toBe('settling');
   });
 });

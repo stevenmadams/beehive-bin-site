@@ -209,10 +209,11 @@ async function verifySquareSignature(env, rawBody, signature) {
 
 const statusFrom = r => {
   if (r.status === 'cancelled') return 'cancelled';
-  if (r.returned_at) return 'returned';
+  if (r.inspected_at) return 'inspected';
+  if (r.returned_at) return 'back';
   if (r.delivered_at) return 'out';
   if (r.agreement_signed_at && r.paid_at) return 'confirmed';
-  return 'pending';
+  return 'booked';
 };
 
 async function handleSquareWebhook(request, env) {
@@ -298,7 +299,7 @@ async function handleSquareWebhook(request, env) {
     }
 
     const rental = await env.DB.prepare(
-      `SELECT id, status, agreement_signed_at, paid_at, delivered_at, returned_at
+      `SELECT id, status, agreement_signed_at, paid_at, delivered_at, returned_at, inspected_at
        FROM rentals WHERE square_invoice_id = ?1`,
     ).bind(invoiceId).first();
 
