@@ -338,6 +338,13 @@ tr.late td{background:rgba(163,44,44,.05)}
 .binrow td{font-variant-numeric:tabular-nums}
 .light{margin-right:7px;cursor:help;font-size:13px;vertical-align:-1px}
 #sform input{width:100%;max-width:260px}
+.facts{padding:20px 22px}
+.factlist{display:grid;grid-template-columns:max-content 1fr;gap:14px 24px;margin:0}
+.factlist dt{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+.factlist dd{margin:0;font-size:15px}
+.factlist dd b{font-weight:700}
+.factlist dd span{display:block;font-size:12.5px;color:var(--muted);margin-top:1px}
+@media (max-width:820px){.factlist{grid-template-columns:1fr;gap:10px}}
 #sform .dayrow input,#sform .holrow input{width:auto;max-width:none;margin:0}
 .dayrow{display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
 .dayrow label{display:flex;align-items:center;gap:5px;font-weight:600}
@@ -2828,63 +2835,104 @@ function openAddItems(existingKinds = []) {
 
 /* ---------- settings ----------
 
-   The few numbers that shape every booking, and the days the van stays home.
-   Owners change them; everyone can see them, because "why did the website
-   refuse Tuesday?" is a question staff get asked. */
+   A page of facts — "we go out Monday to Saturday, 6–8pm, with a day's
+   notice" — that an owner occasionally changes. Read first; the fields only
+   appear behind Edit, so the page is something to glance at rather than a
+   form waiting to be filled in. */
+
+const WDL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const listOf = (arr, none = 'none') => arr.length === 0 ? none
+  : arr.length === 1 ? arr[0] : `${arr.slice(0, -1).join(', ')} and ${arr.at(-1)}`;
 
 async function viewSettings() {
   const owner = me.role === 'owner';
   const view = $(`<div>
     <div class="head"><h1>Settings</h1></div>
-    <p class="sub">${owner ? 'Changes take effect immediately, on the website too.' : 'Only an owner can change these.'}</p>
-    <div class="card" style="padding:20px 22px;margin-bottom:22px" id="sform"><div class="empty">Loading…</div></div>
-    <div class="head" style="margin-top:8px"><h1 style="font-size:22px">Days off</h1></div>
-    <p class="sub">No deliveries start on these days. Pickups already booked for one are flagged on the schedule.</p>
+    <p class="sub">${owner ? 'What the website and the panel go by. Changes take effect immediately.' : 'What the website and the panel go by. Only an owner can change these.'}</p>
+    <div class="card facts" id="sform"><div class="empty">Loading…</div></div>
+    <div class="head" style="margin-top:34px"><h1 style="font-size:22px">Days off</h1>
+      ${owner ? '<button class="btn sm newreq" id="b-open">+ Add a day off</button>' : ''}</div>
+    <p class="sub">One-off days nothing starts on. Holidays and weekly days off are above.</p>
     <div class="card" id="sblack"><div class="empty">Loading…</div></div>
   </div>`);
   render('settings', view);
 
   const form = view.querySelector('#sform');
   const black = view.querySelector('#sblack');
-  const draw = async () => {
-    let st, bl;
-    try { [st, bl] = await Promise.all([api('/settings'), api('/blackouts')]); }
-    catch (err) { form.replaceChildren(banner(err.message)); return; }
+  let st, hols = [];
 
+  /* Read mode: the facts. */
+  const showFacts = () => {
+    const holNames = hols.filter(h => (st.closedHolidays || []).includes(h.key)).map(h => h.name);
+    const closed = (st.closedWeekdays || []).map(d => WDL[d] + 's');
+    form.replaceChildren($(`<div>
+      ${owner ? '<button class="btn sm" id="s-edit" style="float:right">Edit</button>' : ''}
+      <dl class="factlist">
+        <dt>Usual window</dt><dd><b>${esc(st.defaultWindow)}</b> <span>stamped on each new rental; changeable per rental</span></dd>
+        <dt>Days off each week</dt><dd><b>${esc(listOf(closed, 'None'))}</b> <span>nothing starts on these, online or by phone</span></dd>
+        <dt>Holidays</dt><dd><b>${esc(listOf(holNames, 'None'))}</b> <span>closed every year, worked out automatically</span></dd>
+        <dt>Notice online</dt><dd><b>${st.leadDays === 0 ? 'Same day' : st.leadDays === 1 ? '1 day' : `${st.leadDays} days`}</b> <span>the earliest a website booking can start; phone bookings can go inside it</span></dd>
+        <dt>Room per hour</dt><dd><b>${st.jobsPerSlot} job${st.jobsPerSlot === 1 ? '' : 's'} per driver</b> <span>how many stops one person makes in an hour</span></dd>
+        <dt>Turnaround</dt><dd><b>${st.turnaroundDays === 0 ? 'Same night' : st.turnaroundDays === 1 ? '1 day' : `${st.turnaroundDays} days`}</b> <span>bins held after a return, to clean and restack</span></dd>
+        <dt>Bookable fleet</dt><dd><b>${st.fleetTotal} bins</b> <span>in service on the Inventory tab${st.outOfService ? `; ${st.outOfService} out of service` : ''}</span></dd>
+      </dl>
+    </div>`));
+    form.querySelector('#s-edit')?.addEventListener('click', showForm);
+  };
+
+  /* Edit mode: the same facts as fields, with Save and Cancel. */
+  const showForm = () => {
+    const closedSet = new Set(st.closedHolidays || []);
     form.replaceChildren($(`<div>
       <div class="frow">
         <div><label class="fl" for="s-window">Usual delivery window</label>
-          <input id="s-window" value="${esc(st.defaultWindow)}" maxlength="40" ${owner ? '' : 'disabled'}>
-          <p class="sub" style="margin:6px 0 0">Stamped on each new rental; change it per rental on the Rentals tab. Goes in the day-before email.</p></div>
-        <div><label class="fl" for="s-lead">Notice the website needs</label>
-          <input id="s-lead" type="number" min="0" max="30" value="${st.leadDays}" ${owner ? '' : 'disabled'}>
-          <p class="sub" style="margin:6px 0 0">Days. 1 means the earliest online booking is tomorrow. Phone bookings can go inside this.</p></div>
+          <input id="s-window" value="${esc(st.defaultWindow)}" maxlength="40"></div>
+        <div><label class="fl" for="s-lead">Notice the website needs (days)</label>
+          <input id="s-lead" type="number" min="0" max="30" value="${st.leadDays}"></div>
       </div>
       <div class="frow one">
         <div><label class="fl">Days we don't go out</label>
           <div class="dayrow">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) =>
-            `<label><input type="checkbox" data-closed="${i}"${(st.closedWeekdays || []).includes(i) ? ' checked' : ''}${owner ? '' : ' disabled'}> ${d}</label>`).join('')}</div>
-          <p class="sub" style="margin:6px 0 0">No deliveries or pickups start on a ticked day, online or by phone. The rental agreement says Sundays — if you change this, change the agreement too.</p></div>
+            `<label><input type="checkbox" data-closed="${i}"${(st.closedWeekdays || []).includes(i) ? ' checked' : ''}> ${d}</label>`).join('')}</div>
+          <p class="sub" style="margin:6px 0 0">The rental agreement says Sundays — if you change this, change the agreement too.</p></div>
       </div>
       <div class="frow one">
         <div><label class="fl">Holidays we close on</label>
-          <div id="s-hols">Loading…</div>
-          <p class="sub" style="margin:6px 0 0">Worked out each year — nothing to type. The actual day, not the observed Monday. One-off days go under Days off below.</p></div>
+          <div class="holrow">${hols.map(h =>
+            `<label><input type="checkbox" data-hol="${esc(h.key)}"${closedSet.has(h.key) ? ' checked' : ''}> ${esc(h.name)} <small>${esc(niceDate(h.date).replace(/^\w+, /, ''))}</small></label>`).join('')}</div>
+          <p class="sub" style="margin:6px 0 0">The actual day, not the observed Monday.</p></div>
       </div>
       <div class="frow">
         <div><label class="fl" for="s-jobs">Jobs per driver per hour</label>
-          <input id="s-jobs" type="number" min="1" max="10" value="${st.jobsPerSlot ?? 2}" ${owner ? '' : 'disabled'}>
-          <p class="sub" style="margin:6px 0 0">How many drop-offs or pickups one person can do in an hour. Sets the room in each time slot.</p></div>
-        <div><label class="fl" for="s-turn">Turnaround after a return</label>
-          <input id="s-turn" type="number" min="0" max="14" value="${st.turnaroundDays}" ${owner ? '' : 'disabled'}>
-          <p class="sub" style="margin:6px 0 0">Days bins are held after they come back, to clean and restack. 0 means the same night.</p></div>
-        <div><label class="fl">Bookable fleet</label>
-          <div style="font-family:var(--font-display);font-size:28px;line-height:1.2">${st.fleetTotal}</div>
-          <p class="sub" style="margin:6px 0 0">Bins in service on the Inventory tab${st.outOfService ? ` · ${st.outOfService} out of service` : ''}.</p></div>
+          <input id="s-jobs" type="number" min="1" max="10" value="${st.jobsPerSlot ?? 2}"></div>
+        <div><label class="fl" for="s-turn">Turnaround after a return (days)</label>
+          <input id="s-turn" type="number" min="0" max="14" value="${st.turnaroundDays}"></div>
       </div>
-      ${owner ? `<div class="actions" style="margin-top:6px"><button class="btn primary" id="s-save">Save</button><span id="s-msg" class="saved" style="font-size:13px;color:var(--muted)"></span></div>` : ''}
+      <div class="actions" style="margin-top:6px">
+        <button class="btn primary" id="s-save">Save</button>
+        <button class="btn" id="s-cancel">Cancel</button>
+        <span id="s-msg" style="font-size:13px;color:var(--bad)"></span>
+      </div>
     </div>`));
+    form.querySelector('#s-cancel').addEventListener('click', showFacts);
+    form.querySelector('#s-save').addEventListener('click', async () => {
+      try {
+        st = await api('/settings', { method: 'PATCH', body: JSON.stringify({
+          defaultWindow: form.querySelector('#s-window').value,
+          leadDays: form.querySelector('#s-lead').value,
+          turnaroundDays: form.querySelector('#s-turn').value,
+          jobsPerSlot: form.querySelector('#s-jobs').value,
+          closedWeekdays: [...form.querySelectorAll('[data-closed]:checked')].map(c => +c.dataset.closed),
+          closedHolidays: [...form.querySelectorAll('[data-hol]:checked')].map(c => c.dataset.hol),
+        })});
+        showFacts();
+      } catch (err) { form.querySelector('#s-msg').textContent = err.message; }
+    });
+  };
 
+  const drawBlackouts = async (adding = false) => {
+    let bl;
+    try { bl = await api('/blackouts'); } catch (err) { black.replaceChildren(banner(err.message)); return; }
     const rows = bl.blackouts.map(b => `<tr>
       <td class="nowrap"><strong>${esc(niceDate(b.date))}</strong> <span style="color:var(--muted)">${esc(b.date)}</span></td>
       <td>${esc(b.reason || '')}</td>
@@ -2892,53 +2940,39 @@ async function viewSettings() {
       <td style="text-align:right">${owner ? `<button class="linkish" data-unblack="${b.date}">Remove</button>` : ''}</td>
     </tr>`).join('');
     black.replaceChildren($(`<div>
-      ${owner ? `<div style="display:flex;gap:8px;align-items:flex-end;padding:16px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap">
+      ${adding ? `<div style="display:flex;gap:8px;align-items:flex-end;padding:16px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap">
         <div><label class="fl" for="b-date">Date</label><input id="b-date" type="date" min="${todayISO()}"></div>
-        <div style="flex:1;min-width:160px"><label class="fl" for="b-why">Why (optional)</label><input id="b-why" placeholder="Thanksgiving, away, van in the shop" maxlength="80"></div>
-        <button class="btn primary" id="b-add">Add day off</button>
+        <div style="flex:1;min-width:160px"><label class="fl" for="b-why">Why (optional)</label><input id="b-why" placeholder="Away, van in the shop" maxlength="80"></div>
+        <button class="btn primary" id="b-add">Add</button><button class="btn" id="b-cancel">Cancel</button>
       </div>` : ''}
       ${rows ? `<table><thead><tr><th>Day</th><th>Why</th><th class="hide-sm">Added by</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
-        : '<div class="empty">No days off on the calendar.</div>'}
+        : '<div class="empty">No one-off days off on the calendar.</div>'}
       <div id="b-msg" style="padding:0 18px 14px"></div>
     </div>`));
-
-    api(`/holidays?year=${todayISO().slice(0, 4)}`).then(({ holidays }) => {
-      const closedSet = new Set(st.closedHolidays || []);
-      view.querySelector('#s-hols').replaceChildren($(`<div class="holrow">${holidays.map(h =>
-        `<label title="${esc(niceDate(h.date))} this year"><input type="checkbox" data-hol="${esc(h.key)}"${closedSet.has(h.key) ? ' checked' : ''}${owner ? '' : ' disabled'}> ${esc(h.name)} <small>${esc(niceDate(h.date).replace(/^\w+, /, ''))}</small></label>`).join('')}</div>`));
-    }).catch(() => {});
-
-    view.querySelector('#s-save')?.addEventListener('click', async () => {
-      const msg = view.querySelector('#s-msg');
-      try {
-        await api('/settings', { method: 'PATCH', body: JSON.stringify({
-          defaultWindow: view.querySelector('#s-window').value,
-          leadDays: view.querySelector('#s-lead').value,
-          turnaroundDays: view.querySelector('#s-turn').value,
-          jobsPerSlot: view.querySelector('#s-jobs').value,
-          closedWeekdays: [...view.querySelectorAll('[data-closed]:checked')].map(c => +c.dataset.closed),
-          closedHolidays: [...view.querySelectorAll('[data-hol]:checked')].map(c => c.dataset.hol),
-        })});
-        msg.textContent = 'Saved.';
-      } catch (err) { msg.textContent = err.message; }
-    });
-    view.querySelector('#b-add')?.addEventListener('click', async () => {
-      const date = view.querySelector('#b-date').value;
+    black.querySelector('#b-cancel')?.addEventListener('click', () => drawBlackouts(false));
+    black.querySelector('#b-add')?.addEventListener('click', async () => {
+      const date = black.querySelector('#b-date').value;
       if (!date) return;
       try {
-        const res = await api('/blackouts', { method: 'POST', body: JSON.stringify({ date, reason: view.querySelector('#b-why').value }) });
+        const res = await api('/blackouts', { method: 'POST', body: JSON.stringify({ date, reason: black.querySelector('#b-why').value }) });
         if (res.affected?.length) {
           alert(`Added. Already booked that day:\n\n${res.affected.map(a => `• ${a.name} — ${a.job === 'deliver' ? 'delivery' : 'pickup'} (rental #${a.id})`).join('\n')}\n\nMove or contact them.`);
         }
-        draw();
-      } catch (err) { view.querySelector('#b-msg').replaceChildren(banner(err.message)); }
+        drawBlackouts(false);
+      } catch (err) { black.querySelector('#b-msg').replaceChildren(banner(err.message)); }
     });
-    view.querySelectorAll('[data-unblack]').forEach(b => b.addEventListener('click', async () => {
-      try { await api(`/blackouts/${b.dataset.unblack}`, { method: 'DELETE' }); draw(); }
-      catch (err) { view.querySelector('#b-msg').replaceChildren(banner(err.message)); }
+    black.querySelectorAll('[data-unblack]').forEach(b => b.addEventListener('click', async () => {
+      try { await api(`/blackouts/${b.dataset.unblack}`, { method: 'DELETE' }); drawBlackouts(false); }
+      catch (err) { black.querySelector('#b-msg').replaceChildren(banner(err.message)); }
     }));
   };
-  draw();
+  view.querySelector('#b-open')?.addEventListener('click', () => drawBlackouts(true));
+
+  try {
+    [st, { holidays: hols }] = await Promise.all([api('/settings'), api(`/holidays?year=${todayISO().slice(0, 4)}`)]);
+  } catch (err) { form.replaceChildren(banner(err.message)); return; }
+  showFacts();
+  drawBlackouts(false);
 }
 
 /* ---------- stubs ---------- */
