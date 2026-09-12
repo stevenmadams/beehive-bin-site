@@ -230,6 +230,14 @@ Federal ones, Utah's Pioneer Day, and the three everyone takes anyway. The
 `closed_holidays` setting says which close the business (seven by default);
 a closed holiday behaves exactly like a blackout, by name.
 
+**The website's calendar** (`GET /calendar?from&days&bins&weeks` on the
+public Worker) answers, per day, whether a booking can start and why not —
+closed weekday, holiday, day off, notice — and whether the package asked
+about fits, from `workers/shared/availability.js`, the same engine the
+panel's stoplight uses. It never says how many bins exist. `reserve.html`
+draws it as the date picker; the native date field stays underneath as the
+form value and as the fallback if the calendar cannot load.
+
 **Blackouts** (`blackouts` table, Settings tab) stop a booking starting on a
 day; adding one reports jobs already booked for it. **Lead time**
 (`lead_days`) is what the website needs; the panel can book inside it.

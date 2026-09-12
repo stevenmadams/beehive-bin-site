@@ -38,6 +38,7 @@ was asked of them.
 | C20 | Gets a reminder the day before delivery and the day before pickup, with the window and address | ✅ | admin/time, forms/confirm |
 | C21 | Books online for today → told the earliest day; books a day off → told why | ✅ | forms/submit |
 | C22 | Sees the delivery and pickup window once all set | ✅ | forms/confirm |
+| C23 | The website's date picker greys out days off, holidays, days inside the notice, and weeks that are full for the package chosen — naming the reason; never the fleet size | ✅ | forms/calendar |
 
 ## Staff, day to day
 

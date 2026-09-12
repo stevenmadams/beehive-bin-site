@@ -7,6 +7,7 @@ import { today, isoDate, addDays } from '../../shared/clock.js';
 import { closedWeekdays, weekdayOf, WEEKDAY } from '../../shared/coverage.js';
 import { closedHolidayOn } from '../../shared/holidays.js';
 import { customerFor } from '../../shared/customers.js';
+import { availability, getSettings, blackoutOn } from '../../shared/availability.js';
 
 /* Beehive Bin Co. — form handler.
    Receives reserve/contact form POSTs from beehivebin.co and emails them to
@@ -175,6 +176,55 @@ async function storeRequest(env, data) {
     if (cid) await env.DB.prepare('UPDATE requests SET customer_id = ?1 WHERE id = ?2').bind(cid, id).run();
   } catch (err) { console.log('customer link failed', err.message); }
   return id;
+}
+
+/* ---------- the website's calendar ----------
+
+   Which days a booking can start on, and why not for the rest — the same
+   rules the panel applies, so the customer never picks a day we then refuse.
+   Says whether the package asked about fits each day, never how many bins
+   exist: that is the business's number, not the public's. */
+
+async function calendar(env, url, origin) {
+  const asked = url.searchParams.get('from');
+  if (asked && !isoDate(asked)) return json({ ok: false, error: 'from must be YYYY-MM-DD' }, 400, origin);
+  const from = asked || today();
+  const days = Math.min(120, Math.max(1, parseInt(url.searchParams.get('days') || '62', 10)));
+  const bins = parseInt(url.searchParams.get('bins') || '0', 10) || 0;
+  const weeks = Math.min(26, Math.max(1, parseInt(url.searchParams.get('weeks') || '1', 10) || 1));
+
+  const [closed, settings, lead] = await Promise.all([
+    closedWeekdays(env), getSettings(env),
+    env.DB.prepare("SELECT value FROM settings WHERE key = 'lead_days'").first(),
+  ]);
+  const leadDays = Math.max(0, parseInt(lead?.value ?? '1', 10) || 0);
+  const earliest = addDays(today(), leadDays);
+
+  // One availability sweep long enough to judge the last day's whole span.
+  const span = 7 * weeks + settings.turnaroundDays;
+  const av = bins && settings.fleetTotal > 0 ? await availability(env, from, days + span) : null;
+  const free = av ? new Map(av.days.map(d => [d.date, d.available])) : null;
+
+  const out = [];
+  for (let i = 0; i < days; i++) {
+    const date = addDays(from, i);
+    const wd = weekdayOf(date);
+    let why = null;
+    if (date < today()) why = 'Past';
+    else if (closed.includes(wd)) why = WEEKDAY[wd];
+    else if (date < earliest) why = leadDays === 1 ? 'Needs a day\'s notice' : `Needs ${leadDays} days' notice`;
+    else why = await blackoutOn(env, date);   // a day off, or a holiday, by name
+    let fits = true;
+    if (!why && free) {
+      for (let d = date, n = 0; n <= span; d = addDays(d, 1), n++) {
+        if ((free.get(d) ?? settings.fleetTotal) < bins) { fits = false; break; }
+      }
+    }
+    out.push({ date, open: !why, why, fits });
+  }
+  return new Response(JSON.stringify({ from, days: out, closedWeekdays: closed, leadDays }), {
+    status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors(origin) },
+  });
 }
 
 /* ---------- Square webhooks ----------
@@ -474,6 +524,7 @@ export default {
     if (url.hostname === env.BOOKING_HOST) return handleConfirm(request, env, url);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origin) });
+    if (request.method === 'GET' && url.pathname === '/calendar') return calendar(env, url, origin);
     if (request.method === 'GET') return new Response('beehive-forms ok', { status: 200 });
     if (request.method !== 'POST' || url.pathname !== '/submit')
       return json({ ok: false, error: 'not found' }, 404, origin);

@@ -45,6 +45,32 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
    date UI (Chrome's calendar, Safari's inline fields, iOS wheels) is usable. */
 .date-shell input:focus{opacity:1 !important;background:var(--white)}
 .date-shell:focus-within .date-display{visibility:hidden}
+.date-shell.picker input{pointer-events:none}   /* the calendar below is the control */
+.cal{margin-top:14px;background:var(--white);border:2px solid var(--ink);border-radius:12px;padding:14px 16px 12px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-head strong{font-family:var(--font-display);font-size:17px}
+.cal-nav{width:34px;height:34px;border:2px solid var(--ink);border-radius:8px;background:var(--white);font-size:20px;cursor:pointer;line-height:1}
+.cal-nav:disabled{opacity:.3;cursor:default}
+.cal-months{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:640px){.cal-months{grid-template-columns:1fr}}
+.cal-month h4{font-size:14px;margin:0 0 8px;text-align:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--muted);text-align:center;text-transform:uppercase;padding-bottom:4px}
+.cal-day{aspect-ratio:1;border:0;border-radius:8px;background:none;font:600 14px var(--font-body);color:var(--ink);cursor:pointer;position:relative}
+.cal-day:hover{background:rgba(255,196,0,.25)}
+.cal-day.pad{visibility:hidden}
+.cal-day.off,.cal-day.full{color:var(--muted);cursor:not-allowed;background:none}
+.cal-day.off{opacity:.45}
+.cal-day.full{text-decoration:line-through}
+.cal-day.today::after{content:"";position:absolute;bottom:4px;left:50%;width:4px;height:4px;border-radius:50%;background:var(--ink);transform:translateX(-50%)}
+.cal-day.on{background:var(--yellow);box-shadow:0 0 0 2px var(--ink) inset}
+.cal-day.on:hover{background:var(--yellow)}
+.cal-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--muted)}
+.cal-legend .k{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+.cal-legend .k.open{background:var(--yellow)}
+.cal-legend .k.full{background:none;border:1.5px solid var(--muted)}
+.cal-legend .k.off{background:rgba(21,19,15,.15)}
+.cal-why{margin-top:8px;font-size:13px;color:#B3261E;font-weight:600;min-height:1.2em}
 .choice .mini-scene{aspect-ratio:16/9;margin-top:14px}
 #reserve-form .summary{margin:0 0 24px}
 .linklike{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer}
@@ -158,11 +184,11 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
           <div class="grid cols-2">
             <div class="field">
               <label for="start">Rental start date</label>
-              <div class="date-shell">
+              <div class="date-shell" id="date-shell">
                 <span class="date-display empty" id="start-display" aria-hidden="true">Pick a date</span>
                 <input type="date" id="start" name="start" required>
               </div>
-              <span class="help" id="sunday-warn" hidden style="color:#B3261E;font-weight:700">We don't deliver or pick up on Sundays — please pick another day.</span>
+              <span class="help" id="sunday-warn" hidden style="color:#B3261E;font-weight:700">We don't deliver or pick up that day — please pick another.</span>
             </div>
             <div class="field">
               <label for="end">Return date</label>
@@ -170,7 +196,23 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
               <span class="help">Set automatically from your rental length.</span>
             </div>
           </div>
-          <p class="note" style="margin-top:4px">Deliveries and pickups happen <strong>in the evening</strong> on your start and return dates — we'll confirm an exact time window with you. We don't deliver or pick up on <strong>Sundays</strong>.</p>
+          <!-- The real picker. Drawn from /calendar, which knows our days off,
+               holidays, notice, and whether this package fits each day. If
+               that cannot load, the native date field above stands in. -->
+          <div class="cal" id="cal" hidden>
+            <div class="cal-head">
+              <button type="button" class="cal-nav" id="cal-prev" aria-label="Earlier">&lsaquo;</button>
+              <strong id="cal-title"></strong>
+              <button type="button" class="cal-nav" id="cal-next" aria-label="Later">&rsaquo;</button>
+            </div>
+            <div class="cal-months" id="cal-months"></div>
+            <div class="cal-legend">
+              <span><i class="k open"></i> Open</span>
+              <span><i class="k full"></i> Full for this package</span>
+              <span><i class="k off"></i> Closed</span>
+            </div>
+          </div>
+          <p class="note" style="margin-top:4px" id="date-note">Deliveries and pickups happen <strong>in the evening</strong> on your start and return dates — we'll confirm an exact time window with you. We don't deliver or pick up on <strong id="closed-days">Sundays</strong>.</p>
         </fieldset>
 
         <fieldset>
@@ -426,7 +468,7 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
   function syncEndDate() {
     if (!startInput.value) return;
     const d = new Date(startInput.value + 'T12:00:00');
-    document.getElementById('sunday-warn').hidden = d.getDay() !== 0;
+    document.getElementById('sunday-warn').hidden = true;
     startDisplay.textContent = d.toLocaleDateString(undefined, FMT);
     startDisplay.classList.remove('empty');
     d.setDate(d.getDate() + 7 * selectedWeeks());
@@ -474,6 +516,87 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
   });
   form.addEventListener('change', syncSummary);
   startInput.addEventListener('change', syncEndDate);
+
+  /* The calendar. Two months at a time, from the same rules the panel uses:
+     days off, holidays, the notice we need, and whether this package fits.
+     The native date field stays underneath as the value the form sends, and
+     as the whole control if the calendar cannot load. */
+  const CAL_ENDPOINT = 'https://api.beehivebin.co/calendar';
+  const cal = document.getElementById('cal');
+  const calState = { first: null, days: new Map(), months: 2 };
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const todayLocal = () => { const d = new Date(); return iso(d); };
+
+  async function loadCalendar() {
+    if (!calState.first) { const d = new Date(); d.setDate(1); calState.first = d; }
+    const from = iso(calState.first);
+    const end = new Date(calState.first); end.setMonth(end.getMonth() + calState.months);
+    const days = Math.round((end - calState.first) / 86400000);
+    try {
+      const res = await fetch(`${CAL_ENDPOINT}?from=${from}&days=${days}&bins=${selectedBins()}&weeks=${selectedWeeks()}`);
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      calState.days = new Map(data.days.map(d => [d.date, d]));
+      const names = ['Sundays','Mondays','Tuesdays','Wednesdays','Thursdays','Fridays','Saturdays'];
+      const closed = (data.closedWeekdays || []).map(n => names[n]);
+      document.getElementById('closed-days').textContent = closed.length ? closed.join(' or ') : 'holidays';
+      drawCalendar();
+      cal.hidden = false;
+      document.getElementById('date-shell').classList.add('picker');
+    } catch {
+      cal.hidden = true;   // the native field does the job
+      document.getElementById('date-shell').classList.remove('picker');
+    }
+  }
+
+  function drawCalendar() {
+    const box = document.getElementById('cal-months');
+    box.replaceChildren();
+    const t = todayLocal();
+    for (let m = 0; m < calState.months; m++) {
+      const first = new Date(calState.first); first.setMonth(first.getMonth() + m);
+      const month = document.createElement('div'); month.className = 'cal-month';
+      const h = document.createElement('h4'); h.textContent = `${MONTHS[first.getMonth()]} ${first.getFullYear()}`;
+      const grid = document.createElement('div'); grid.className = 'cal-grid';
+      for (const d of ['Su','Mo','Tu','We','Th','Fr','Sa']) { const e = document.createElement('div'); e.className = 'cal-dow'; e.textContent = d; grid.append(e); }
+      for (let i = 0; i < first.getDay(); i++) { const e = document.createElement('button'); e.type = 'button'; e.className = 'cal-day pad'; e.tabIndex = -1; grid.append(e); }
+      const daysIn = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+      for (let n = 1; n <= daysIn; n++) {
+        const date = iso(new Date(first.getFullYear(), first.getMonth(), n));
+        const info = calState.days.get(date);
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = n;
+        const bad = !info || !info.open ? 'off' : !info.fits ? 'full' : '';
+        b.className = `cal-day ${bad}${date === t ? ' today' : ''}${date === startInput.value ? ' on' : ''}`;
+        b.title = !info ? '' : !info.open ? info.why : !info.fits ? `Full for ${selectedBins()} bins that week` : `Open`;
+        b.setAttribute('aria-label', `${date}${b.title ? ' — ' + b.title : ''}`);
+        b.addEventListener('click', () => {
+          if (bad) { showWhy(b.title === 'Past' ? '' : b.title, date); return; }
+          startInput.value = date;
+          showWhy('');
+          syncEndDate();
+          drawCalendar();
+        });
+        grid.append(b);
+      }
+      month.append(h, grid); box.append(month);
+    }
+    const last = new Date(calState.first); last.setMonth(last.getMonth() + calState.months - 1);
+    document.getElementById('cal-title').textContent = calState.months === 1 ? `${MONTHS[calState.first.getMonth()]}` : `${MONTHS[calState.first.getMonth()]} – ${MONTHS[last.getMonth()]}`;
+    const now = new Date(); now.setDate(1);
+    document.getElementById('cal-prev').disabled = calState.first <= now;
+  }
+  function showWhy(text, date) {
+    let el = cal.querySelector('.cal-why');
+    if (!el) { el = document.createElement('div'); el.className = 'cal-why'; cal.querySelector('.cal-legend').before(el); }
+    el.textContent = text ? `${new Date(date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'})}: ${text}.` : '';
+  }
+  document.getElementById('cal-prev').addEventListener('click', () => { calState.first.setMonth(calState.first.getMonth() - 1); loadCalendar(); });
+  document.getElementById('cal-next').addEventListener('click', () => { calState.first.setMonth(calState.first.getMonth() + 1); loadCalendar(); });
+  // Whether a day fits depends on the package, so the calendar follows it.
+  form.querySelectorAll('input[name="bins"], input[name="weeks"]').forEach(i => i.addEventListener('change', loadCalendar));
+  if (matchMedia('(max-width:640px)').matches) calState.months = 1;
+  loadCalendar();
   syncSummary();
 
   /* LIVE SWITCH: create a free form at https://formspree.io, then paste its
@@ -485,11 +608,14 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
   form.addEventListener('submit', async e => {
     e.preventDefault();
     if (!form.reportValidity()) return;
-    if (startInput.value && new Date(startInput.value + 'T12:00:00').getDay() === 0) {
-      document.getElementById('sunday-warn').hidden = false;
-      startInput.focus();
-      startInput.scrollIntoView({behavior:'smooth', block:'center'});
-      return;
+    {
+      const info = calState.days.get(startInput.value);
+      if (info && (!info.open || !info.fits)) {
+        document.getElementById('sunday-warn').textContent = !info.open ? `${info.why} — please pick another day.` : 'That week is full for this package — please pick another day.';
+        document.getElementById('sunday-warn').hidden = false;
+        cal.scrollIntoView({behavior:'smooth', block:'center'});
+        return;
+      }
     }
     const bins = selectedBins();
     const weeks = selectedWeeks();
