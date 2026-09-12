@@ -3,7 +3,8 @@ import { handleConfirm } from './confirm.js';
 import { sendEmail, FROM, INBOX } from './mail.js';
 import { serviceCity } from './tax.js';
 import { quoteCents } from './pricing.js';
-import { today, isoDate, isSunday, addDays } from '../../shared/clock.js';
+import { today, isoDate, addDays } from '../../shared/clock.js';
+import { closedWeekdays, weekdayOf, WEEKDAY } from '../../shared/coverage.js';
 
 /* Beehive Bin Co. — form handler.
    Receives reserve/contact form POSTs from beehivebin.co and emails them to
@@ -87,20 +88,21 @@ async function reserveProblem(env, data) {
   const start = isoDate(data.start);
   if (!start) return 'start: pick a date';
   if (start < today()) return 'start: that date has already passed';
-  if (isSunday(start)) return 'start: we do not deliver on Sundays';
+  const closed = await closedWeekdays(env);
+  if (closed.includes(weekdayOf(start))) return `start: we do not deliver on ${WEEKDAY[weekdayOf(start)]}s`;
 
   // Notice. The owner sets it; the website honours it; the panel can book
   // inside it when someone rings and the van happens to be free.
   const lead = await env.DB.prepare("SELECT value FROM settings WHERE key = 'lead_days'").first();
   const leadDays = Math.max(0, parseInt(lead?.value ?? '1', 10) || 0);
   let earliest = addDays(today(), leadDays);
-  while (isSunday(earliest)) earliest = addDays(earliest, 1);
+  while (closed.includes(weekdayOf(earliest))) earliest = addDays(earliest, 1);
   if (start < earliest) {
     const day = new Date(`${earliest}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     return `start: we need a little notice — the earliest delivery is ${day}`;
   }
-  const closed = await env.DB.prepare('SELECT reason FROM blackouts WHERE date = ?1').bind(start).first();
-  if (closed) return `start: we are not delivering that day — ${closed.reason || 'closed'}. Pick another date`;
+  const dayOff = await env.DB.prepare('SELECT reason FROM blackouts WHERE date = ?1').bind(start).first();
+  if (dayOff) return `start: we are not delivering that day — ${dayOff.reason || 'closed'}. Pick another date`;
   if (!serviceCity(data.dcity)) return `dcity: we don't serve "${trim(data.dcity, 60) || ''}" yet`;
   if (trim(data.pcity) && !serviceCity(data.pcity)) return `pcity: we don't serve "${trim(data.pcity, 60)}" yet`;
   if (!isEmail(data.email)) return 'email: that address looks wrong';

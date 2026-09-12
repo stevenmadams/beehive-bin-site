@@ -337,6 +337,9 @@ tr.late td{background:rgba(163,44,44,.05)}
 .binrow td{font-variant-numeric:tabular-nums}
 .light{margin-right:7px;cursor:help;font-size:13px;vertical-align:-1px}
 #sform input{width:100%;max-width:260px}
+.dayrow{display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
+.dayrow label{display:flex;align-items:center;gap:5px;font-weight:600}
+.dayrow input{width:auto}
 .seg button .n{opacity:.55;margin-left:4px;font-weight:400}
 .cond{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
   padding:3px 9px;border-radius:999px}
@@ -2204,7 +2207,7 @@ async function viewCalendar() {
       const cls = ['cell', past ? 'past' : '', c.date === todayISO() ? 'today' : '',
         c.blackout ? 'closed' : !c.open && c.configured ? 'nobody' : '', free < 0 ? 'over' : ''].filter(Boolean).join(' ');
       cells.push(`<a class="${cls}" href="#/schedule/${c.date}">
-        <div class="n">${i + 1}${c.sunday ? '<small>Sun</small>' : ''}</div>
+        <div class="n">${i + 1}${c.closedDay ? `<small>${esc(c.closedDay.slice(0, 3))} · closed</small>` : ''}</div>
         ${c.blackout ? `<div class="tag">Closed${c.blackout !== 'closed' ? ` · ${esc(c.blackout)}` : ''}</div>`
           : c.configured && !c.staff.length ? '<div class="tag">Nobody on</div>'
           : c.staff.length ? `<div class="who">${c.staff.map(x => esc(x.name.split('@')[0])).join(', ')}</div>` : ''}
@@ -2448,7 +2451,7 @@ async function viewSchedule() {
         : day.open === false && !day.blackout ? '<span class="sun">Nobody on</span>' : '';
       const el = $(`<section class="day">
         <h3>${day.date === todayISO() ? 'Tonight' : esc(niceDate(day.date))}
-          ${day.sunday ? '<span class="sun">Sunday</span>' : ''}${day.blackout ? `<span class="sun">Closed — ${esc(day.blackout)}</span>` : ''}
+          ${day.closedDay ? `<span class="sun">${esc(day.closedDay)} — closed</span>` : ''}${day.blackout ? `<span class="sun">Closed — ${esc(day.blackout)}</span>` : ''}
           ${who}<span class="load">${load}</span></h3>
         <div class="jobs"></div>
       </section>`);
@@ -2838,6 +2841,12 @@ async function viewSettings() {
           <input id="s-lead" type="number" min="0" max="30" value="${st.leadDays}" ${owner ? '' : 'disabled'}>
           <p class="sub" style="margin:6px 0 0">Days. 1 means the earliest online booking is tomorrow. Phone bookings can go inside this.</p></div>
       </div>
+      <div class="frow one">
+        <div><label class="fl">Days we don't go out</label>
+          <div class="dayrow">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) =>
+            `<label><input type="checkbox" data-closed="${i}"${(st.closedWeekdays || []).includes(i) ? ' checked' : ''}${owner ? '' : ' disabled'}> ${d}</label>`).join('')}</div>
+          <p class="sub" style="margin:6px 0 0">No deliveries or pickups start on a ticked day, online or by phone. The rental agreement says Sundays — if you change this, change the agreement too.</p></div>
+      </div>
       <div class="frow">
         <div><label class="fl" for="s-jobs">Jobs per driver per hour</label>
           <input id="s-jobs" type="number" min="1" max="10" value="${st.jobsPerSlot ?? 2}" ${owner ? '' : 'disabled'}>
@@ -2877,6 +2886,7 @@ async function viewSettings() {
           leadDays: view.querySelector('#s-lead').value,
           turnaroundDays: view.querySelector('#s-turn').value,
           jobsPerSlot: view.querySelector('#s-jobs').value,
+          closedWeekdays: [...view.querySelectorAll('[data-closed]:checked')].map(c => +c.dataset.closed),
         })});
         msg.textContent = 'Saved.';
       } catch (err) { msg.textContent = err.message; }

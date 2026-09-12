@@ -33,6 +33,9 @@ export async function getSettings(env) {
     // Notice the website needs. The panel can book inside it on purpose.
     leadDays: Math.max(0, parseInt(map.lead_days ?? '1', 10) || 0),
     jobsPerSlot: Math.max(1, parseInt(map.jobs_per_slot ?? '2', 10) || 2),
+    // Sunday unless told otherwise. Stored as "0,1" style; blank means none.
+    closedWeekdays: map.closed_weekdays == null ? [0]
+      : String(map.closed_weekdays).split(',').filter(v => v !== '').map(Number),
   };
 }
 

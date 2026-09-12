@@ -10,8 +10,8 @@ import { createInvoice, fetchInvoice, ping as squarePing, storeCard, ensureCusto
 import { PRICES, EXTRA, quoteCents } from './pricing.js';
 import { rateFor, serviceCity, SERVICE_CITIES } from './tax.js';
 import { availability, canFit, getSettings, stoplights, blackoutOn } from './inventory.js';
-import { today, addDays, addWeeks, isoDate, isSunday, dayDiff, startOfDay } from '../../shared/clock.js';
-import { coverage, claimSlot, isTime } from '../../shared/coverage.js';
+import { today, addDays, addWeeks, isoDate, dayDiff, startOfDay } from '../../shared/clock.js';
+import { coverage, claimSlot, isTime, closedDayName, closedWeekdays } from '../../shared/coverage.js';
 import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
 const json = (body, status = 200) =>
@@ -208,7 +208,8 @@ async function createRequest(env, user, body) {
     if (!PRICES[bins]) throw new HttpError(400, 'Pick a package: 10, 20, 40 or 60 bins.');
     if (!Number.isFinite(weeks) || weeks < 1 || weeks > 26) throw new HttpError(400, 'Weeks must be between 1 and 26.');
     if (!start) throw new HttpError(400, 'A start date is required.');
-    if (isSunday(start)) throw new HttpError(400, 'We do not deliver on Sundays.');
+    const dayOff = await closedDayName(env, start);
+    if (dayOff) throw new HttpError(400, `We do not deliver on ${dayOff}s.`);
     const closed = await blackoutOn(env, start);
     if (closed) throw new HttpError(400, `We are not delivering on ${start} — ${closed}.`);
     if (!dcity) throw new HttpError(400, 'A delivery city is required.');
@@ -764,7 +765,8 @@ async function rescheduleRental(env, user, id, body) {
   const start = isoDate(body.start_date);
   if (!start) throw new HttpError(400, 'A new start date is required.');
     if (start < today()) throw new HttpError(400, 'That date has already passed.');
-  if (isSunday(start)) throw new HttpError(400, 'We do not deliver on Sundays.');
+  const dayOff = await closedDayName(env, start);
+  if (dayOff) throw new HttpError(400, `We do not deliver on ${dayOff}s.`);
   const closed = await blackoutOn(env, start);
   if (closed) throw new HttpError(400, `We are not delivering on ${start} — ${closed}.`);
   if (start === rental.start_date) throw new HttpError(400, 'That is already the start date.');
@@ -922,7 +924,7 @@ async function schedule(env, from, days) {
     const date = addDays(from, i);
     byDay.set(date, {
       date,
-      sunday: isSunday(date),
+      closedDay: cov[i].closedDay,
       blackout: blackout.get(date) || null,
       staff: cov[i].staff,
       staffNote: cov[i].note,
@@ -1802,6 +1804,12 @@ async function api(request, env, url) {
         const n = parseInt(body[field], 10);
         if (!Number.isFinite(n) || n < 0 || n > 100000) throw new HttpError(400, `${field} must be a whole number.`);
         await put(key, String(n));
+      }
+      if ('closedWeekdays' in body) {
+        const days = [...new Set((Array.isArray(body.closedWeekdays) ? body.closedWeekdays : []).map(Number)
+          .filter(n => Number.isInteger(n) && n >= 0 && n <= 6))].sort();
+        if (days.length === 7) throw new HttpError(400, 'That would close every day of the week.');
+        await put('closed_weekdays', days.join(','));
       }
       for (const [key, field] of Object.entries(texts)) {
         if (!(field in body)) continue;

@@ -77,6 +77,7 @@ was asked of them.
 | S32 | Sets a delivery or pickup window per rental; the usual one is a setting | ✅ | admin/time |
 | S33 | Blocks a day off; bookings onto it refused; jobs already on it reported | ✅ | admin/time |
 | S34 | Sets the notice the website needs; phone bookings can go inside it | ✅ | admin/time |
+| S35 | Days we don't go out are a setting (Sunday by default), refused online and by phone by name; all seven refused | ✅ | admin/time |
 
 ## Staff, the evening run
 

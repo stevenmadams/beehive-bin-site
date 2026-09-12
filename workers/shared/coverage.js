@@ -9,7 +9,26 @@
    the business ran that way before this existed, and switching it on should
    not stop the phone ringing. */
 
-import { addDays, isSunday } from './clock.js';
+import { addDays } from './clock.js';
+
+export const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const weekdayOf = iso => new Date(`${iso}T12:00:00Z`).getUTCDay();
+
+/* The days the business does not go out, as weekday numbers. Sunday unless
+   the owner says otherwise — a setting, so it is visible in the panel rather
+   than a rule someone has to know is in the code. */
+export async function closedWeekdays(env) {
+  const row = await env.DB.prepare("SELECT value FROM settings WHERE key = 'closed_weekdays'").first();
+  if (!row) return [0];
+  return String(row.value).split(',').filter(v => v !== '').map(Number).filter(n => n >= 0 && n <= 6);
+}
+
+/* The weekday name if `date` falls on a closed day, else null. */
+export async function closedDayName(env, date) {
+  const closed = await closedWeekdays(env);
+  const wd = weekdayOf(date);
+  return closed.includes(wd) ? WEEKDAY[wd] : null;
+}
 
 export const DEFAULTS = { slotMinutes: 60, jobsPerSlot: 2, fallbackStart: '17:00', fallbackEnd: '20:00' };
 
@@ -53,6 +72,7 @@ export async function coverage(env, from, days) {
 
   const { results: closed } = await env.DB.prepare('SELECT date, reason FROM blackouts WHERE date BETWEEN ?1 AND ?2').bind(from, to).all();
   const blackout = new Map(closed.map(b => [b.date, b.reason || 'closed']));
+  const closedDays = await closedWeekdays(env);
 
   // Jobs already booked into a slot.
   const { results: booked } = await env.DB.prepare(
@@ -80,8 +100,9 @@ export async function coverage(env, from, days) {
       .map(s => ({ id: s.employee_id, name: s.name, start: s.start_time, end: s.end_time }));
     const note = [...byPerson.values()].filter(s => s.off && s.note).map(s => `${s.name}: ${s.note}`).join('; ') || null;
 
+    const closedDay = closedDays.includes(wd) ? WEEKDAY[wd] : null;
     let slots = [];
-    if (!blackout.has(date)) {
+    if (!blackout.has(date) && !closedDay) {
       if (!configured) {
         // Legacy: the usual evening, one driver's worth of room.
         for (let m = toMin(DEFAULTS.fallbackStart); m < toMin(DEFAULTS.fallbackEnd); m += slotMinutes) {
@@ -102,7 +123,7 @@ export async function coverage(env, from, days) {
       s.free = Math.max(0, s.capacity - s.used);
     }
     out.push({
-      date, sunday: isSunday(date), configured, staff, note,
+      date, closedDay, configured, staff, note,
       blackout: blackout.get(date) || null,
       open: slots.length > 0,
       slots,

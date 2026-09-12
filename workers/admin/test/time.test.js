@@ -110,3 +110,32 @@ describe('reminders', () => {
     expect((await sent()).filter(m => m.kind === 'reminder')).toHaveLength(1);
   });
 });
+
+describe('days we do not go out', () => {
+  const dow = iso => new Date(`${iso}T12:00:00Z`).getUTCDay();
+  const nextDow = (wd, from = 1) => { let d = today(from); while (dow(d) !== wd) d = addDays(d, 1); return d; };
+  const book = (start, as) => api('/requests', { method: 'POST', as, body: { kind: 'reserve', first_name: 'A', bins: 10, weeks: 1, start_date: start, delivery_city: 'Clinton', phone: '801' } });
+
+  it('Sunday by default, visible in settings; the days are a setting, not a rule in the code', async () => {
+    await fleet(40);
+    expect((await ok('/settings')).closedWeekdays).toEqual([0]);
+    expect((await book(nextDow(0))).error).toMatch(/Sunday/);
+    // Close Mondays too.
+    await ok('/settings', { method: 'PATCH', body: { closedWeekdays: [0, 1] } });
+    expect((await ok('/settings')).closedWeekdays).toEqual([0, 1]);
+    expect((await book(nextDow(1))).error).toMatch(/Monday/);
+    expect((await book(nextDow(2))).status).toBe(201);
+    // Open Sundays (a setting, so it can be undone).
+    await ok('/settings', { method: 'PATCH', body: { closedWeekdays: [] } });
+    expect((await book(nextDow(0))).status).toBe(201);
+    // The run sheet and the calendar say which days are closed.
+    await ok('/settings', { method: 'PATCH', body: { closedWeekdays: [0, 1] } });
+    const days = (await ok(`/schedule?from=${nextDow(1)}&days=1`)).days;
+    expect(days[0].closedDay).toBe('Monday');
+    expect((await ok(`/coverage?from=${nextDow(1)}&days=1`)).days[0].open).toBe(false);
+  });
+
+  it('every day closed is refused as a setting — it would close the business', async () => {
+    expect((await api('/settings', { method: 'PATCH', body: { closedWeekdays: [0, 1, 2, 3, 4, 5, 6] } })).status).toBe(400);
+  });
+});

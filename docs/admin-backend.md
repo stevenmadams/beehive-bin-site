@@ -191,6 +191,10 @@ anyone has entered a shift, every evening is covered in the usual window.
 `delivery_slot` / `pickup_slot` are what capacity is counted against; the
 window text beside them is what people read.
 
+**Closed weekdays** (`closed_weekdays` setting, Sunday by default) are the
+days nothing starts, online or by phone, named in the refusal. The rental
+agreement's prose says Sundays; changing the setting does not rewrite it.
+
 **Blackouts** (`blackouts` table, Settings tab) stop a booking starting on a
 day; adding one reports jobs already booked for it. **Lead time**
 (`lead_days`) is what the website needs; the panel can book inside it.

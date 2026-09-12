@@ -44,11 +44,12 @@ describe('the evening run', () => {
     expect(after.done_by).toBe('owner@beehivebin.co');
   });
 
-  it('R6 Sundays are flagged, and a week view spans them', async () => {
+  it('R6 closed days are flagged by name, and a week view spans them', async () => {
     const { days } = await ok(`/schedule?from=${today()}&days=7`);
     expect(days).toHaveLength(7);
-    expect(days.filter(d => d.sunday)).toHaveLength(1);
-    expect(days.find(d => d.sunday).date).toBe(days.find(d => new Date(`${d.date}T12:00:00Z`).getUTCDay() === 0).date);
+    expect(days.filter(d => d.closedDay)).toHaveLength(1);
+    expect(days.find(d => d.closedDay)).toMatchObject({ closedDay: 'Sunday' });
+    expect(new Date(`${days.find(d => d.closedDay).date}T12:00:00Z`).getUTCDay()).toBe(0);
   });
 
   it('R7 the run sheet and availability agree on what is in use', async () => {
