@@ -13,6 +13,7 @@ import { availability, canFit, getSettings, stoplights, blackoutOn } from './inv
 import { today, addDays, addWeeks, isoDate, dayDiff, startOfDay } from '../../shared/clock.js';
 import { coverage, claimSlot, isTime, closedDayName, closedWeekdays } from '../../shared/coverage.js';
 import { HOLIDAYS, holidaysIn } from '../../shared/holidays.js';
+import { customerFor, emailKey, phoneKey } from '../../shared/customers.js';
 import { itemsOn, whereabouts, assign as assignBins, unassign as unassignBin, inspect as inspectBins, resolveRest, release as releaseBins } from './binlink.js';
 import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
@@ -136,13 +137,14 @@ const REQUEST_COLUMNS = () => `id, created_at, kind, source, status, contact_pre
   CASE WHEN status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')
        THEN 1 ELSE 0 END AS lapsed, first_name, last_name, email, phone,
   bins, weeks, start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
-  customer_notes, message, internal_notes, decided_at, decided_by, decline_reason,
+  customer_notes, message, internal_notes, decided_at, decided_by, decline_reason, customer_id,
   (SELECT id FROM rentals WHERE rentals.request_id = requests.id LIMIT 1) AS rental_id`;
 
 const STATUSES = ['new', 'approved', 'declined', 'converted'];
 
 async function listRequests(env, url) {
-  const status = url.searchParams.get('status');
+  // The list is the open questions. Everything else is on the customer.
+  const status = url.searchParams.get('status') || 'new';
   const q = String(url.searchParams.get('q') || '').trim();
   const where = [];
   const binds = [];
@@ -255,6 +257,8 @@ async function createRequest(env, user, body) {
   ).run();
 
   const id = res.meta.last_row_id;
+  const customerId = await customerFor(env, { email, phone, first_name: first, last_name: clean(body.last_name, 100), city: dcity }, user.email);
+  if (customerId) await env.DB.prepare('UPDATE requests SET customer_id = ?1 WHERE id = ?2').bind(customerId, id).run();
   await audit(env, user.email, 'request.create', 'request', id, `source=manual kind=${kind}`);
 
   // What was typed under "Internal notes" is a note — attributed, in the
@@ -275,6 +279,14 @@ async function decideRequest(env, user, id, body) {
 
   // Approving is the moment the job becomes real, so it produces the rental
   // record the schedule and run sheet are built from.
+  /* Reopening is for a decline that was wrong. A converted request has a
+     rental behind it — sending it back to "new" would leave that rental
+     orphaned and invite a second one. */
+  if (action === 'reopen' && existing.status === 'converted') {
+    const r = await env.DB.prepare('SELECT id FROM rentals WHERE request_id = ?1').bind(id).first();
+    throw new HttpError(409, `This request became rental #${r?.id ?? '?'}. Cancel that rental if the booking is off; the request stays as the record of how it started.`);
+  }
+
   let rentalId = null;
   if (action === 'approve') {
     const already = await env.DB.prepare('SELECT id FROM rentals WHERE request_id = ?1')
@@ -367,7 +379,7 @@ const RENTAL_COLUMNS = () => `id, request_id, created_at, created_by, status,
   pickup_city, pickup_address, pickup_notes, pickup_street, pickup_unit, pickup_zip,
   agreement_signed_at, paid_at, delivered_at, returned_at, notes,
   delivery_window, pickup_window, delivery_slot, pickup_slot, reminded_delivery_at, reminded_pickup_at,
-  inspected_at, inspected_by`;
+  inspected_at, inspected_by, customer_id`;
 
 /* A kind is a word: lowercase, letters and underscores. "Hand truck" and
    "hand_truck" and "HAND-TRUCK" are the same thing and must land in the same
@@ -426,12 +438,13 @@ async function createRentalFromRequest(env, user, req, forceOverbook = false) {
   const res = await env.DB.prepare(
     `INSERT INTO rentals (request_id, created_by, first_name, last_name, email, phone,
        contact_pref, bins, weeks, start_date, due_date, total_cents,
-       delivery_city, pickup_city, delivery_window, pickup_window)
-     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?15)`,
+       delivery_city, pickup_city, delivery_window, pickup_window, customer_id)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?15,?16)`,
   ).bind(
     req.id, user.email, req.first_name, req.last_name, req.email, req.phone,
     req.contact_pref, req.bins, req.weeks, req.start_date, due, req.quoted_total_cents,
     req.delivery_city, req.pickup_city || req.delivery_city, defaultWindow,
+    req.customer_id || await customerFor(env, req, user.email),
   ).run();
 
   const id = res.meta.last_row_id;
@@ -451,8 +464,11 @@ async function listRentals(env, url) {
   let where = '';
 
   if (status === 'active') {
-    // What someone actually needs on a Monday: everything not finished.
-    where = "WHERE status IN ('pending','confirmed','out')";
+    // Everything with work left in it — including bins that are back but
+    // not yet looked at. Inspected and cancelled are history, on the customer.
+    where = "WHERE status IN ('pending','confirmed','out') OR (status = 'returned' AND inspected_at IS NULL)";
+  } else if (status === 'to_inspect') {
+    where = "WHERE status = 'returned' AND inspected_at IS NULL";
   } else if (status === 'stalled') {
     // Never confirmed, and the day it was meant to go out has passed.
     where = `WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`;
@@ -1121,7 +1137,7 @@ async function recordReturnedCount(env, user, rentalId, body) {
    Append-only, attributed, and never shown to a customer — the public Worker
    does not read this table at all. */
 
-const ENTITIES = ['request', 'rental'];
+const ENTITIES = ['request', 'rental', 'customer'];
 
 async function listNotes(env, entity, entityId) {
   if (!ENTITIES.includes(entity)) throw new HttpError(400, 'unknown entity');
@@ -1138,7 +1154,7 @@ async function addNote(env, user, entity, entityId, body) {
   const text = String(body.body ?? '').trim().slice(0, 4000);
   if (!text) throw new HttpError(400, 'A note needs something in it.');
 
-  const table = entity === 'request' ? 'requests' : 'rentals';
+  const table = `${entity}s`;
   const exists = await env.DB.prepare(`SELECT id FROM ${table} WHERE id = ?1`)
     .bind(entityId).first();
   if (!exists) throw new HttpError(404, `no such ${entity}`);
@@ -1548,7 +1564,7 @@ async function api(request, env, url) {
     counts.new = Math.max(0, counts.new - lapsed);   // the badge should count live work
 
     const { count: activeRentals } = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM rentals WHERE status IN ('pending','confirmed','out')",
+      "SELECT COUNT(*) AS count FROM rentals WHERE status IN ('pending','confirmed','out') OR (status = 'returned' AND inspected_at IS NULL)",
     ).first();
     const { count: overdue } = await env.DB.prepare(
       `SELECT COUNT(*) AS count FROM rentals WHERE status = 'out' AND due_date < date('${today()}')`,
@@ -1581,12 +1597,27 @@ async function api(request, env, url) {
       return json({ request: row });
     }
     if (method === 'PATCH') {
-      const notes = String(body.internal_notes ?? '').slice(0, 4000);
-      const res = await env.DB.prepare('UPDATE requests SET internal_notes = ?1 WHERE id = ?2')
-        .bind(notes, id).run();
-      if (!res.meta.changes) throw new HttpError(404, 'no such request');
-      await audit(env, user.email, 'request.note', 'request', id);
-      return json({ ok: true });
+      const row = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS()} FROM requests WHERE id = ?1`).bind(id).first();
+      if (!row) throw new HttpError(404, 'no such request');
+      /* A lapsed request is a person who wanted bins on a day that passed.
+         The answer is a new date, which makes it a live request again — or a
+         decline, which files them under customers for next time. */
+      if ('start_date' in body) {
+        requireOwner(user, 'change a request');
+        if (row.status !== 'new') throw new HttpError(409, 'Only an open request can be re-dated.');
+        const start = isoDate(body.start_date);
+        if (!start || start < today()) throw new HttpError(400, 'Pick a date that has not passed.');
+        const dayOff = await closedDayName(env, start);
+        if (dayOff) throw new HttpError(400, `We do not deliver on ${dayOff}s.`);
+        const closed = await blackoutOn(env, start);
+        if (closed) throw new HttpError(400, `We are not delivering on ${start} — ${closed}.`);
+        await env.DB.prepare('UPDATE requests SET start_date = ?1, return_date = ?2 WHERE id = ?3')
+          .bind(start, row.weeks ? addWeeks(start, row.weeks) : null, id).run();
+        await audit(env, user.email, 'request.redated', 'request', id, `${row.start_date} → ${start}`);
+      }
+      const updated = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS()} FROM requests WHERE id = ?1`).bind(id).first();
+      updated.fit = (await stoplights(env, [updated]))[updated.id];
+      return json({ request: updated });
     }
   }
 
@@ -1796,8 +1827,8 @@ async function api(request, env, url) {
     return json({ employee: await updateEmployee(env, user, Number(m[1]), body) });
   }
 
-  if ((m = match(/^\/(requests|rentals)\/(\d+)\/notes$/))) {
-    const entity = m[1] === 'requests' ? 'request' : 'rental';
+  if ((m = match(/^\/(requests|rentals|customers)\/(\d+)\/notes$/))) {
+    const entity = m[1].slice(0, -1);
     const eid = Number(m[2]);
     if (method === 'GET') return json({ notes: await listNotes(env, entity, eid) });
     if (method === 'POST') return json({ notes: await addNote(env, user, entity, eid, body) }, 201);
@@ -1869,6 +1900,78 @@ async function api(request, env, url) {
     }
   }
 
+  /* ---------- customers ----------
+     One row per person, with everything they have asked for or rented. The
+     list answers "have we dealt with them" and "who should we call in
+     March"; the record is where a declined or lapsed enquiry ends up. */
+  if (path === '/customers' && method === 'GET') {
+    const q = String(url.searchParams.get('q') || '').trim().toLowerCase();
+    const filter = url.searchParams.get('filter') || 'all';
+    const { results } = await env.DB.prepare(
+      `SELECT c.id, c.email, c.phone, c.first_name, c.last_name, c.city, c.created_at,
+         (SELECT COUNT(*) FROM rentals r WHERE r.customer_id = c.id AND r.status != 'cancelled') AS rentals,
+         (SELECT COUNT(*) FROM rentals r WHERE r.customer_id = c.id AND r.inspected_at IS NOT NULL) AS finished,
+         (SELECT COALESCE(SUM(total_cents), 0) FROM rentals r WHERE r.customer_id = c.id AND r.paid_at IS NOT NULL) AS spent_cents,
+         (SELECT COUNT(*) FROM requests q WHERE q.customer_id = c.id) AS requests,
+         (SELECT COUNT(*) FROM requests q WHERE q.customer_id = c.id AND q.status = 'new') AS open_requests,
+         (SELECT COUNT(*) FROM requests q WHERE q.customer_id = c.id AND q.status = 'declined') AS declined,
+         (SELECT COUNT(*) FROM requests q WHERE q.customer_id = c.id AND q.status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')) AS lapsed,
+         (SELECT MAX(x) FROM (SELECT MAX(created_at) AS x FROM requests q WHERE q.customer_id = c.id
+                              UNION ALL SELECT MAX(created_at) FROM rentals r WHERE r.customer_id = c.id)) AS last_seen
+       FROM customers c ORDER BY last_seen DESC, c.id DESC LIMIT 500`,
+    ).all();
+    const customers = results.filter(c => {
+      if (filter === 'renters' && !c.finished) return false;
+      if (filter === 'declined' && !c.declined) return false;
+      if (filter === 'lapsed' && !c.lapsed) return false;
+      if (q) {
+        const hay = [c.first_name, c.last_name, c.email, c.phone, c.city].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q) && !(c.phone || '').includes(q.replace(/\D/g, '') || '\u0000')) return false;
+      }
+      return true;
+    });
+    return json({ customers });
+  }
+  if ((m = match(/^\/customers\/(\d+)$/))) {
+    const cid = Number(m[1]);
+    const customer = await env.DB.prepare('SELECT * FROM customers WHERE id = ?1').bind(cid).first();
+    if (!customer) throw new HttpError(404, 'no such customer');
+    if (method === 'GET') {
+      const { results: requests } = await env.DB.prepare(
+        `SELECT ${REQUEST_COLUMNS()} FROM requests WHERE customer_id = ?1 ORDER BY created_at DESC`).bind(cid).all();
+      const { results: rentals } = await env.DB.prepare(
+        `SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE customer_id = ?1 ORDER BY start_date DESC, id DESC`).bind(cid).all();
+      return json({ customer, requests, rentals });
+    }
+    if (method === 'PATCH') {
+      requireOwner(user, 'change a customer\'s details');
+      const patch = {};
+      if ('email' in body) {
+        const e = body.email ? emailKey(body.email) : null;
+        if (body.email && !e) throw new HttpError(400, 'That email address looks wrong.');
+        patch.email = e;
+      }
+      if ('phone' in body) {
+        const ph = body.phone ? phoneKey(body.phone) : null;
+        if (body.phone && !ph) throw new HttpError(400, 'A phone number is ten digits.');
+        patch.phone = ph;
+      }
+      for (const f of ['first_name', 'last_name', 'city']) if (f in body) patch[f] = clean(body[f], 120);
+      if (!Object.keys(patch).length) throw new HttpError(400, 'Nothing to change.');
+      const keys = Object.keys(patch);
+      try {
+        await env.DB.prepare(`UPDATE customers SET ${keys.map((k, i) => `${k} = ?${i + 1}`).join(', ')},
+          updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'), updated_by = ?${keys.length + 1} WHERE id = ?${keys.length + 2}`)
+          .bind(...keys.map(k => patch[k]), user.email, cid).run();
+      } catch (err) {
+        if (/UNIQUE/.test(err.message)) throw new HttpError(409, 'Another customer already has that email address.');
+        throw err;
+      }
+      await audit(env, user.email, 'customer.update', 'customer', cid, keys.join(', '));
+      return json({ customer: await env.DB.prepare('SELECT * FROM customers WHERE id = ?1').bind(cid).first() });
+    }
+  }
+
   /* When people can drive. Anyone sets their own; an owner sets anyone's. */
   if (path === '/shifts') {
     if (method === 'GET') {
@@ -1933,18 +2036,32 @@ async function api(request, env, url) {
       return json({ blackouts: results });
     }
     if (method === 'POST') {
-      requireOwner(user);
-      const date = isoDate(body.date);
-      if (!date) throw new HttpError(400, 'A date is required.');
+      requireOwner(user, 'add a day off');
+      // One day, or a run of them — a week away is one entry, not seven.
+      const from = isoDate(body.date || body.from);
+      const to = isoDate(body.to) || from;
+      if (!from) throw new HttpError(400, 'A date is required.');
+      if (to < from) throw new HttpError(400, 'The end is before the start.');
+      if (dayDiff(to, from) > 90) throw new HttpError(400, 'That is more than 90 days — add it in pieces, or close a weekday.');
       const reason = clean(body.reason, 80);
-      await env.DB.prepare('INSERT OR REPLACE INTO blackouts (date, reason, created_by) VALUES (?1,?2,?3)')
-        .bind(date, reason, user.email).run();
-      await audit(env, user.email, 'blackout.add', 'blackout', 0, `${date}${reason ? ` — ${reason}` : ''}`);
+      const dates = [];
+      for (let d = from; d <= to; d = addDays(d, 1)) dates.push(d);
+      for (const date of dates) {
+        await env.DB.prepare('INSERT OR REPLACE INTO blackouts (date, reason, created_by) VALUES (?1,?2,?3)')
+          .bind(date, reason, user.email).run();
+      }
+      await audit(env, user.email, 'blackout.add', 'blackout', 0,
+        `${from}${to !== from ? ` → ${to}` : ''}${reason ? ` — ${reason}` : ''}`);
       const { results } = await env.DB.prepare(
-        `SELECT id, first_name, last_name, CASE WHEN start_date = ?1 THEN 'deliver' ELSE 'collect' END AS job
-         FROM rentals WHERE status NOT IN ('cancelled','returned') AND (start_date = ?1 OR (due_date = ?1 AND delivered_at IS NOT NULL))`,
-      ).bind(date).all();
-      return json({ ok: true, affected: results.map(r => ({ id: r.id, name: [r.first_name, r.last_name].filter(Boolean).join(' '), job: r.job })) }, 201);
+        `SELECT id, first_name, last_name, start_date, due_date,
+                CASE WHEN start_date BETWEEN ?1 AND ?2 THEN 'deliver' ELSE 'collect' END AS job
+         FROM rentals WHERE status NOT IN ('cancelled','returned')
+           AND (start_date BETWEEN ?1 AND ?2 OR (due_date BETWEEN ?1 AND ?2 AND delivered_at IS NOT NULL))
+         ORDER BY start_date`,
+      ).bind(from, to).all();
+      return json({ ok: true, days: dates.length, affected: results.map(r => ({
+        id: r.id, name: [r.first_name, r.last_name].filter(Boolean).join(' '), job: r.job,
+        date: r.job === 'deliver' ? r.start_date : r.due_date })) }, 201);
     }
   }
   if ((m = match(/^\/blackouts\/(\d{4}-\d{2}-\d{2})$/)) && method === 'DELETE') {

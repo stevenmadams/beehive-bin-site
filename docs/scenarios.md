@@ -109,6 +109,30 @@ was asked of them.
 | I9 | Only an owner can delete an item or add a batch | ✅ | admin/inventory |
 | I10 | Turnaround days is a setting; 0 means same-night reuse | ✅ | admin/inventory |
 
+## Which bins, and what came back
+
+| # | Scenario | Status | T |
+|---|---|---|---|
+| B1 | Bins go on a rental by label or auto-picked from the free ones, up to the package | ✅ | admin/binlink |
+| B2 | A bin cannot be on two live rentals; a damaged or unknown one cannot go out — refused by name | ✅ | admin/binlink |
+| B3 | Delivering with nothing assigned auto-assigns; Inventory says where each bin is tonight | ✅ | admin/binlink |
+| B4 | Inspection: tick each bin back, flag damage with a note, unticked is missing — count, bin condition, fleet and charges all follow | ✅ | admin/binlink |
+| B5 | A lost bin that turns up is ticked back and is good again | ✅ | admin/binlink |
+| B6 | Inspected & cleaned is the fifth step; a bin is on the shelf only once inspected | ✅ | admin/binlink |
+| B7 | Staff do all of it; cancelling releases the bins | ✅ | admin/binlink |
+
+## Requests, rentals, customers
+
+| # | Scenario | Status | T |
+|---|---|---|---|
+| Q1 | A converted request cannot be moved back to new — its rental is real | ✅ | admin/customers |
+| Q2 | Requests lists open questions only (new, lapsed); answered ones live on the customer | ✅ | admin/customers |
+| Q3 | A lapsed request gets a new date (back to new) or is declined (to the customer) | ✅ | admin/customers |
+| J1 | Rentals lists live jobs; inspected and cancelled are history on the customer | ✅ | admin/customers |
+| K1 | One customer per person, merged by email (or phone when there is no email), across requests and rentals | ✅ | admin/customers |
+| K2 | Declined and lapsed people are leads, filterable; past renters too | ✅ | admin/customers |
+| K3 | Notes live on the person; an owner can fix details | ✅ | admin/customers |
+
 ## Who drives when
 
 | # | Scenario | Status | T |
@@ -141,5 +165,4 @@ was asked of them.
 
 ## Not built, on purpose for now
 
-- **Customers tab.** One record per renter across requests. Nothing depends on
-  it yet.
+- Nothing at the moment. Everything the business has asked for is on the list above.

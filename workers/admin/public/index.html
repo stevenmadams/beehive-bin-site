@@ -287,6 +287,55 @@ tr.late td{background:rgba(163,44,44,.05)}
 .job .warn{color:var(--warn);font-weight:600;font-size:12.5px;margin-top:6px}
 .job .acts{display:flex;flex-direction:column;gap:6px;flex:none}
 
+/* ---- rental page ---- */
+.rentalpage{max-width:1180px}
+.rhead{display:flex;align-items:flex-start;gap:16px;margin-bottom:22px}
+.rhead .back{font-size:13px;color:var(--muted);text-decoration:none;padding-top:10px;white-space:nowrap}
+.rhead .back:hover{color:var(--ink)}
+.rhead .title{flex:1}
+.rhead h1{font-size:30px;margin:0}
+.rhead .meta{color:var(--muted);font-size:13.5px;margin-top:4px}
+.rhead .pill{margin-top:8px}
+.sect{font-size:15px;margin:18px 0 8px}
+.sect:first-child{margin-top:0}
+.sect .cnt{font-weight:400;color:var(--muted);font-size:13px;margin-left:6px}
+.pill.declined{background:rgba(163,44,44,.12);color:var(--bad)}
+.rgrid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:26px;align-items:start}
+.rside .card.side{padding:16px 18px;margin-bottom:16px}
+.rside .contactbar{margin:0 0 12px}
+.rside .kv{margin:0}
+.rside .linkbox{margin:0 0 16px}
+.rside h4{margin:0 0 10px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.rside h4 .cnt{float:right;font-weight:400;text-transform:none;letter-spacing:0}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;
+  border:1px solid var(--line);background:var(--white)}
+.chip.out{background:rgba(255,196,0,.18);border-color:var(--yellow-deep)}
+.chip.back{background:rgba(31,122,76,.12);border-color:rgba(31,122,76,.35)}
+.chip.damaged{background:rgba(180,83,26,.14);border-color:rgba(180,83,26,.4)}
+.chip.lost{background:rgba(163,44,44,.12);border-color:rgba(163,44,44,.4);text-decoration:line-through}
+.chip button{border:0;background:none;font:inherit;cursor:pointer;color:var(--muted);padding:0 0 0 2px;line-height:1}
+.chip button:hover{color:var(--bad)}
+.binadd{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.binadd input{padding:7px 9px}
+.step.inspectrow{display:block;cursor:default}
+.step.inspectrow:hover{border-color:var(--line)}
+.step.inspectrow .top{display:flex;align-items:center;gap:11px}
+.step.inspectrow .tick{cursor:pointer;background:none;padding:0;flex:none}
+.step.inspectrow[data-done="1"] .tick{background:var(--ok);border-color:var(--ok);color:#fff}
+.inspectlist{margin:10px 0 0 32px}
+.insphead{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-bottom:6px}
+.insp{display:flex;align-items:center;gap:9px;padding:5px 0;border-top:1px solid var(--line);font-size:13.5px}
+.insp .ok{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--line);background:var(--white);cursor:pointer;flex:none;font-size:13px;color:#fff}
+.insp.done .ok{background:var(--ok);border-color:var(--ok)}
+.insp.dmg .ok,.insp.lost .ok{background:var(--white)}
+.insp .lb{font-weight:700;min-width:58px}
+.insp .st{flex:1;color:var(--muted);font-size:12.5px}
+.insp.dmg .st{color:var(--warn)}
+.insp.lost .st{color:var(--bad)}
+.insp.lost .lb{text-decoration:line-through}
+@media (max-width:980px){.rgrid{grid-template-columns:1fr}.rhead h1{font-size:24px}}
+
 /* ---- availability ---- */
 .avail{width:100%}
 .avail td.wd{cursor:pointer;text-align:center;font-size:12.5px;line-height:1.25;padding:8px 4px;min-width:58px}
@@ -612,7 +661,7 @@ const NAV = [
   { id: 'rentals',   label: 'Rentals',   live: true },
   { id: 'schedule',  label: 'Schedule',  live: true },
   { id: 'inventory', label: 'Inventory', live: true },
-  { id: 'customers', label: 'Customers' },
+  { id: 'customers', label: 'Customers', live: true },
   { id: 'employees', label: 'Employees', live: true },
   { id: 'settings',  label: 'Settings',  live: true },
 ];
@@ -675,14 +724,13 @@ const reqState = { status: 'new', q: '' };
 
 async function viewRequests() {
   const view = $('<div></div>');
-  const filters = [['new', 'New'], ['lapsed', 'Lapsed'], ['converted', 'Booked'],
-    ['declined', 'Declined'], ['all', 'All']];
+  const filters = [['new', 'New'], ['lapsed', 'Lapsed']];
   const head = $(`<div>
     <div class="head">
       <h1>Requests</h1><span class="count" id="rcount"></span>
       <button class="btn primary newreq" id="newreq">+ New request</button>
     </div>
-    <p class="sub">Everything the reserve and contact forms send in, plus anything taken over the phone.</p>
+    <p class="sub">Open questions from the website, the contact form, and the phone. Answered ones live on the customer.</p>
     <div class="toolbar">
       <div class="seg">${filters.map(([f, label]) =>
         `<button data-f="${f}" aria-pressed="${f === reqState.status}">${label}</button>`).join('')}</div>
@@ -844,6 +892,116 @@ function openLightbox(photos, startIndex) {
 
   draw();
   document.body.append(box);
+}
+
+/* ---------- the bins on a rental ----------
+
+   Which bins went out, and — at inspection — what came back. The side card
+   shows and edits the list; the inspection row on the checklist is where
+   each one is ticked back or flagged. Both talk to the same rows. */
+
+const stageLabel = i => i.back_at
+  ? (i.back_condition === 'lost' ? 'not back' : i.back_condition === 'damaged' ? 'back, damaged' : 'back')
+  : 'out';
+
+function inspectRow(r, label, done) {
+  const waiting = !r.returned_at;
+  return `
+  <div class="step inspectrow${waiting ? ' waiting' : ''}" data-done="${done}">
+    <div class="top">
+      <button class="tick"${waiting ? ' disabled' : ' data-step="inspected"'} data-done="${done}">✓</button>
+      <span class="lbl">${label}</span>
+      ${waiting ? '<span class="soon">after the bins are back</span>'
+        : `<span class="when" style="margin-left:auto">${r.inspected_at ? esc(ago(r.inspected_at)) : ''}</span>`}
+    </div>
+    ${r.inspected_at ? `<div class="by">Inspected <strong>${esc(stamp(r.inspected_at))}</strong>${
+      r.inspected_by ? ` by <strong>${esc(r.inspected_by.split('@')[0])}</strong>` : ''}</div>` : ''}
+    ${waiting ? '' : `<div class="inspectlist" id="inspect-list"><span class="soon">Loading the bins…</span></div>`}
+  </div>`;
+}
+
+/* Fills the inspection row: one line per bin with a tick and "Flag an issue". */
+async function inspectList(container, rentalId, r) {
+  let items;
+  try { ({ items } = await api(`/rentals/${rentalId}/items`)); }
+  catch (err) { container.replaceChildren(banner(err.message)); return; }
+  if (!items.length) {
+    container.replaceChildren($(`<p class="soon">No bins are recorded on this rental, so there is nothing to tick through.
+      Add them on the right, or tick the step to say they all came back.</p>`));
+    return;
+  }
+  const rows = items.map(i => `<div class="insp${i.back_at ? ' done' : ''}${i.back_condition === 'lost' ? ' lost' : i.back_condition === 'damaged' ? ' dmg' : ''}" data-item="${i.id}">
+    <button class="ok" title="Came back fine" data-ok="${i.id}">${i.back_at && i.back_condition === 'good' ? '✓' : ''}</button>
+    <span class="lb">${esc(i.label)}</span>
+    <span class="st">${i.back_at ? esc(stageLabel(i)) : ''}${i.back_note ? ` — ${esc(i.back_note)}` : ''}</span>
+    ${r.inspected_at ? '' : `<button class="linkish" data-flag="${i.id}">${i.back_at && i.back_condition !== 'good' ? 'Change' : 'Flag an issue'}</button>`}
+  </div>`).join('');
+  container.replaceChildren($(`<div>
+    <div class="insphead"><span>${items.filter(i => i.back_at).length} of ${items.length} checked</span>
+      ${r.inspected_at ? '' : `<button class="linkish" data-allok="1">All the rest came back fine</button>`}</div>
+    ${rows}
+    <div class="soon" style="margin-top:8px">Tick the step above when every bin is checked and clean. Anything flagged becomes a charge to decide on.</div>
+  </div>`));
+
+  const send = async payload => {
+    try { await api(`/rentals/${rentalId}/items/inspect`, { method: 'POST', body: JSON.stringify({ items: payload }) }); openRental(rentalId); }
+    catch (err) { container.prepend(banner(err.message)); }
+  };
+  container.querySelectorAll('[data-ok]').forEach(b => b.addEventListener('click', () => {
+    if (r.inspected_at) return;
+    send([{ id: +b.dataset.ok, back: true }]);
+  }));
+  container.querySelector('[data-allok]')?.addEventListener('click', () =>
+    send(items.filter(i => !i.back_at).map(i => ({ id: i.id, back: true }))));
+  container.querySelectorAll('[data-flag]').forEach(b => b.addEventListener('click', () => {
+    const item = items.find(i => i.id === +b.dataset.flag);
+    const what = prompt(`${item.label} — what happened?\n\n  d = damaged (came back, not usable)\n  l = lost (did not come back)\n  ok = fine after all`, item.back_condition === 'lost' ? 'l' : item.back_condition === 'damaged' ? 'd' : '');
+    if (what === null) return;
+    const w = what.trim().toLowerCase();
+    if (w === 'ok' || w === 'fine') return send([{ id: item.id, back: true }]);
+    if (w !== 'd' && w !== 'l') return;
+    const note = prompt(w === 'd' ? 'What is wrong with it? (goes on the bin and on the charge)' : 'Anything to note? (optional)', item.back_note || '') ?? '';
+    send([w === 'd' ? { id: item.id, back: true, condition: 'damaged', note } : { id: item.id, back: false, note }]);
+  }));
+}
+
+/* The side card: the bins on this rental, editable until inspection. */
+function binsPanel(container, rentalId, r) {
+  const draw = async () => {
+    let items;
+    try { ({ items } = await api(`/rentals/${rentalId}/items`)); }
+    catch (err) { container.replaceChildren(banner(err.message)); return; }
+    const editable = !r.inspected_at && r.status !== 'cancelled';
+    const bins = items.filter(i => i.kind === 'bin');
+    const chips = items.map(i => `<span class="chip ${i.back_at ? (i.back_condition === 'good' ? 'back' : i.back_condition) : (r.delivered_at ? 'out' : '')}" title="${esc(stageLabel(i))}${i.back_note ? ' — ' + esc(i.back_note) : ''}">${esc(i.label)}${
+      editable && !i.back_at ? `<button data-unassign="${i.id}" title="Take off this rental">×</button>` : ''}</span>`).join('');
+    container.replaceChildren($(`<div>
+      <h4>Bins on this rental <span class="cnt">${bins.length} of ${r.bins}</span></h4>
+      ${items.length ? `<div class="chips">${chips}</div>`
+        : `<p class="soon">${r.delivered_at ? 'None recorded.' : 'Picked automatically from the free ones when they go out — or choose them now.'}</p>`}
+      ${editable ? `<div class="binadd">
+        ${bins.length < r.bins ? `<button class="btn sm" id="bins-auto">Auto-pick ${r.bins - bins.length}</button>` : ''}
+        <input id="bins-label" placeholder="B-017, B-018…" style="flex:1;min-width:120px">
+        <button class="btn sm" id="bins-add">Add</button>
+      </div><div id="bins-msg"></div>` : ''}
+    </div>`));
+    const fail = err => container.querySelector('#bins-msg')?.replaceChildren(banner(err.message));
+    container.querySelector('#bins-auto')?.addEventListener('click', async () => {
+      try { await api(`/rentals/${rentalId}/items`, { method: 'POST', body: JSON.stringify({ auto: true }) }); draw(); } catch (err) { fail(err); }
+    });
+    container.querySelector('#bins-add')?.addEventListener('click', async () => {
+      const labels = container.querySelector('#bins-label').value.split(/[\s,]+/).filter(Boolean);
+      if (!labels.length) return;
+      try { await api(`/rentals/${rentalId}/items`, { method: 'POST', body: JSON.stringify({ labels }) }); draw(); } catch (err) { fail(err); }
+    });
+    container.querySelectorAll('[data-unassign]').forEach(b => b.addEventListener('click', async () => {
+      try { await api(`/rentals/${rentalId}/items/${b.dataset.unassign}`, { method: 'DELETE' }); draw(); } catch (err) { fail(err); }
+    }));
+    // The inspection row on the left reads the same list.
+    const list = document.getElementById('inspect-list');
+    if (list) inspectList(list, rentalId, r);
+  };
+  draw();
 }
 
 /* ---------- charges ----------
@@ -1276,10 +1434,18 @@ async function openRequest(id) {
       <div id="req-history" style="margin-top:6px"></div>
 
       <div class="actions" style="margin-top:22px;border-top:1px solid var(--line);padding-top:18px">
-        ${r.status === 'new' ? `
+        ${!isOwner() ? '<span style="color:var(--muted);font-size:13px">An owner approves or declines this.</span>'
+        : r.status === 'converted' ? `<a class="btn" href="#/rentals/${r.rental_id}">Open rental #${r.rental_id}</a>
+          <span style="color:var(--muted);font-size:13px">Booked. To call it off, cancel the rental.</span>`
+        : r.status === 'new' && r.lapsed ? `
+          <button class="btn primary" id="req-redate">New date</button>
+          <button class="btn danger" data-act="decline">Decline</button>
+          <span style="color:var(--muted);font-size:13px">The day they asked for has passed.</span>`
+        : r.status === 'new' ? `
           <button class="btn primary" data-act="approve">Approve</button>
           <button class="btn danger" data-act="decline">Decline</button>`
-        : `<button class="btn" data-act="reopen">Move back to new</button>`}
+        : `<button class="btn" data-act="reopen">Reopen as new</button>`}
+        ${r.customer_id ? `<a class="linkish" href="#/customers/${r.customer_id}" style="margin-left:auto">Customer record</a>` : ''}
       </div>
       <div id="drawer-msg"></div>
     </div>`));
@@ -1313,6 +1479,12 @@ async function openRequest(id) {
   notesPanel(drawer.querySelector('#req-notes'), 'requests', id);
   historyPanel(drawer.querySelector('#req-history'), 'requests', id);
   drawer.querySelector('[data-act="approve"]')?.addEventListener('click', () => act('approve'));
+  drawer.querySelector('#req-redate')?.addEventListener('click', async () => {
+    const to = prompt(`New delivery date for ${fullName(r)} (they asked for ${r.start_date}):`, todayISO());
+    if (!to) return;
+    try { await api(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ start_date: to.trim() }) }); close(); viewRequests(); }
+    catch (err) { msg.replaceChildren(banner(err.message)); }
+  });
   drawer.querySelector('[data-act="reopen"]')?.addEventListener('click', () => act('reopen'));
   drawer.querySelector('[data-act="decline"]')?.addEventListener('click', () => {
     const reason = prompt('Why is this being declined? (optional — the customer never sees it)');
@@ -1468,14 +1640,14 @@ function openNewRequest() {
 /* ---------- rentals ---------- */
 const rentState = { status: 'active' };
 const RENT_FILTERS = [['active','Active'],['stalled','Stalled'],['pending','Pending'],
-  ['out','Out'],['returned','Returned'],['all','All']];
+  ['out','Out'],['to_inspect','To inspect']];
 
 const isLate = r => r.status === 'out' && r.due_date && r.due_date < todayISO();
 
 async function viewRentals() {
   const view = $(`<div>
     <div class="head"><h1>Rentals</h1><span class="count" id="ncount"></span></div>
-    <p class="sub">Approved jobs, from agreement through pickup.</p>
+    <p class="sub">Live jobs, from agreement through inspection. Finished ones live on the customer.</p>
     <div class="toolbar">
       <div class="seg">${RENT_FILTERS.map(([f, label]) =>
         `<button data-f="${f}" aria-pressed="${f === rentState.status}">${label}</button>`).join('')}</div>
@@ -1504,7 +1676,8 @@ async function viewRentals() {
 
     const rows = rentals.map(r => `<tr class="clickable${isLate(r) ? ' late' : r.stalled ? ' stale' : ''}" data-id="${r.id}">
       <td><span class="pill ${r.status}">${r.status}</span>${
-        isLate(r) ? ' <span class="pill overdue">late</span>'
+        r.status === 'returned' && !r.inspected_at ? ' <span class="pill stalled" title="Back, not yet inspected">inspect</span>'
+        : isLate(r) ? ' <span class="pill overdue">late</span>'
         : r.stalled ? ' <span class="pill stalled" title="Never confirmed and the start date has passed">stalled</span>' : ''}</td>
       <td><div class="who">${esc(fullName(r))}<small>${esc(r.delivery_city || '—')}</small></div></td>
       <td class="nowrap">${r.bins} bins · ${r.weeks === 1 ? '1 wk' : r.weeks + ' wks'}</td>
@@ -1533,20 +1706,19 @@ const STEPS = [
   ['paid',      'paid_at',             'Paid'],
   ['delivered', 'delivered_at',        'Bins delivered'],
   ['returned',  'returned_at',         'Bins back'],
+  ['inspected', 'inspected_at',        'Inspected & cleaned'],
 ];
 
+/* A rental is a page, not a drawer. There is too much on it — five steps,
+   photos, addresses, the bins, charges, notes — for a panel that slides in
+   over the list. The work runs down the left; the facts sit on the right. */
 async function openRental(id) {
-  if (!document.getElementById('app')) await viewRentals();
   closeAnyDrawer();
-
-  const scrim = $('<div class="scrim"></div>');
-  const drawer = $('<div class="drawer" role="dialog" aria-modal="true"><div class="dbody">Loading…</div></div>');
-  const close = () => { scrim.remove(); drawer.remove(); document.removeEventListener('keydown', onKey);
-    if (location.hash.startsWith('#/rentals/')) location.hash = '#/rentals'; };
-  const onKey = e => { if (e.key === 'Escape') close(); };
-  scrim.addEventListener('click', close);
-  document.addEventListener('keydown', onKey);
-  document.body.append(scrim, drawer);
+  const drawer = $('<div class="rentalpage"><div class="empty">Loading…</div></div>');
+  render('rentals', drawer);
+  const close = () => { location.hash = '#/rentals'; };
+  // Keep the scroll position across the many re-renders a rental goes through.
+  const scrollY = window.scrollY;
 
   let r, photos = [];
   try {
@@ -1560,7 +1732,7 @@ async function openRental(id) {
     photos = shots.photos || [];
   }
   catch (err) {
-    drawer.replaceChildren($(`<div class="dbody"><div class="banner err">${esc(err.message)}</div></div>`));
+    drawer.replaceChildren($(`<div class="banner err">${esc(err.message)}</div>`));
     return;
   }
 
@@ -1568,47 +1740,25 @@ async function openRental(id) {
   const actions = contactActions(r);
 
   drawer.replaceChildren($(`
-    <div class="dhead">
-      <div style="flex:1">
-        <h2>${esc(fullName(r))}</h2>
-        <div class="meta">Rental #${r.id}${r.request_id ? ` · from request #${r.request_id}` : ''}</div>
+    <div class="rhead">
+      <a class="back" href="#/rentals">&larr; Rentals</a>
+      <div class="title">
+        <h1>${esc(fullName(r))}</h1>
+        <div class="meta">Rental #${r.id}${r.request_id ? ` · from request #${r.request_id}` : ''}${
+          r.customer_id ? ` · <a href="#/customers/${r.customer_id}">customer record</a>` : ''}
+          · ${r.bins} bins · ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'} · ${esc(niceDate(r.start_date))} &rarr; ${esc(niceDate(r.due_date))}</div>
       </div>
-      <span class="pill ${r.status}" style="margin-top:3px">${r.status}</span>
-      <button class="x" aria-label="Close">×</button>
+      <span class="pill ${r.status}">${r.status}</span>
     </div>
-    <div class="dbody">
-      ${actions ? `<div class="contactbar">${actions}${
-        pref ? `<span class="prefnote">prefers ${esc(pref)}</span>` : ''}</div>` : ''}
-
-      ${isLate(r) ? '<div class="banner err">Past its return date and still out.</div>' : ''}
+    <div class="rgrid">
+      <div class="rmain">
+        ${isLate(r) ? '<div class="banner err">Past its return date and still out.</div>' : ''}
       ${r.stalled ? `<div class="banner err">This never got confirmed and its start date
         (${esc(niceDate(r.start_date))}) has passed. Chase it or cancel it &mdash; the bins
         are not going anywhere while it sits here.</div>` : ''}
 
-      ${r.confirm_token ? `<div class="linkbox">
-          <h4>Confirmation link${r.confirm_sent_at
-            ? ` — emailed to ${esc(r.email)} ${esc(ago(r.confirm_sent_at))}`
-            : ' — not sent yet'}</h4>
-          <code>${esc(`https://${bookingHost}/${r.confirm_token}`)}</code>
-          <div class="row">
-            ${isOwner() ? `<button class="btn sm${r.confirm_sent_at ? '' : ' primary'}" id="r-send">${
-              r.confirm_sent_at ? 'Resend email' : 'Email it to them'}</button>` : ''}
-            <button class="btn sm" id="r-copy">Copy link</button>
-            <a class="btn sm" href="${esc(`https://${bookingHost}/${r.confirm_token}`)}" target="_blank" rel="noopener">Preview</a>
-          </div>
-        </div>` : ''}
-
-      ${r.signed_at ? (r.agreement_manual
-        ? `<p class="signed"><span style="color:var(--warn);font-weight:700">Recorded by staff</span> —
-           ${esc(r.agreement_manual_by || '—')} ${esc(ago(r.signed_at))}${
-             r.agreement_manual_reason ? ` · ${esc(r.agreement_manual_reason)}` : ''}.
-           Not a customer e-signature.</p>`
-        : `<p class="signed">Signed by <strong>${esc(r.agreement_name)}</strong>
-           ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}${
-             r.signed_on_behalf ? ` · <span style="color:var(--warn);font-weight:700">on behalf of ${esc(fullName(r))}</span>` : ''}</p>`) : ''}
-
-
-      ${/* Gated on the link being sent, not on an invoice existing — the invoice
+      
+        ${/* Gated on the link being sent, not on an invoice existing — the invoice
             is now raised by the customer's card at the end, so waiting for one
             would hide the checklist for the whole rental. */
         !r.confirm_sent_at ? `
@@ -1624,6 +1774,7 @@ async function openRental(id) {
       </div>` : `
       <div class="steps">${STEPS.map(([key, col, label]) => {
         const done = r[col] ? 1 : 0;
+        if (key === 'inspected') return inspectRow(r, label, done);
 
         /* Payment is the one row with anything to do, so the invoice controls
            live in it rather than in a separate card repeating its status. */
@@ -1759,7 +1910,18 @@ async function openRental(id) {
           <span class="when">${r[col] ? esc(ago(r[col])) : ''}</span>
         </button>`; }).join('')}</div>`}
 
-      <dl class="kv">
+      
+        <div id="rent-charges"></div>
+        <div id="r-msg" style="margin-top:14px"></div>
+      
+      </div>
+      <aside class="rside">
+        <div class="card side">
+      ${actions ? `<div class="contactbar">${actions}${
+        pref ? `<span class="prefnote">prefers ${esc(pref)}</span>` : ''}</div>` : ''}
+
+      
+        <dl class="kv">
         <dt>Package</dt><dd>${r.bins} bins · ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'}</dd>
         <dt>Total</dt><dd>${esc(money(r.total_cents))} <span style="color:var(--muted);font-weight:400">before tax</span></dd>
         <dt>Delivered</dt><dd>${esc(niceDate(r.start_date))}</dd>
@@ -1767,6 +1929,33 @@ async function openRental(id) {
         <dt>Phone</dt><dd>${esc(r.phone || '—')}</dd>
         <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
       </dl>
+        </div>
+        ${r.confirm_token ? `<div class="linkbox">
+          <h4>Confirmation link${r.confirm_sent_at
+            ? ` — emailed to ${esc(r.email)} ${esc(ago(r.confirm_sent_at))}`
+            : ' — not sent yet'}</h4>
+          <code>${esc(`https://${bookingHost}/${r.confirm_token}`)}</code>
+          <div class="row">
+            ${isOwner() ? `<button class="btn sm${r.confirm_sent_at ? '' : ' primary'}" id="r-send">${
+              r.confirm_sent_at ? 'Resend email' : 'Email it to them'}</button>` : ''}
+            <button class="btn sm" id="r-copy">Copy link</button>
+            <a class="btn sm" href="${esc(`https://${bookingHost}/${r.confirm_token}`)}" target="_blank" rel="noopener">Preview</a>
+          </div>
+        </div>` : ''}
+
+      ${r.signed_at ? (r.agreement_manual
+        ? `<p class="signed"><span style="color:var(--warn);font-weight:700">Recorded by staff</span> —
+           ${esc(r.agreement_manual_by || '—')} ${esc(ago(r.signed_at))}${
+             r.agreement_manual_reason ? ` · ${esc(r.agreement_manual_reason)}` : ''}.
+           Not a customer e-signature.</p>`
+        : `<p class="signed">Signed by <strong>${esc(r.agreement_name)}</strong>
+           ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}${
+             r.signed_on_behalf ? ` · <span style="color:var(--warn);font-weight:700">on behalf of ${esc(fullName(r))}</span>` : ''}</p>`) : ''}
+
+
+      
+        <div class="card side" id="rent-bins"></div>
+        
 
 
       <div style="height:20px"></div>
@@ -1774,13 +1963,13 @@ async function openRental(id) {
         <input type="checkbox" id="ph-hold"${r.photo_hold ? ' checked' : ''}>
         <span>Keep photos past the 90-day limit &mdash; there&rsquo;s a dispute open</span>
       </label>` : ''}
-      <div id="rent-charges"></div>
+      
       <div id="rent-exts"></div>
       <div id="rent-notes"></div>
       <div id="rent-history" style="margin-top:6px"></div>
 
-      <div id="r-msg" style="margin-top:14px"></div>
-      <div class="actions" style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
+      
+        <div class="actions" style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
         ${!isOwner() ? ''
           : r.status === 'cancelled'
           ? '<button class="btn" data-status="pending">Reinstate</button>'
@@ -1793,9 +1982,10 @@ async function openRental(id) {
           : `${r.delivered_at ? '' : '<button class="btn" id="r-move">Change date</button>'}
              <button class="btn danger" data-status="cancelled">Cancel rental</button>`}
       </div>
+    
+      </aside>
     </div>`));
-
-  drawer.querySelector('.x').addEventListener('click', close);
+  window.scrollTo(0, scrollY);
   const msg = drawer.querySelector('#r-msg');
 
   const patch = async (body) => {
@@ -1805,7 +1995,7 @@ async function openRental(id) {
     return res;
   };
 
-  drawer.querySelectorAll('.step[data-step], .payrow .tick, .photorow .tick').forEach(b => b.addEventListener('click', async () => {
+  drawer.querySelectorAll('.step[data-step], .payrow .tick, .photorow .tick, .inspectrow .tick').forEach(b => b.addEventListener('click', async () => {
     if (b.dataset.locked === '1') return;
     const done = b.dataset.done === '1';
     // Undoing a milestone is a correction, not a routine action — a stray click
@@ -1947,6 +2137,7 @@ async function openRental(id) {
   });
 
   chargesPanel(drawer.querySelector('#rent-charges'), id, r);
+  binsPanel(drawer.querySelector('#rent-bins'), id, r);
   extensionsPanel(drawer.querySelector('#rent-exts'), id, r);
   notesPanel(drawer.querySelector('#rent-notes'), 'rentals', id);
   historyPanel(drawer.querySelector('#rent-history'), 'rentals', id);
@@ -2262,6 +2453,137 @@ async function viewMyHours() {
   </div>`);
   render('employees', view);
   availabilityPanel(view.querySelector('#avail'), [{ id: me.id, name: me.name, email: me.email, active: 1 }]);
+}
+
+/* ---------- customers ----------
+
+   One row per person: everyone who has asked for bins or rented them. The
+   list answers "have we dealt with them" and "who should we call in March";
+   the record holds their rentals, their requests — including the declined
+   and lapsed ones, which are leads rather than dead rows — and notes that
+   outlive any one rental. */
+
+const custState = { filter: 'all', q: '' };
+const CUST_FILTERS = [['all', 'Everyone'], ['renters', 'Past renters'], ['lapsed', 'Lapsed'], ['declined', 'Declined']];
+const custName = c => [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || c.phone || '(no name)';
+const fmtPhone = p => p && p.length === 10 ? `(${p.slice(0, 3)}) ${p.slice(3, 6)}-${p.slice(6)}` : (p || '');
+
+async function viewCustomers() {
+  const view = $(`<div>
+    <div class="head"><h1>Customers</h1><span class="count" id="ccount"></span></div>
+    <p class="sub">Everyone who has asked or rented. Finished rentals and answered requests live here.</p>
+    <div class="toolbar">
+      <div class="seg">${CUST_FILTERS.map(([f, label]) =>
+        `<button data-f="${f}" aria-pressed="${f === custState.filter}">${label}</button>`).join('')}</div>
+      <input class="search" placeholder="Name, email, phone, city…" value="${esc(custState.q)}">
+    </div>
+    <div class="card" id="clist"><div class="empty">Loading…</div></div>
+  </div>`);
+  render('customers', view);
+  view.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => { custState.filter = b.dataset.f; viewCustomers(); }));
+  let t;
+  view.querySelector('.search').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { custState.q = e.target.value; load(); }, 200); });
+
+  const list = view.querySelector('#clist');
+  const load = async () => {
+    try {
+      const { customers } = await api(`/customers?filter=${custState.filter}&q=${encodeURIComponent(custState.q)}`);
+      view.querySelector('#ccount').textContent = customers.length || '';
+      if (!customers.length) {
+        list.replaceChildren($(`<div class="empty"><strong>Nobody here</strong>${custState.q ? 'Try a different search.' : 'People appear as requests come in.'}</div>`));
+        return;
+      }
+      const rows = customers.map(c => `<tr class="clickable" data-id="${c.id}">
+        <td><div class="who">${esc(custName(c))}<small>${esc(c.email || '')}${c.email && c.phone ? ' · ' : ''}${esc(fmtPhone(c.phone))}</small></div></td>
+        <td class="hide-sm">${esc(c.city || '—')}</td>
+        <td class="nowrap">${c.finished ? `${c.finished} rental${c.finished === 1 ? '' : 's'}` : '<span style="color:var(--muted)">—</span>'}${
+          c.rentals > c.finished ? ` <span class="pill confirmed">${c.rentals - c.finished} live</span>` : ''}</td>
+        <td class="nowrap num hide-sm">${c.spent_cents ? esc(money(c.spent_cents)) : '—'}</td>
+        <td class="nowrap">${c.open_requests && !c.lapsed ? '<span class="pill new">asking</span>' : ''}${
+          c.lapsed ? '<span class="pill lapsed">lapsed</span>' : ''}${c.declined ? ' <span class="pill declined">declined</span>' : ''}</td>
+        <td class="nowrap hide-sm" style="color:var(--muted)">${c.last_seen ? esc(ago(c.last_seen)) : ''}</td>
+      </tr>`).join('');
+      const table = $(`<table><thead><tr><th>Who</th><th class="hide-sm">City</th><th>Rented</th><th class="hide-sm">Spent</th><th></th><th class="hide-sm">Last</th></tr></thead><tbody>${rows}</tbody></table>`);
+      table.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', () => { location.hash = `#/customers/${tr.dataset.id}`; }));
+      list.replaceChildren(table);
+    } catch (err) { list.replaceChildren($(`<div class="empty">${esc(err.message)}</div>`)); }
+  };
+  load();
+}
+
+async function viewCustomer(id) {
+  const page = $('<div class="rentalpage"><div class="empty">Loading…</div></div>');
+  render('customers', page);
+  let d;
+  try { d = await api(`/customers/${id}`); }
+  catch (err) { page.replaceChildren(banner(err.message)); return; }
+  const { customer: c, requests, rentals } = d;
+  const contact = contactActions({ phone: c.phone, email: c.email, contact_pref: requests[0]?.contact_pref });
+  const live = rentals.filter(r => r.status !== 'cancelled' && !r.inspected_at);
+  const past = rentals.filter(r => r.inspected_at || r.status === 'cancelled');
+  const spent = past.filter(r => r.paid_at && r.status !== 'cancelled').reduce((n, r) => n + (r.total_cents || 0), 0);
+
+  const rentalRow = r => `<tr class="clickable" data-rental="${r.id}">
+    <td><span class="pill ${r.status}">${r.inspected_at ? 'done' : r.status}</span></td>
+    <td class="nowrap">${r.bins} bins · ${r.weeks === 1 ? '1 wk' : r.weeks + ' wks'}</td>
+    <td class="nowrap num">${esc(niceDate(r.start_date))} → ${esc(niceDate(r.due_date))}</td>
+    <td class="hide-sm">${esc(r.delivery_city || '')}</td>
+    <td class="nowrap num">${esc(money(r.total_cents))}${r.paid_at ? '' : ' <span style="color:var(--muted)">unpaid</span>'}</td>
+  </tr>`;
+  const requestRow = q => `<tr class="clickable" data-request="${q.id}">
+    <td>${q.lapsed ? '<span class="pill lapsed">lapsed</span>' : `<span class="pill ${q.status}">${q.status}</span>`}</td>
+    <td class="nowrap">${q.kind === 'contact' ? '<em style="color:var(--muted)">Question</em>' : esc(pkg(q))}</td>
+    <td class="nowrap num">${esc(niceDate(q.start_date))}</td>
+    <td class="hide-sm" style="color:var(--muted)">${esc(q.decline_reason || q.message?.slice(0, 60) || '')}</td>
+    <td class="nowrap hide-sm" style="color:var(--muted)">${esc(ago(q.created_at))}</td>
+  </tr>`;
+
+  page.replaceChildren($(`
+    <div class="rhead">
+      <a class="back" href="#/customers">&larr; Customers</a>
+      <div class="title"><h1>${esc(custName(c))}</h1>
+        <div class="meta">${[c.city, c.email, fmtPhone(c.phone)].filter(Boolean).map(esc).join(' · ')}
+          · customer since ${esc(niceDate(c.created_at.slice(0, 10)))}</div></div>
+    </div>
+    <div class="rgrid">
+      <div class="rmain">
+        ${live.length ? `<h3 class="sect">Live rental${live.length === 1 ? '' : 's'}</h3>
+          <div class="card"><table><tbody>${live.map(rentalRow).join('')}</tbody></table></div>` : ''}
+        <h3 class="sect">Past rentals <span class="cnt">${past.length}${spent ? ` · ${esc(money(spent))} paid` : ''}</span></h3>
+        <div class="card">${past.length ? `<table><tbody>${past.map(rentalRow).join('')}</tbody></table>`
+          : '<div class="empty">No finished rentals yet.</div>'}</div>
+        <h3 class="sect">Requests <span class="cnt">${requests.length}</span></h3>
+        <div class="card">${requests.length ? `<table><tbody>${requests.map(requestRow).join('')}</tbody></table>`
+          : '<div class="empty">None.</div>'}</div>
+      </div>
+      <aside class="rside">
+        <div class="card side">
+          ${contact ? `<div class="contactbar">${contact}</div>` : ''}
+          <dl class="kv">
+            <dt>Email</dt><dd>${esc(c.email || '—')}</dd>
+            <dt>Phone</dt><dd>${esc(fmtPhone(c.phone) || '—')}</dd>
+            <dt>City</dt><dd>${esc(c.city || '—')}</dd>
+          </dl>
+          ${isOwner() ? '<button class="btn sm" id="c-edit" style="margin-top:10px">Edit details</button>' : ''}
+        </div>
+        <div id="cust-notes"></div>
+      </aside>
+    </div>`));
+
+  page.querySelectorAll('[data-rental]').forEach(tr => tr.addEventListener('click', () => { location.hash = `#/rentals/${tr.dataset.rental}`; }));
+  page.querySelectorAll('[data-request]').forEach(tr => tr.addEventListener('click', () => openRequest(tr.dataset.request)));
+  notesPanel(page.querySelector('#cust-notes'), 'customers', id);
+  page.querySelector('#c-edit')?.addEventListener('click', async () => {
+    const first = prompt('First name', c.first_name || ''); if (first === null) return;
+    const last = prompt('Last name', c.last_name || ''); if (last === null) return;
+    const email = prompt('Email', c.email || ''); if (email === null) return;
+    const phone = prompt('Phone', fmtPhone(c.phone)); if (phone === null) return;
+    const city = prompt('City', c.city || ''); if (city === null) return;
+    try {
+      await api(`/customers/${id}`, { method: 'PATCH', body: JSON.stringify({ first_name: first, last_name: last, email, phone, city }) });
+      viewCustomer(id);
+    } catch (err) { page.querySelector('.rside').prepend(banner(err.message)); }
+  });
 }
 
 /* ---------- employees ---------- */
@@ -2941,7 +3263,8 @@ async function viewSettings() {
     </tr>`).join('');
     black.replaceChildren($(`<div>
       ${adding ? `<div style="display:flex;gap:8px;align-items:flex-end;padding:16px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap">
-        <div><label class="fl" for="b-date">Date</label><input id="b-date" type="date" min="${todayISO()}"></div>
+        <div><label class="fl" for="b-date">From</label><input id="b-date" type="date" min="${todayISO()}"></div>
+        <div><label class="fl" for="b-to">To <span style="font-weight:400;text-transform:none;letter-spacing:0">(same day if blank)</span></label><input id="b-to" type="date" min="${todayISO()}"></div>
         <div style="flex:1;min-width:160px"><label class="fl" for="b-why">Why (optional)</label><input id="b-why" placeholder="Away, van in the shop" maxlength="80"></div>
         <button class="btn primary" id="b-add">Add</button><button class="btn" id="b-cancel">Cancel</button>
       </div>` : ''}
@@ -2952,11 +3275,12 @@ async function viewSettings() {
     black.querySelector('#b-cancel')?.addEventListener('click', () => drawBlackouts(false));
     black.querySelector('#b-add')?.addEventListener('click', async () => {
       const date = black.querySelector('#b-date').value;
+      const to = black.querySelector('#b-to').value;
       if (!date) return;
       try {
-        const res = await api('/blackouts', { method: 'POST', body: JSON.stringify({ date, reason: black.querySelector('#b-why').value }) });
+        const res = await api('/blackouts', { method: 'POST', body: JSON.stringify({ date, to, reason: black.querySelector('#b-why').value }) });
         if (res.affected?.length) {
-          alert(`Added. Already booked that day:\n\n${res.affected.map(a => `• ${a.name} — ${a.job === 'deliver' ? 'delivery' : 'pickup'} (rental #${a.id})`).join('\n')}\n\nMove or contact them.`);
+          alert(`Added ${res.days === 1 ? 'the day' : res.days + ' days'}. Already booked in that time:\n\n${res.affected.map(a => `• ${a.name} — ${a.job === 'deliver' ? 'delivery' : 'pickup'} ${niceDate(a.date)} (rental #${a.id})`).join('\n')}\n\nMove or contact them.`);
         }
         drawBlackouts(false);
       } catch (err) { black.querySelector('#b-msg').replaceChildren(banner(err.message)); }
@@ -2976,9 +3300,7 @@ async function viewSettings() {
 }
 
 /* ---------- stubs ---------- */
-const SOON = {
-  customers: ['One record per renter, merged across requests', 'Rental history and repeat business', 'Notes that outlive a single rental'],
-};
+const SOON = {};
 
 function viewSoon(id) {
   const label = NAV.find(n => n.id === id).label;
@@ -3078,6 +3400,7 @@ function route() {
   if (tab === 'schedule') return viewSchedule();
   if (tab === 'inventory') return viewInventory();
   if (tab === 'settings') return viewSettings();
+  if (tab === 'customers') return id ? viewCustomer(id) : viewCustomers();
   if (SOON[tab]) return viewSoon(tab);
   return viewRequests();
 }

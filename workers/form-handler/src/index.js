@@ -6,6 +6,7 @@ import { quoteCents } from './pricing.js';
 import { today, isoDate, addDays } from '../../shared/clock.js';
 import { closedWeekdays, weekdayOf, WEEKDAY } from '../../shared/coverage.js';
 import { closedHolidayOn } from '../../shared/holidays.js';
+import { customerFor } from '../../shared/customers.js';
 
 /* Beehive Bin Co. — form handler.
    Receives reserve/contact form POSTs from beehivebin.co and emails them to
@@ -166,7 +167,14 @@ async function storeRequest(env, data) {
     JSON.stringify(data).slice(0, 8000),
   ).run();
 
-  return res.meta.last_row_id;
+  const id = res.meta.last_row_id;
+  // The person behind the form. Never fatal: a request with no customer row
+  // is still a request, and the panel links it on the next touch.
+  try {
+    const cid = await customerFor(env, { email: row.email, phone: row.phone, first_name: row.first_name, last_name: row.last_name, city: row.delivery_city }, 'website');
+    if (cid) await env.DB.prepare('UPDATE requests SET customer_id = ?1 WHERE id = ?2').bind(cid, id).run();
+  } catch (err) { console.log('customer link failed', err.message); }
+  return id;
 }
 
 /* ---------- Square webhooks ----------

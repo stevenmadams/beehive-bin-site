@@ -27,8 +27,25 @@ reserve/contact form ──POST──▶ beehive-forms ──┬─▶ D1 `reque
   what §4 allows when a rental goes wrong, `src/square.js` talks to Square and
   `src/tax.js` / `src/pricing.js` are generated from `data/`.
 
-**Requests, Rentals, Schedule, Inventory and Employees work.** Customers and
-Settings render a description of what will live there.
+**Every tab works.** A request is a question; a rental is a job; a customer
+is a person. Requests lists open questions (new and lapsed). Approving makes
+a rental and the request leaves the list; declining files the person under
+Customers. Rentals lists live jobs — through inspection — and a finished or
+cancelled one is history on the customer. A rental is a full page: the work
+down the left (link → agreement → payment → delivery → back → inspected &
+cleaned), the facts down the right.
+
+**Which bins.** `rental_items` ties each bin to the rental it went out on:
+auto-picked from the free ones at delivery, or chosen by label, adjustable
+until inspection. Inspection is a checklist — tick a bin back, flag an issue
+(damaged or lost, with a note) — and writes the bin's own condition, the
+rental's count, and what the charges panel proposes. A bin is free again only
+once inspected. Inventory shows where every bin is tonight.
+
+**Customers** (`customers`, `workers/shared/customers.js`): one row per
+person, matched by email, or by phone when one side has no email (two emails
+on one phone are two people who share a line). Both Workers link on write.
+Notes attach to the person.
 
 **Schedule** answers "what am I doing tonight": collections first, then
 deliveries — bins coming back can go straight out again — with the address, the

@@ -48,11 +48,22 @@ describe('blackout dates', () => {
     expect((await ok('/blackouts')).blackouts).toHaveLength(0);
   });
 
+  it('a run of days off is one entry, and every job inside it is reported', async () => {
+    await fleet(40);
+    const a = weekday(5), b = addDays(a, 6);
+    const r = await rental({ bins: 10, start_date: addDays(a, 2) });
+    const res = await ok('/blackouts', { method: 'POST', body: { date: a, to: b, reason: 'Away' } });
+    expect(res.days).toBe(7);
+    expect(res.affected).toEqual([{ id: r.id, name: 'Dana Whitfield', job: 'deliver', date: addDays(a, 2) }]);
+    expect((await ok('/blackouts')).blackouts.filter(x => x.reason === 'Away')).toHaveLength(7);
+    expect((await api('/blackouts', { method: 'POST', body: { date: b, to: a } })).status).toBe(400);
+  });
+
   it('a pending rental already on a day that gets blacked out is reported, not silently left', async () => {
     await fleet(40);
     const r = await rental({ bins: 10, start_date: weekday(5) });
     const res = await ok('/blackouts', { method: 'POST', body: { date: weekday(5), reason: 'Closed' } });
-    expect(res.affected).toEqual([{ id: r.id, name: 'Dana Whitfield', job: 'deliver' }]);
+    expect(res.affected).toEqual([{ id: r.id, name: 'Dana Whitfield', job: 'deliver', date: weekday(5) }]);
   });
 });
 
