@@ -24,6 +24,7 @@ body{margin:0;font-family:var(--font-body);background:var(--paper);color:var(--i
   font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
 h1,h2,h3{font-family:var(--font-display);font-weight:400;letter-spacing:-.02em;line-height:1.05;margin:0}
 button,input,select,textarea{font:inherit;color:inherit}
+input[type=checkbox],input[type=radio]{accent-color:var(--ink);width:16px;height:16px}
 a{color:inherit}
 
 /* ---- shell ---- */
@@ -57,8 +58,20 @@ main{padding:26px 30px 60px;max-width:1160px}
 .pill.manual{background:rgba(21,19,15,.08);color:var(--muted);font-weight:600}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .frow.one{grid-template-columns:1fr}
-.dbody input,.dbody select{width:100%;padding:9px 11px;border:1px solid var(--line);
-  border-radius:9px;background:var(--white)}
+/* Every text, date, number and select control looks like one thing, wherever
+   it sits — a toolbar, a sheet, a drawer, a card. The browser's own chrome for
+   a date or a select is different on every OS, so it is replaced. */
+input:not([type=checkbox]):not([type=radio]):not([type=file]),select{
+  padding:0 11px;height:38px;border:1px solid var(--line);border-radius:9px;background:var(--white);
+  font-size:14px;color:var(--ink);min-width:0;-webkit-appearance:none;appearance:none}
+input[type=date],input[type=time]{padding-right:8px}
+input::-webkit-calendar-picker-indicator{opacity:.55;cursor:pointer}
+input::placeholder{color:var(--muted);opacity:1}
+select{padding-right:32px;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B675C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;background-size:16px}
+input:disabled,select:disabled{background-color:#F4F2EC;color:var(--muted);cursor:default}
+.dbody input,.dbody select{width:100%}
 .quote{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:11px 14px;
   margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
 .quote strong{font-family:var(--font-display);font-size:21px}
@@ -75,8 +88,7 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .seg button{border:0;background:none;padding:6px 14px;border-radius:999px;font-weight:600;font-size:13px;
   color:var(--muted);cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--white);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
-.search{flex:1;min-width:190px;max-width:320px;padding:8px 12px;border:1px solid var(--line);
-  border-radius:999px;background:var(--white)}
+.search{flex:1;min-width:190px;max-width:320px;border-radius:999px !important;padding:0 14px}
 .search:focus{outline:2px solid var(--yellow);outline-offset:1px}
 
 .btn{border:1px solid var(--line);background:var(--white);padding:8px 14px;border-radius:9px;
@@ -354,7 +366,7 @@ tr.dayhead td{background:#F4F2EC;font-size:11px;letter-spacing:.06em;text-transf
 .vgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media (max-width:640px){.vgrid{grid-template-columns:1fr}}
 .stagebody .addr .shown b{font-weight:600;font-size:14px}
-.stagebody .addr .edit input,.stagebody .addr .edit select{width:100%;margin-top:6px;padding:8px 10px}
+.stagebody .addr .edit input,.stagebody .addr .edit select{width:100%;margin-top:6px}
 .stagebody .addr .saverow{display:flex;gap:6px;margin-top:8px}
 .stagebody .addr .cust{background:#FBFAF6;border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-top:8px;font-size:13px;white-space:pre-wrap}
 .stagebody .addr .cust b{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
@@ -400,7 +412,7 @@ tr.dayhead td{background:#F4F2EC;font-size:11px;letter-spacing:.06em;text-transf
 .chip button{border:0;background:none;font:inherit;cursor:pointer;color:var(--muted);padding:0 0 0 2px;line-height:1}
 .chip button:hover{color:var(--bad)}
 .binadd{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap}
-.binadd input{padding:7px 9px}
+
 .step.inspectrow{display:block;cursor:default}
 .step.inspectrow:hover{border-color:var(--line)}
 .step.inspectrow .top{display:flex;align-items:center;gap:11px}

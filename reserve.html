@@ -208,11 +208,10 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
             <div class="cal-months" id="cal-months"></div>
             <div class="cal-legend">
               <span><i class="k open"></i> Open</span>
-              <span><i class="k full"></i> Full for this package</span>
               <span><i class="k off"></i> Closed</span>
             </div>
           </div>
-          <p class="note" style="margin-top:4px" id="date-note">Deliveries and pickups happen <strong>in the evening</strong> on your start and return dates — we'll confirm an exact time window with you. We don't deliver or pick up on <strong id="closed-days">Sundays</strong>.</p>
+          <p class="note" style="margin-top:4px" id="date-note">We typically deliver and pick up <strong>in the evening</strong>, and we'll confirm a time with you before the day. We're closed on <strong id="closed-days">Sundays</strong>.</p>
         </fieldset>
 
         <fieldset>
@@ -534,7 +533,10 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
     const end = new Date(calState.first); end.setMonth(end.getMonth() + calState.months);
     const days = Math.round((end - calState.first) / 86400000);
     try {
-      const res = await fetch(`${CAL_ENDPOINT}?from=${from}&days=${days}&bins=${selectedBins()}&weeks=${selectedWeeks()}`);
+      // Whether the package fits is not asked for yet: the calendar would grey
+      // out weeks by fleet size, and the fleet is still being built. Add
+      // `&bins=${selectedBins()}&weeks=${selectedWeeks()}` to turn it on.
+      const res = await fetch(`${CAL_ENDPOINT}?from=${from}&days=${days}`);
       if (!res.ok) throw new Error(res.status);
       const data = await res.json();
       calState.days = new Map(data.days.map(d => [d.date, d]));
@@ -593,8 +595,8 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
   }
   document.getElementById('cal-prev').addEventListener('click', () => { calState.first.setMonth(calState.first.getMonth() - 1); loadCalendar(); });
   document.getElementById('cal-next').addEventListener('click', () => { calState.first.setMonth(calState.first.getMonth() + 1); loadCalendar(); });
-  // Whether a day fits depends on the package, so the calendar follows it.
-  form.querySelectorAll('input[name="bins"], input[name="weeks"]').forEach(i => i.addEventListener('change', loadCalendar));
+  // When fit is switched on, the calendar should follow the package:
+  // form.querySelectorAll('input[name="bins"], input[name="weeks"]').forEach(i => i.addEventListener('change', loadCalendar));
   if (matchMedia('(max-width:640px)').matches) calState.months = 1;
   loadCalendar();
   syncSummary();

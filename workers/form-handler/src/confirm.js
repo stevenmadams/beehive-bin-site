@@ -330,8 +330,8 @@ const details = (r, opts = {}) => `
         <dt>Total</dt><dd style="font-size:18px">${esc(money(t.total))}</dd>`
         : `<dt>Total</dt><dd>${esc(money(t.sub))} <span style="font-weight:400;color:var(--muted)">plus tax</span></dd>`; })()}
     </dl>
-    <p class="help" style="margin-top:14px">Deliveries and pickups happen in the evening &mdash;
-    we&rsquo;ll confirm your window closer to the day. ${opts.beforeSigning
+    <p class="help" style="margin-top:14px">We typically deliver and pick up in the evening &mdash;
+    we&rsquo;ll confirm a time with you before the day. ${opts.beforeSigning
       ? 'Something wrong here? <a href="mailto:support@beehivebin.co">Tell us</a> before you sign.'
       : 'Something not right? <a href="mailto:support@beehivebin.co">Get in touch</a> and we&rsquo;ll sort it out.'}</p>
   </div>`;
