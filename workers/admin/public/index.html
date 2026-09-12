@@ -287,7 +287,68 @@ tr.late td{background:rgba(163,44,44,.05)}
 .job .warn{color:var(--warn);font-weight:600;font-size:12.5px;margin-top:6px}
 .job .acts{display:flex;flex-direction:column;gap:6px;flex:none}
 
+/* ---- sheet ---- */
+.sheet-scrim{position:fixed;inset:0;background:rgba(21,19,15,.45);z-index:60;display:grid;place-items:center;padding:20px}
+.sheet{background:var(--white);border-radius:14px;width:min(460px,100%);box-shadow:0 30px 80px rgba(0,0,0,.3);
+  animation:sheetin .16s ease-out}
+@keyframes sheetin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.shbody{padding:22px 24px}
+.shbody h3{font-size:19px;margin:0 0 6px}
+.shbody .sub{margin:0 0 14px}
+.shf{margin-top:12px}
+.shf .opt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)}
+.shf input,.shf textarea,.shf select{width:100%}
+.choices{display:grid;gap:8px}
+.choice{text-align:left;font:inherit;background:var(--white);border:1.5px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
+.choice b{display:block;font-size:14.5px}
+.choice small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.choice.on{border-color:var(--yellow-deep);background:rgba(255,196,0,.15)}
+.sherr{color:var(--bad);font-size:13px;margin-top:10px;font-weight:600}
+.shacts{display:flex;gap:8px;margin-top:18px}
+
 /* ---- rental page ---- */
+.stage{background:var(--white);border:1px solid var(--line);border-radius:14px;margin-bottom:10px}
+.stage header{display:flex;align-items:center;gap:12px;padding:13px 16px}
+.stage .n{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:12.5px;font-weight:700;flex:none;color:var(--muted)}
+.stage.done .n{background:var(--ok);border-color:var(--ok);color:#fff}
+.stage.now .n{background:var(--yellow);border-color:var(--yellow-deep);color:var(--ink)}
+.stage h3{font-size:15.5px;margin:0;white-space:nowrap}
+.stage .sum{flex:1;font-size:13px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stage.now .sum{white-space:normal}
+.stage.dim{opacity:.5}
+.stage.now{border-color:var(--yellow-deep);box-shadow:0 0 0 3px rgba(255,196,0,.18)}
+.stagebody{border-top:1px solid var(--line);padding:16px 18px 18px}
+.stagebody h5{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.stagebody h5:first-child{margin-top:0}
+.stagebody h5 .cnt{font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px}
+.todo p{margin:0 0 12px;font-size:14.5px}
+.subs{margin-top:14px}
+.subrow{display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.subrow .tick{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--line);background:var(--white);cursor:pointer;flex:none;font-size:13px;color:transparent;margin-top:1px}
+.subrow.ok .tick{background:var(--ok);border-color:var(--ok);color:#fff}
+.subrow .tick:disabled{cursor:default}
+.warn{color:var(--warn);font-weight:600}
+.bad{color:var(--bad);font-weight:600}
+.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:640px){.vgrid{grid-template-columns:1fr}}
+.stagebody .addr .shown b{font-weight:600;font-size:14px}
+.stagebody .addr .edit input,.stagebody .addr .edit select{width:100%;margin-top:6px;padding:8px 10px}
+.stagebody .addr .saverow{display:flex;gap:6px;margin-top:8px}
+.stagebody .addr .cust{background:#FBFAF6;border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-top:8px;font-size:13px;white-space:pre-wrap}
+.stagebody .addr .cust b{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.lockline{background:#FBFAF6;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px;margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.orline{margin-top:12px;font-size:13px;color:var(--muted);display:flex;gap:10px;align-items:center}
+.stagebody .ev{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.stagebody .ev figure{margin:0;position:relative;width:64px;height:64px}
+.stagebody .ev img{width:64px;height:64px;object-fit:cover;border-radius:8px;cursor:zoom-in}
+.stagebody .ev .rm{position:absolute;top:2px;right:2px;border:0;border-radius:5px;background:rgba(21,19,15,.7);color:#fff;width:18px;height:18px;font-size:12px;cursor:pointer}
+.stagebody .staged{margin-top:10px}
+.stagebody .strip{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.stagebody .strip figure{margin:0;position:relative;width:64px;height:64px}
+.stagebody .strip img{width:64px;height:64px;object-fit:cover;border-radius:8px}
+.stagebody .strip .rm{position:absolute;top:2px;right:2px;border:0;border-radius:5px;background:rgba(21,19,15,.7);color:#fff;width:18px;height:18px;font-size:12px;cursor:pointer}
+.kv .mut{color:var(--muted);font-weight:400}
+
 .rentalpage{max-width:1180px}
 .rhead{display:flex;align-items:flex-start;gap:16px;margin-bottom:22px}
 .rhead .back{font-size:13px;color:var(--muted);text-decoration:none;padding-top:10px;white-space:nowrap}
@@ -719,6 +780,91 @@ function lightTitle(f, r) {
 const light = (r, cls = '') => r.kind === 'reserve'
   ? `<span class="light ${cls}" title="${esc(lightTitle(r.fit, r))}">${LIGHT[r.fit?.light || 'grey']}</span>` : '';
 
+/* ---------- the sheet ----------
+
+   Every question the panel asks — a reason, a date, which of two things
+   happened — is asked here, in the panel's own type and colours, with real
+   fields. Never a browser prompt(): a box that asks you to type "d" is not
+   an interface.
+
+   ask()  → the values, or null if dismissed.
+   sure() → true/false.
+   tell() → resolves when read. */
+
+function sheet(inner) {
+  document.querySelectorAll('.sheet-scrim').forEach(s => s.remove());
+  const scrim = $('<div class="sheet-scrim"><div class="sheet" role="dialog" aria-modal="true"></div></div>');
+  scrim.querySelector('.sheet').append(inner);
+  document.body.append(scrim);
+  return scrim;
+}
+
+function ask({ title, body = '', fields = [], ok = 'Save', cancel = 'Cancel', danger = false }) {
+  return new Promise(resolve => {
+    const f = fields.map(fl => {
+      const id = `sh-${fl.name}`;
+      const lab = fl.label ? `<label class="fl" for="${id}">${fl.label}${fl.optional ? ' <span class="opt">optional</span>' : ''}</label>` : '';
+      if (fl.type === 'choice') {
+        return `<div class="shf">${lab}<div class="choices" data-name="${fl.name}">${fl.options.map(([v, l, hint]) =>
+          `<button type="button" class="choice${fl.value === v ? ' on' : ''}" data-v="${esc(v)}"><b>${esc(l)}</b>${hint ? `<small>${esc(hint)}</small>` : ''}</button>`).join('')}</div></div>`;
+      }
+      if (fl.type === 'select') {
+        return `<div class="shf">${lab}<select id="${id}" name="${fl.name}">${fl.options.map(([v, l]) =>
+          `<option value="${esc(v)}"${fl.value === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+      }
+      if (fl.type === 'textarea') {
+        return `<div class="shf">${lab}<textarea id="${id}" name="${fl.name}" placeholder="${esc(fl.placeholder || '')}" rows="3">${esc(fl.value || '')}</textarea></div>`;
+      }
+      return `<div class="shf">${lab}<input id="${id}" name="${fl.name}" type="${fl.type || 'text'}" value="${esc(fl.value ?? '')}"
+        placeholder="${esc(fl.placeholder || '')}"${fl.min ? ` min="${fl.min}"` : ''}${fl.max ? ` max="${fl.max}"` : ''}${fl.maxlength ? ` maxlength="${fl.maxlength}"` : ''}></div>`;
+    }).join('');
+    const box = $(`<form class="shbody">
+      <h3>${esc(title)}</h3>
+      ${body ? `<p class="sub">${body}</p>` : ''}
+      ${f}
+      <div class="sherr" hidden></div>
+      <div class="shacts">
+        <button type="submit" class="btn primary${danger ? ' danger' : ''}">${esc(ok)}</button>
+        ${cancel ? `<button type="button" class="btn" data-cancel>${esc(cancel)}</button>` : ''}
+      </div>
+    </form>`);
+    const scrim = sheet(box);
+    const choices = {};
+    for (const fl of fields) if (fl.type === 'choice' && fl.value != null) choices[fl.name] = fl.value;
+    box.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => {
+      const group = b.closest('.choices');
+      group.querySelectorAll('.choice').forEach(x => x.classList.toggle('on', x === b));
+      choices[group.dataset.name] = b.dataset.v;
+    }));
+    const done = v => { scrim.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = e => { if (e.key === 'Escape') done(null); };
+    document.addEventListener('keydown', onKey);
+    scrim.addEventListener('click', e => { if (e.target === scrim) done(null); });
+    box.querySelector('[data-cancel]')?.addEventListener('click', () => done(null));
+    box.addEventListener('submit', e => {
+      e.preventDefault();
+      const out = {};
+      for (const fl of fields) {
+        out[fl.name] = fl.type === 'choice' ? (choices[fl.name] ?? null) : box.querySelector(`[name="${fl.name}"]`).value.trim();
+        if (fl.required && !out[fl.name]) {
+          const err = box.querySelector('.sherr');
+          err.textContent = fl.type === 'choice' ? 'Pick one.' : `${fl.label || 'This'} is needed.`;
+          err.hidden = false;
+          return;
+        }
+      }
+      done(out);
+    });
+    const first = box.querySelector('input:not([type=hidden]), textarea, select');
+    if (first) first.focus();
+  });
+}
+
+const sure = ({ title, body = '', ok = 'Yes', cancel = 'No', danger = false }) =>
+  ask({ title, body, ok, cancel, danger }).then(v => v !== null);
+
+const tell = ({ title, body = '', ok = 'OK' }) => ask({ title, body, ok, cancel: '' }).then(() => undefined);
+
 /* ---------- requests ---------- */
 const reqState = { status: 'new', q: '' };
 
@@ -894,6 +1040,430 @@ function openLightbox(photos, startIndex) {
   document.body.append(box);
 }
 
+/* ---------- a rental ----------
+
+   Five stages, one at a time:
+
+     1. Booked      the customer has the link; signs and pays
+     2. Delivered   bins go out — load the van, photograph the drop
+     3. Collected   bins come back — photograph the pickup
+     4. Inspected   look at each bin; flag what is wrong
+     5. Settled     decide and charge what the agreement allows
+
+   At any moment there is one thing to do next. The page shows that, with
+   the facts that matter for it; stages already passed are one line each,
+   stages ahead are dim. The side column is what is always true: who, what,
+   when, where the bins are, notes, history. */
+
+const stageOf = r => {
+  if (r.status === 'cancelled') return 'cancelled';
+  if (!(r.agreement_signed_at && r.paid_at)) return 'booked';
+  if (!r.delivered_at) return 'delivered';
+  if (!r.returned_at) return 'returned';
+  if (!r.inspected_at) return 'inspected';
+  return 'settled';
+};
+const STAGE_ORDER = ['booked', 'delivered', 'returned', 'inspected', 'settled'];
+
+async function openRental(id) {
+  closeAnyDrawer();
+  const page = $('<div class="rentalpage"><div class="empty">Loading…</div></div>');
+  render('rentals', page);
+  const scrollY = window.scrollY;
+
+  let r, photos = [], items = [], charges = null;
+  try {
+    const [rental, shots, bins, chg] = await Promise.all([
+      api(`/rentals/${id}`),
+      api(`/rentals/${id}/photos`).catch(() => ({ photos: [] })),
+      api(`/rentals/${id}/items`).catch(() => ({ items: [] })),
+      api(`/rentals/${id}/charges`).catch(() => null),
+    ]);
+    r = rental.rental; photos = shots.photos || []; items = bins.items || []; charges = chg;
+  } catch (err) { page.replaceChildren(banner(err.message)); return; }
+
+  const stage = stageOf(r);
+  const at = STAGE_ORDER.indexOf(stage);
+  const owner = isOwner();
+  const patch = body => api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  const reload = () => openRental(id);
+  const fail = err => page.querySelector('#r-msg').replaceChildren(banner(err.message));
+  const who = e => e ? e.split('@')[0] : '';
+  const bins = items.filter(i => i.kind === 'bin');
+  const link = r.confirm_token ? `https://${bookingHost}/${r.confirm_token}` : null;
+  const settled = charges && charges.outstanding_cents === 0 && !charges.proposals.some(p => !p.blocked);
+
+  /* ---- each stage: a summary line when passed, a body when current ---- */
+
+  const booked = {
+    label: 'Booked',
+    done: at > 0,
+    summary: () => [
+      r.confirm_sent_at ? `link sent ${ago(r.confirm_sent_at)}` : 'link not sent',
+      r.signed_at ? `signed by ${r.agreement_manual ? 'staff' : esc(r.agreement_name || 'customer')}` : 'not signed',
+      r.paid_at ? `paid ${money(r.total_cents)}` : 'not paid',
+    ].join(' · '),
+    body: () => `
+      ${!r.confirm_sent_at ? `<div class="todo">
+        <p>Nothing else can happen until the customer has their link: they confirm the address, sign, put a card on file and pay.</p>
+        ${owner ? `<button class="btn primary" id="r-send" ${r.email ? '' : 'disabled'}>${r.email ? `Email the link to ${esc(r.email)}` : 'No email address on this rental'}</button>`
+          : '<span class="soon">An owner sends the link.</span>'}
+      </div>` : `<div class="linkbox">
+        <h4>Confirmation link — emailed ${esc(ago(r.confirm_sent_at))}</h4>
+        <code>${esc(link)}</code>
+        <div class="row">
+          ${owner ? '<button class="btn sm" id="r-send">Resend</button>' : ''}
+          <button class="btn sm" id="r-copy">Copy</button>
+          <a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">Preview</a>
+        </div></div>`}
+      <div class="subs">
+        <div class="subrow${r.signed_at ? ' ok' : ''}">
+          <button class="tick" data-m="agreement" data-done="${r.signed_at ? 1 : 0}" ${r.signed_at && !r.agreement_manual ? 'disabled title="A customer signature is theirs"' : ''}>✓</button>
+          <div><b>Agreement</b> ${r.signed_at
+            ? (r.agreement_manual ? `<span class="warn">recorded by staff</span> — ${esc(r.agreement_manual_by || '')}, ${esc(r.agreement_manual_reason || '')}`
+              : `signed by <b>${esc(r.agreement_name)}</b> ${esc(ago(r.signed_at))} · ${esc(r.agreement_version || '')}${r.signed_on_behalf ? ' · <span class="warn">on their behalf</span>' : ''}`)
+            : '<span class="soon">waiting on the customer</span>'}</div>
+        </div>
+        <div class="subrow${r.paid_at ? ' ok' : ''}">
+          <button class="tick" data-m="paid" data-done="${r.paid_at ? 1 : 0}" ${r.square_status === 'PAID' ? 'disabled title="Square has this as paid"' : ''}>✓</button>
+          <div><b>Payment</b> ${r.paid_at ? `paid ${esc(ago(r.paid_at))}` : '<span class="soon">waiting on the customer</span>'}${
+            r.square_status ? ` · Square: ${esc(r.square_status)}` : ''}${r.card_last4 ? ` · card on file ••${esc(r.card_last4)}` : ''}
+            ${r.square_invoice_url ? ` <a href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">invoice</a>` : ''}
+            ${r.square_invoice_id ? ' <button class="linkish" id="r-sync">check Square</button>' : ''}</div>
+        </div>
+      </div>
+      ${r.stalled ? `<div class="banner err">Never confirmed, and the start date (${esc(niceDate(r.start_date))}) has passed. Chase it or cancel it.</div>` : ''}`,
+  };
+
+  const visit = (kind, key, col, label, verb) => {
+    const done = !!r[col];
+    const date = kind === 'delivery' ? r.start_date : r.due_date;
+    const unlocked = kind === 'delivery' ? r.delivery_unlocked_at : r.pickup_unlocked_at;
+    const locked = !done && date > todayISO() && !unlocked;
+    const mine = photos.filter(p => p.kind === kind);
+    const slotBox = `<div class="slotrow" data-slotbox="${kind}"><label>When</label><span class="soon">…</span></div>`;
+    const addr = `
+      <div class="addr" data-addr="${kind}">
+        <div class="shown"><b>${esc((kind === 'delivery' ? r.delivery_address : r.pickup_address) || (kind === 'delivery' ? 'No address yet' : 'Same as delivery'))}</b>
+          ${done ? '' : `<button class="linkish" data-editaddr="${kind}">edit</button>`}</div>
+        <div class="edit" hidden>
+          <input data-part="${kind}_street" value="${esc(r[kind + '_street'] || '')}" placeholder="Street">
+          <input data-part="${kind}_unit" value="${esc(r[kind + '_unit'] || '')}" placeholder="Unit (optional)">
+          <div style="display:flex;gap:6px"><select data-part="${kind}_city">${cities.map(c => `<option${(kind === 'delivery' ? r.delivery_city : r.pickup_city) === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
+            <input data-part="${kind}_zip" value="${esc(r[kind + '_zip'] || '')}" placeholder="ZIP" maxlength="5" style="width:80px"></div>
+          <div class="saverow"><button class="btn sm primary" data-saveaddr="${kind}">Save</button><button class="btn sm" data-canceladdr="${kind}">Cancel</button></div>
+        </div>
+        ${(kind === 'delivery' ? r.delivery_notes : r.pickup_notes) ? `<div class="cust"><b>From the customer</b>${esc(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)}</div>` : ''}
+      </div>`;
+    const thumbs = mine.map(p => `<figure><img src="/api/photo/${encodeURIComponent(p.r2_key)}" data-photo="${p.id}" data-kind="${kind}" alt="">${
+      done ? '' : `<button class="rm" data-rm="${p.id}" title="Remove">×</button>`}</figure>`).join('');
+    return {
+      label, done,
+      summary: () => done
+        ? `${verb} <b>${esc(stamp(r[col]))}</b>${r[key === 'delivered' ? 'delivered_by' : 'returned_by'] ? ` by ${esc(who(r[key === 'delivered' ? 'delivered_by' : 'returned_by']))}` : ''}${
+            key === 'delivered' && bins.length ? ` · ${bins.length} bins` : ''}${mine.length ? ` · ${mine.length} photo${mine.length === 1 ? '' : 's'}` : ' · <span class="warn">no photo</span>'}`
+        : `${esc(niceDate(date))}${r[kind + '_window'] ? `, ${esc(r[kind + '_window'])}` : ''}`,
+      body: () => `
+        ${locked ? `<div class="lockline">🔒 Not due ${kind === 'delivery' ? 'out' : 'back'} until <b>${esc(niceDate(date))}</b>.
+          <button class="linkish" data-unlock="${key}">Going ${kind === 'delivery' ? 'early' : 'early'}? Unlock</button></div>` : ''}
+        ${key === 'delivered' && !(r.signed_at && r.paid_at) ? `<div class="banner err">Not ${!r.signed_at ? 'signed' : ''}${!r.signed_at && !r.paid_at ? ' or ' : ''}${!r.paid_at ? 'paid' : ''} yet. Delivering anyway is allowed, on purpose.</div>` : ''}
+        ${key === 'returned' && isLate(r) ? `<div class="banner err">Past the return date — ${esc(niceDate(r.due_date))}. A late week is proposed when they are back.</div>` : ''}
+        <div class="vgrid">
+          <div><h5>${esc(niceDate(date))}</h5>${slotBox}</div>
+          <div><h5>${kind === 'delivery' ? 'Deliver to' : 'Collect from'}</h5>${addr}</div>
+        </div>
+        ${key === 'delivered' ? `<h5>Load the van <span class="cnt">${bins.length} of ${r.bins}</span></h5>
+          <div class="chips" id="van-chips">${bins.map(i => `<span class="chip">${esc(i.label)}<button data-unassign="${i.id}" title="Not this one">×</button></span>`).join('')}
+            ${bins.length ? '' : '<span class="soon">Picked from the free ones when you mark it delivered — or choose them:</span>'}</div>
+          <div class="binadd">${bins.length < r.bins ? `<button class="btn sm" id="bins-auto">Pick ${r.bins - bins.length} for me</button>` : ''}
+            <input id="bins-label" placeholder="or type labels: B-017 B-018" style="flex:1;min-width:150px"><button class="btn sm" id="bins-add">Add</button></div>` : ''}
+        ${key === 'returned' && owner ? '<div id="rent-exts"></div>' : ''}
+        <h5>Photo${mine.length ? 's' : ''} at the ${kind === 'delivery' ? 'door' : 'pickup'}</h5>
+        <div class="ev">${thumbs}${locked ? '<span class="soon">Unlock first.</span>' : `<label class="shoot"><input type="file" accept="image/*" capture="environment" data-step="${key}" multiple><span>📷 ${mine.length ? 'Add another' : 'Take a photo'}</span></label>`}</div>
+        <div class="staged" id="stage-${key}" hidden><div class="strip" id="strip-${key}"></div><button class="btn primary" data-commit="${key}"></button></div>
+        ${locked ? '' : `<div class="orline">or <button class="linkish" data-m="${key}" data-done="0">mark ${verb.toLowerCase()} without a photo</button></div>`}`,
+    };
+  };
+  const delivered = visit('delivery', 'delivered', 'delivered_at', 'Delivered', 'Dropped off');
+  const returned = visit('pickup', 'returned', 'returned_at', 'Collected', 'Collected');
+
+  const inspected = {
+    label: 'Inspected & cleaned',
+    done: !!r.inspected_at,
+    summary: () => {
+      if (!r.inspected_at) return `${bins.length} bins to look at`;
+      const back = items.filter(i => i.back_condition === 'good').length;
+      const dmg = items.filter(i => i.back_condition === 'damaged');
+      const lost = items.filter(i => i.back_condition === 'lost');
+      return `by ${esc(who(r.inspected_by))} ${esc(ago(r.inspected_at))} · ${back} fine${dmg.length ? ` · <span class="warn">${dmg.length} damaged (${esc(dmg.map(i => i.label).join(', '))})</span>` : ''}${lost.length ? ` · <span class="bad">${lost.length} not back (${esc(lost.map(i => i.label).join(', '))})</span>` : ''}`;
+    },
+    body: () => `<p class="sub">Go through the bins as you clean them. Tick the ones that are fine; flag anything else.</p>
+      <div class="inspectlist" id="inspect-list"></div>
+      <div class="orline"><button class="btn primary" data-m="inspected" data-done="0" id="r-finish-inspect">Done — all checked</button>
+        <span class="soon">Anything not flagged counts as fine.</span></div>`,
+  };
+
+  const settle = {
+    label: 'Settled',
+    done: at > 4 || (stage === 'settled' && settled),
+    summary: () => !charges ? '' : charges.owed_cents === 0 ? 'nothing owed'
+      : charges.outstanding_cents ? `<span class="warn">${money(charges.outstanding_cents)} outstanding</span>`
+      : `${money(charges.owed_cents)} charged`,
+    body: () => '<div id="rent-charges"></div>',
+  };
+
+  const stages = { booked, delivered, returned, inspected, settled: settle };
+
+  /* ---- the page ---- */
+  const stageRows = STAGE_ORDER.map((key, i) => {
+    const st = stages[key];
+    const state = stage === 'cancelled' ? 'dim' : i < at ? 'done' : i === at ? 'now' : 'dim';
+    const undoable = state === 'done' && i === at - 1 && key !== 'booked';
+    return `<section class="stage ${state}" data-stage="${key}">
+      <header>
+        <span class="n">${state === 'done' ? '✓' : i + 1}</span>
+        <h3>${st.label}</h3>
+        <span class="sum">${st.summary()}</span>
+        ${undoable ? `<button class="linkish" data-undo="${key}">undo</button>` : ''}
+      </header>
+      ${state === 'now' ? `<div class="stagebody">${st.body()}</div>` : ''}
+    </section>`;
+  }).join('');
+
+  page.replaceChildren($(`
+    <div class="rhead">
+      <a class="back" href="#/rentals">&larr; Rentals</a>
+      <div class="title"><h1>${esc(fullName(r))}</h1>
+        <div class="meta">Rental #${r.id} · ${r.bins} bins · ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'} · ${esc(niceDate(r.start_date))} &rarr; ${esc(niceDate(r.due_date))}${
+          r.customer_id ? ` · <a href="#/customers/${r.customer_id}">customer</a>` : ''}</div></div>
+      <span class="pill ${r.status}">${stage === 'cancelled' ? 'cancelled' : stage === 'settled' && settled ? 'done' : r.status}</span>
+    </div>
+    ${stage === 'cancelled' ? '<div class="banner err">This rental is cancelled.</div>' : ''}
+    <div class="rgrid">
+      <div class="rmain">
+        ${stageRows}
+        <div id="r-msg"></div>
+        <div class="actions" style="margin-top:14px">
+          ${!owner ? '' : stage === 'cancelled' ? '<button class="btn" data-status="pending">Reinstate</button>'
+            : r.returned_at ? '' : `${r.delivered_at ? '' : '<button class="btn" id="r-move">Change date</button>'}
+              <button class="btn danger" data-status="cancelled">Cancel rental</button>`}
+        </div>
+      </div>
+      <aside class="rside">
+        <div class="card side">
+          <div class="contactbar">${contactActions(r)}${r.contact_pref ? `<span class="prefnote">prefers ${esc(r.contact_pref)}</span>` : ''}</div>
+          <dl class="kv">
+            <dt>Total</dt><dd>${esc(money(r.total_cents))} <span class="mut">before tax</span>${r.tax_cents != null ? ` · ${esc(money(r.total_cents + r.tax_cents))} <span class="mut">with tax</span>` : ''}</dd>
+            <dt>Phone</dt><dd>${esc(r.phone || '—')}</dd>
+            <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
+            <dt>Deliver</dt><dd>${esc(niceDate(r.start_date))}${r.delivery_window ? `, ${esc(r.delivery_window)}` : ''}<br><span class="mut">${esc(r.delivery_address || '—')}</span></dd>
+            <dt>Collect</dt><dd>${esc(niceDate(r.due_date))}${r.pickup_window ? `, ${esc(r.pickup_window)}` : ''}<br><span class="mut">${esc(r.pickup_address || 'same')}</span></dd>
+          </dl>
+        </div>
+        ${bins.length && r.delivered_at ? `<div class="card side"><h4>The bins <span class="cnt">${bins.length}</span></h4>
+          <div class="chips">${items.map(i => `<span class="chip ${i.back_at ? (i.back_condition === 'good' ? 'back' : i.back_condition) : 'out'}" title="${esc(stageLabel(i))}${i.back_note ? ' — ' + esc(i.back_note) : ''}">${esc(i.label)}</span>`).join('')}</div></div>` : ''}
+        ${r.square_invoice_id && photos.length ? `<label class="holdline"><input type="checkbox" id="ph-hold"${r.photo_hold ? ' checked' : ''}><span>Keep photos past 90 days — dispute open</span></label>` : ''}
+        <div id="rent-notes"></div>
+        <div id="rent-history"></div>
+      </aside>
+    </div>`));
+  window.scrollTo(0, scrollY);
+
+  /* ---- wiring ---- */
+  notesPanel(page.querySelector('#rent-notes'), 'rentals', id);
+  historyPanel(page.querySelector('#rent-history'), 'rentals', id);
+  if (page.querySelector('#rent-charges')) chargesPanel(page.querySelector('#rent-charges'), id, r);
+  if (page.querySelector('#rent-exts')) extensionsPanel(page.querySelector('#rent-exts'), id, r);
+  if (page.querySelector('#inspect-list')) inspectList(page.querySelector('#inspect-list'), id, r);
+
+  // Milestones: the ticks and the "mark … without a photo" links.
+  page.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', async () => {
+    const m = b.dataset.m, done = b.dataset.done === '1';
+    if (b.disabled) return;
+    if (done && !(await sure({ title: `Undo "${stages[m === 'agreement' ? 'booked' : m === 'paid' ? 'booked' : m].label}"?`, body: 'This is a correction, and it is recorded.', ok: 'Undo' }))) return;
+    try { await patch({ milestone: m, done: !done }); reload(); }
+    catch (err) { await milestoneProblem(err, m); }
+  }));
+  page.querySelectorAll('[data-undo]').forEach(b => b.addEventListener('click', async () => {
+    const m = b.dataset.undo;
+    if (!(await sure({ title: `Undo "${stages[m].label}"?`, body: 'This is a correction, and it is recorded.', ok: 'Undo' }))) return;
+    try { await patch({ milestone: m, done: false }); reload(); } catch (err) { fail(err); }
+  }));
+
+  /* The Worker refuses with a reason; some reasons are questions. */
+  async function milestoneProblem(err, m) {
+    if (/Deliver anyway\?|back anyway\?/i.test(err.message)) {
+      if (await sure({ title: err.message.replace(/\s*(Deliver|Mark .*?) anyway\?$/i, ''), body: 'Go ahead anyway? It is recorded.', ok: 'Go ahead' })) {
+        try { await patch({ milestone: m, done: true, force: true }); reload(); } catch (e2) { await milestoneProblem(e2, m); }
+      }
+      return;
+    }
+    if (/say how they agreed/i.test(err.message)) {
+      const v = await ask({ title: 'Recording the agreement by hand', body: 'The customer normally signs through their link. If they agreed another way, say how — this is never shown as an e-signature.',
+        fields: [{ name: 'why', label: 'How they agreed', placeholder: 'Signed the paper copy at the door', required: true }], ok: 'Record it' });
+      if (v) { try { await patch({ milestone: 'agreement', done: true, reason: v.why }); reload(); } catch (e2) { fail(e2); } }
+      return;
+    }
+    if (/photo yet/i.test(err.message)) {
+      const v = await ask({ title: 'No photo', body: esc(err.message), fields: [{ name: 'why', label: 'Why not', placeholder: 'Phone died', required: true }], ok: 'Mark it anyway' });
+      if (v) { try { await patch({ milestone: m, done: true, force: true, photo_reason: v.why }); reload(); } catch (e2) { fail(e2); } }
+      return;
+    }
+    fail(err);
+  }
+
+  page.querySelectorAll('[data-unlock]').forEach(b => b.addEventListener('click', async () => {
+    const step = b.dataset.unlock;
+    if (!(await sure({ title: step === 'delivered' ? 'Going out early?' : 'Collecting early?', body: `These bins aren't due ${step === 'delivered' ? 'out' : 'back'} until ${esc(niceDate(step === 'delivered' ? r.start_date : r.due_date))}. Unlocking is recorded.`, ok: 'Unlock' }))) return;
+    try { await api(`/rentals/${id}/unlock`, { method: 'POST', body: JSON.stringify({ step }) }); reload(); } catch (err) { fail(err); }
+  }));
+
+  // Link
+  page.querySelector('#r-send')?.addEventListener('click', async e => {
+    e.target.disabled = true;
+    try { await api(`/rentals/${id}/${r.confirm_sent_at ? 'send' : 'invoice'}`, { method: 'POST' }); reload(); }
+    catch (err) { e.target.disabled = false; fail(err); }
+  });
+  page.querySelector('#r-copy')?.addEventListener('click', async e => {
+    try { await navigator.clipboard.writeText(link); e.target.textContent = 'Copied'; } catch { e.target.textContent = link; }
+  });
+  page.querySelector('#r-sync')?.addEventListener('click', async () => {
+    try { await api(`/rentals/${id}/sync`, { method: 'POST' }); reload(); } catch (err) { fail(err); }
+  });
+
+  // Addresses
+  page.querySelectorAll('[data-editaddr]').forEach(b => b.addEventListener('click', () => {
+    const box = page.querySelector(`[data-addr="${b.dataset.editaddr}"]`);
+    box.querySelector('.shown').hidden = true; box.querySelector('.edit').hidden = false;
+  }));
+  page.querySelectorAll('[data-canceladdr]').forEach(b => b.addEventListener('click', reload));
+  page.querySelectorAll('[data-saveaddr]').forEach(b => b.addEventListener('click', async () => {
+    const box = page.querySelector(`[data-addr="${b.dataset.saveaddr}"]`);
+    const body = {};
+    box.querySelectorAll('[data-part]').forEach(i => { body[i.dataset.part] = i.value; });
+    try { await patch(body); reload(); } catch (err) { fail(err); }
+  }));
+
+  // Windows: the slots for that day, or free text when nobody's hours are entered.
+  for (const kind of ['delivery', 'pickup']) {
+    const box = page.querySelector(`[data-slotbox="${kind}"]`);
+    if (!box) continue;
+    const date = kind === 'delivery' ? r.start_date : r.due_date;
+    api(`/coverage?from=${date}&days=1`).then(({ days: [day] }) => {
+      if (!day.configured || !day.open) {
+        box.replaceChildren($(`<label>When</label><input data-window="${kind}_window" value="${esc(r[kind + '_window'] || '')}" placeholder="6–8pm" maxlength="40" style="width:110px"><span class="saved"></span>`));
+        box.querySelector('input').addEventListener('change', async e => {
+          try { await patch({ [`${kind}_window`]: e.target.value }); box.querySelector('.saved').textContent = 'saved'; } catch (err) { fail(err); }
+        });
+        return;
+      }
+      const cur = r[`${kind}_slot`] || day.slots.find(sl => sl.label === r[`${kind}_window`])?.start;
+      box.replaceChildren($(`<label>When</label>${day.slots.map(sl => `<button class="slotbtn${sl.start === cur ? ' on' : ''}${sl.free <= 0 && sl.start !== cur ? ' full' : ''}" data-slot="${sl.start}" title="${sl.free} of ${sl.capacity} free">${esc(sl.label)}</button>`).join('')}<span class="saved"></span>`));
+      box.querySelectorAll('.slotbtn').forEach(b => b.addEventListener('click', async () => {
+        const full = b.classList.contains('full');
+        if (full && !(await sure({ title: `${b.textContent} is full`, body: 'Book it anyway?', ok: 'Book it' }))) return;
+        try {
+          await patch({ [`${kind}_slot`]: b.dataset.slot, force: full });
+          box.querySelectorAll('.slotbtn').forEach(x => x.classList.toggle('on', x === b));
+          box.querySelector('.saved').textContent = 'saved';
+        } catch (err) { fail(err); }
+      }));
+    }).catch(() => {});
+  }
+
+  // Loading the van
+  page.querySelector('#bins-auto')?.addEventListener('click', async () => {
+    try { await api(`/rentals/${id}/items`, { method: 'POST', body: JSON.stringify({ auto: true }) }); reload(); } catch (err) { fail(err); }
+  });
+  page.querySelector('#bins-add')?.addEventListener('click', async () => {
+    const labels = page.querySelector('#bins-label').value.split(/[\s,]+/).filter(Boolean);
+    if (!labels.length) return;
+    try { await api(`/rentals/${id}/items`, { method: 'POST', body: JSON.stringify({ labels }) }); reload(); } catch (err) { fail(err); }
+  });
+  page.querySelectorAll('[data-unassign]').forEach(b => b.addEventListener('click', async () => {
+    try { await api(`/rentals/${id}/items/${b.dataset.unassign}`, { method: 'DELETE' }); reload(); } catch (err) { fail(err); }
+  }));
+
+  // Photos: staged, then committed with the milestone in one action.
+  const staged = { delivered: [], returned: [] };
+  const drawStage = step => {
+    const box = page.querySelector(`#stage-${step}`);
+    if (!box) return;
+    const list = staged[step];
+    box.hidden = !list.length;
+    box.querySelector(`#strip-${step}`).replaceChildren(...list.map((f, i) => {
+      const fig = $('<figure><img alt=""><button class="rm" title="Remove">×</button></figure>');
+      fig.querySelector('img').src = URL.createObjectURL(f);
+      fig.querySelector('.rm').addEventListener('click', () => { list.splice(i, 1); drawStage(step); });
+      return fig;
+    }));
+    box.querySelector('[data-commit]').textContent = `Upload ${list.length} photo${list.length === 1 ? '' : 's'} and mark ${step === 'delivered' ? 'delivered' : 'collected'}`;
+  };
+  page.querySelectorAll('input[type="file"][data-step]').forEach(input => input.addEventListener('change', () => {
+    staged[input.dataset.step].push(...input.files); input.value = ''; drawStage(input.dataset.step);
+  }));
+  page.querySelectorAll('[data-commit]').forEach(b => b.addEventListener('click', async () => {
+    const step = b.dataset.commit, kind = step === 'delivered' ? 'delivery' : 'pickup', files = staged[step];
+    if (!files.length) return;
+    b.disabled = true;
+    try {
+      for (const [i, file] of files.entries()) {
+        b.textContent = `Uploading ${i + 1} of ${files.length}…`;
+        const res = await fetch(`/api/rentals/${id}/photos?kind=${kind}`, { method: 'POST', headers: { 'Content-Type': file.type || 'image/jpeg' }, body: file });
+        if (!res.ok) throw new Error((await res.json()).error || `Upload failed (${res.status})`);
+      }
+      b.textContent = 'Marking…';
+      await patch({ milestone: step, done: true, force: true, photo_reason: 'photographed' });
+      reload();
+    } catch (err) { b.disabled = false; drawStage(step); fail(err); }
+  }));
+  page.querySelectorAll('figure img[data-photo]').forEach(img => img.addEventListener('click', () => {
+    const set = photos.filter(p => p.kind === img.dataset.kind);
+    openLightbox(set, set.findIndex(p => String(p.id) === img.dataset.photo));
+  }));
+  page.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', async () => {
+    if (!(await sure({ title: 'Remove this photo?', body: 'The record that it existed stays.', ok: 'Remove', danger: true }))) return;
+    try { await api(`/photos/${b.dataset.rm}`, { method: 'DELETE' }); reload(); } catch (err) { fail(err); }
+  }));
+  page.querySelector('#ph-hold')?.addEventListener('change', async e => {
+    try { await api(`/rentals/${id}/photo-hold`, { method: 'POST', body: JSON.stringify({ hold: e.target.checked }) }); }
+    catch (err) { e.target.checked = !e.target.checked; fail(err); }
+  });
+
+  // Cancel / reinstate / move
+  page.querySelectorAll('[data-status]').forEach(b => b.addEventListener('click', async () => {
+    if (b.dataset.status !== 'cancelled') {
+      try { await patch({ status: b.dataset.status }); reload(); } catch (err) { fail(err); }
+      return;
+    }
+    let body = 'Nothing is refunded from here — refunds are issued in Square.';
+    if (r.paid_at) {
+      try {
+        const p = await api(`/rentals/${id}/cancel-preview`);
+        body = `They paid <b>${money(p.paid_cents)}</b>. This is ${p.hours_before >= 48 ? '48 hours or more' : 'under 48 hours'} before delivery, so §8 says refund <b>${p.percent}% — ${money(p.cents)}</b>, in Square.`;
+      } catch {}
+    }
+    const v = await ask({ title: 'Cancel this rental', body, fields: [{ name: 'reason', label: 'Why', required: true, placeholder: 'Move fell through' }], ok: 'Cancel the rental', danger: true, cancel: 'Keep it' });
+    if (!v) return;
+    try {
+      const res = await patch({ status: 'cancelled', reason: v.reason });
+      if (res.refund?.cents) await tell({ title: 'Cancelled', body: `Refund <b>${money(res.refund.cents)}</b> (${res.refund.percent}%) in Square. It is on the history.` });
+      reload();
+    } catch (err) { fail(err); }
+  }));
+  page.querySelector('#r-move')?.addEventListener('click', async () => {
+    const v = await ask({ title: 'Change the delivery date', body: `${r.weeks === 1 ? 'One week' : r.weeks + ' weeks'} stays ${r.weeks === 1 ? 'one week' : r.weeks + ' weeks'}; the return date moves with it. The customer is emailed.`,
+      fields: [{ name: 'start_date', label: 'New delivery date', type: 'date', value: r.start_date, min: todayISO(), required: true },
+               { name: 'reason', label: 'Why', optional: true, placeholder: 'Closing slipped a week' }], ok: 'Move it' });
+    if (!v) return;
+    try {
+      const res = await api(`/rentals/${id}/reschedule`, { method: 'POST', body: JSON.stringify(v) });
+      if (res.note) await tell({ title: 'Moved', body: esc(res.note) });
+      reload();
+    } catch (err) { fail(err); }
+  });
+}
+
 /* ---------- the bins on a rental ----------
 
    Which bins went out, and — at inspection — what came back. The side card
@@ -903,22 +1473,6 @@ function openLightbox(photos, startIndex) {
 const stageLabel = i => i.back_at
   ? (i.back_condition === 'lost' ? 'not back' : i.back_condition === 'damaged' ? 'back, damaged' : 'back')
   : 'out';
-
-function inspectRow(r, label, done) {
-  const waiting = !r.returned_at;
-  return `
-  <div class="step inspectrow${waiting ? ' waiting' : ''}" data-done="${done}">
-    <div class="top">
-      <button class="tick"${waiting ? ' disabled' : ' data-step="inspected"'} data-done="${done}">✓</button>
-      <span class="lbl">${label}</span>
-      ${waiting ? '<span class="soon">after the bins are back</span>'
-        : `<span class="when" style="margin-left:auto">${r.inspected_at ? esc(ago(r.inspected_at)) : ''}</span>`}
-    </div>
-    ${r.inspected_at ? `<div class="by">Inspected <strong>${esc(stamp(r.inspected_at))}</strong>${
-      r.inspected_by ? ` by <strong>${esc(r.inspected_by.split('@')[0])}</strong>` : ''}</div>` : ''}
-    ${waiting ? '' : `<div class="inspectlist" id="inspect-list"><span class="soon">Loading the bins…</span></div>`}
-  </div>`;
-}
 
 /* Fills the inspection row: one line per bin with a tick and "Flag an issue". */
 async function inspectList(container, rentalId, r) {
@@ -940,7 +1494,6 @@ async function inspectList(container, rentalId, r) {
     <div class="insphead"><span>${items.filter(i => i.back_at).length} of ${items.length} checked</span>
       ${r.inspected_at ? '' : `<button class="linkish" data-allok="1">All the rest came back fine</button>`}</div>
     ${rows}
-    <div class="soon" style="margin-top:8px">Tick the step above when every bin is checked and clean. Anything flagged becomes a charge to decide on.</div>
   </div>`));
 
   const send = async payload => {
@@ -953,55 +1506,25 @@ async function inspectList(container, rentalId, r) {
   }));
   container.querySelector('[data-allok]')?.addEventListener('click', () =>
     send(items.filter(i => !i.back_at).map(i => ({ id: i.id, back: true }))));
-  container.querySelectorAll('[data-flag]').forEach(b => b.addEventListener('click', () => {
+  container.querySelectorAll('[data-flag]').forEach(b => b.addEventListener('click', async () => {
     const item = items.find(i => i.id === +b.dataset.flag);
-    const what = prompt(`${item.label} — what happened?\n\n  d = damaged (came back, not usable)\n  l = lost (did not come back)\n  ok = fine after all`, item.back_condition === 'lost' ? 'l' : item.back_condition === 'damaged' ? 'd' : '');
-    if (what === null) return;
-    const w = what.trim().toLowerCase();
-    if (w === 'ok' || w === 'fine') return send([{ id: item.id, back: true }]);
-    if (w !== 'd' && w !== 'l') return;
-    const note = prompt(w === 'd' ? 'What is wrong with it? (goes on the bin and on the charge)' : 'Anything to note? (optional)', item.back_note || '') ?? '';
-    send([w === 'd' ? { id: item.id, back: true, condition: 'damaged', note } : { id: item.id, back: false, note }]);
+    const v = await ask({
+      title: `${item.label} — what happened?`,
+      fields: [
+        { name: 'what', type: 'choice', value: item.back_condition && item.back_condition !== 'good' ? item.back_condition : null, required: true, options: [
+          ['damaged', 'Damaged', 'Came back, but not usable — tape, cracks, smell'],
+          ['lost', "Didn't come back", 'Not among the bins collected'],
+          ['good', 'Fine after all', 'Clear the flag'],
+        ]},
+        { name: 'note', label: 'Note', optional: true, value: item.back_note || '', placeholder: 'What is wrong with it — goes on the bin and on the charge' },
+      ],
+      ok: 'Save',
+    });
+    if (!v) return;
+    send([v.what === 'good' ? { id: item.id, back: true }
+        : v.what === 'damaged' ? { id: item.id, back: true, condition: 'damaged', note: v.note }
+        : { id: item.id, back: false, note: v.note }]);
   }));
-}
-
-/* The side card: the bins on this rental, editable until inspection. */
-function binsPanel(container, rentalId, r) {
-  const draw = async () => {
-    let items;
-    try { ({ items } = await api(`/rentals/${rentalId}/items`)); }
-    catch (err) { container.replaceChildren(banner(err.message)); return; }
-    const editable = !r.inspected_at && r.status !== 'cancelled';
-    const bins = items.filter(i => i.kind === 'bin');
-    const chips = items.map(i => `<span class="chip ${i.back_at ? (i.back_condition === 'good' ? 'back' : i.back_condition) : (r.delivered_at ? 'out' : '')}" title="${esc(stageLabel(i))}${i.back_note ? ' — ' + esc(i.back_note) : ''}">${esc(i.label)}${
-      editable && !i.back_at ? `<button data-unassign="${i.id}" title="Take off this rental">×</button>` : ''}</span>`).join('');
-    container.replaceChildren($(`<div>
-      <h4>Bins on this rental <span class="cnt">${bins.length} of ${r.bins}</span></h4>
-      ${items.length ? `<div class="chips">${chips}</div>`
-        : `<p class="soon">${r.delivered_at ? 'None recorded.' : 'Picked automatically from the free ones when they go out — or choose them now.'}</p>`}
-      ${editable ? `<div class="binadd">
-        ${bins.length < r.bins ? `<button class="btn sm" id="bins-auto">Auto-pick ${r.bins - bins.length}</button>` : ''}
-        <input id="bins-label" placeholder="B-017, B-018…" style="flex:1;min-width:120px">
-        <button class="btn sm" id="bins-add">Add</button>
-      </div><div id="bins-msg"></div>` : ''}
-    </div>`));
-    const fail = err => container.querySelector('#bins-msg')?.replaceChildren(banner(err.message));
-    container.querySelector('#bins-auto')?.addEventListener('click', async () => {
-      try { await api(`/rentals/${rentalId}/items`, { method: 'POST', body: JSON.stringify({ auto: true }) }); draw(); } catch (err) { fail(err); }
-    });
-    container.querySelector('#bins-add')?.addEventListener('click', async () => {
-      const labels = container.querySelector('#bins-label').value.split(/[\s,]+/).filter(Boolean);
-      if (!labels.length) return;
-      try { await api(`/rentals/${rentalId}/items`, { method: 'POST', body: JSON.stringify({ labels }) }); draw(); } catch (err) { fail(err); }
-    });
-    container.querySelectorAll('[data-unassign]').forEach(b => b.addEventListener('click', async () => {
-      try { await api(`/rentals/${rentalId}/items/${b.dataset.unassign}`, { method: 'DELETE' }); draw(); } catch (err) { fail(err); }
-    }));
-    // The inspection row on the left reads the same list.
-    const list = document.getElementById('inspect-list');
-    if (list) inspectList(list, rentalId, r);
-  };
-  draw();
 }
 
 /* ---------- charges ----------
@@ -1021,156 +1544,104 @@ function chargeState(c) {
 }
 
 function chargesPanel(container, rentalId, r) {
+  const owner = isOwner();
   const draw = async () => {
     let d;
     try { d = await api(`/rentals/${rentalId}/charges`); }
     catch (err) { container.replaceChildren(banner(err.message)); return; }
-
     const { charges, proposals: props, owed_cents, outstanding_cents, card } = d;
-    const counted = r.bins_returned != null;
+    const live = props.filter(p => !p.blocked);
 
-    // Nothing has gone wrong and nothing is being counted: stay out of the way.
-    if (!charges.length && !props.length && !r.returned_at && !r.delivered_at) {
-      container.replaceChildren();
+    if (!charges.length && !live.length) {
+      container.replaceChildren($(`<div class="todo"><p><b>Nothing owed.</b> The bins came back on time and in one piece.</p>
+        ${props.filter(p => p.blocked).map(p => `<p class="soon">${esc(p.blocked)}</p>`).join('')}
+        ${owner ? '<details class="manual"><summary>Add a charge by hand</summary><div id="c-manual"></div></details>' : ''}</div>`));
+      if (owner) manualForm(container.querySelector('#c-manual'));
       return;
     }
 
     const rows = charges.map(c => {
       const [cls, label] = chargeState(c);
       return `<div class="chg ${cls}">
-        <div class="l">
-          <strong>${esc(CHARGE_LABEL[c.kind] || c.kind)}</strong>
-          <span class="st ${cls}">${esc(label)}</span>
+        <div class="l"><strong>${esc(CHARGE_LABEL[c.kind] || c.kind)}</strong><span class="st ${cls}">${esc(label)}</span>
           <div class="why">${esc(c.reason)}${c.bin_labels ? ` &middot; ${esc(c.bin_labels)}` : ''}</div>
-          <div class="meta">${c.qty} &times; ${esc(money(c.unit_cents))}${c.taxable ? ' plus tax' : ' &middot; not taxed'}
-            &middot; added by ${esc(c.created_by)} ${esc(ago(c.created_at))}${
-            c.waived_at ? ` &middot; waived by ${esc(c.waived_by)}: ${esc(c.waive_reason)}` : ''}${
-            c.paid_at ? ` &middot; paid ${esc(stamp(c.paid_at))}` : ''}</div>
-        </div>
-        <div class="r">
-          <strong>${esc(money(c.amount_cents))}</strong>
-          ${cls === 'draft' && isOwner() ? `<button class="linkish" data-waive="${c.id}">Waive</button>` : ''}
-          ${c.square_invoice_url && cls !== 'waived'
-            ? `<a class="linkish" href="${esc(c.square_invoice_url)}" target="_blank" rel="noopener">Invoice</a>` : ''}
-        </div>
+          <div class="meta">${c.qty} &times; ${esc(money(c.unit_cents))}${c.taxable ? ' plus tax' : ''} &middot; ${esc(c.created_by.split('@')[0])} ${esc(ago(c.created_at))}${
+            c.waived_at ? ` &middot; waived by ${esc(c.waived_by.split('@')[0])}: ${esc(c.waive_reason)}` : ''}${c.paid_at ? ` &middot; paid ${esc(stamp(c.paid_at))}` : ''}</div></div>
+        <div class="r"><strong>${esc(money(c.amount_cents))}</strong>
+          ${cls === 'draft' && owner ? `<button class="linkish" data-waive="${c.id}">Waive</button>` : ''}
+          ${c.square_invoice_url && cls !== 'waived' ? `<a class="linkish" href="${esc(c.square_invoice_url)}" target="_blank" rel="noopener">Invoice</a>` : ''}</div>
       </div>`;
     }).join('');
 
     const suggestions = props.map((p, i) => p.blocked
-      ? `<div class="prop warn"><div class="l"><strong>Worth knowing</strong>
-           <div class="why">${esc(p.blocked)}</div></div></div>`
-      : `<div class="prop"><div class="l">
-           <strong>${esc(CHARGE_LABEL[p.kind])}${p.section === 7 ? ' — treat as unreturned' : ''}</strong>
-           <div class="why">${esc(p.reason)}</div>
-           <div class="meta">${esc(p.note)}</div>
-         </div>
-         <div class="r"><strong>${esc(money(p.amount_cents))}</strong>
-           ${isOwner() ? `<button class="btn sm primary" data-prop="${i}">Add</button>` : ''}</div></div>`).join('');
+      ? `<div class="prop warn"><div class="l"><strong>Worth knowing</strong><div class="why">${esc(p.blocked)}</div></div></div>`
+      : `<div class="prop"><div class="l"><strong>${esc(CHARGE_LABEL[p.kind])}${p.section === 7 ? ' — treat as unreturned' : ''}</strong>
+           <div class="why">${esc(p.reason)}</div><div class="meta">${esc(p.note)}</div></div>
+         <div class="r"><strong>${esc(money(p.amount_cents))}</strong>${owner ? `<button class="btn sm primary" data-prop="${i}">Add</button>` : ''}</div></div>`).join('');
 
-    container.replaceChildren($(`<div class="chgwrap">
-      <label class="fl">If something went wrong</label>
-
-      ${r.delivered_at ? `<div class="countbox">
-        <span>Bins back</span>
-        <input type="number" id="c-count" min="0" max="${r.bins}" value="${counted ? r.bins_returned : ''}"
-          placeholder="of ${r.bins}">
-        <span class="of">of ${r.bins}</span>
-        <button class="btn sm" id="c-count-save">${counted ? 'Update' : 'Record the count'}</button>
-        ${counted ? '' : '<span class="hint">Counting is what turns a shortfall into a charge.</span>'}
-      </div>` : ''}
-
-      ${suggestions ? `<div class="props">${suggestions}</div>` : ''}
-      ${rows || ''}
-
-      ${outstanding_cents > 0 ? `<div class="chgfoot">
-        <div>
-          <strong>${esc(money(outstanding_cents))} outstanding</strong>
-          <div class="meta">${card
-            ? `Charges to the card on file &mdash; ${esc(card.brand || 'card')} &bull;&bull;${esc(card.last4 || '')}, as §4 allows. Plus tax.`
-            : 'No card on file &mdash; this raises an invoice they have to pay themselves. Plus tax.'}</div>
-        </div>
-        ${isOwner() ? `<button class="btn primary" id="c-invoice">${card ? 'Charge the card' : 'Send an invoice'}</button>`
-          : '<span class="meta">An owner charges this.</span>'}
-      </div>` : owed_cents > 0 ? `<div class="chgfoot"><div class="meta">All settled &mdash;
-        ${esc(money(owed_cents))} charged on this rental.</div></div>` : ''}
-
-      ${isOwner() ? `<details class="manual"><summary>Add something by hand</summary>
-        <div class="frow">
-          <div><label class="fl" for="c-kind">Kind</label>
-            <select id="c-kind">
-              <option value="late">Late return</option>
-              <option value="missing">Unreturned bins</option>
-              <option value="damage">Damage</option>
-              <option value="other" selected>Other</option>
-            </select></div>
-          <div><label class="fl" for="c-qty">Quantity</label>
-            <input id="c-qty" type="number" min="1" max="1000" value="1"></div>
-        </div>
-        <div class="frow">
-          <div><label class="fl" for="c-unit">Each</label><input id="c-unit" placeholder="15.00"></div>
-          <div><label class="fl" for="c-tax">Sales tax</label>
-            <select id="c-tax"><option value="1">Add tax</option><option value="0">No tax</option></select></div>
-        </div>
-        <label class="fl" for="c-why">What the customer sees on the invoice</label>
-        <input id="c-why" placeholder="Two bins returned with tape residue">
-        <div style="margin-top:12px"><button class="btn sm" id="c-add">Add charge</button></div>
-      </details>` : ''}
-
+    container.replaceChildren($(`<div>
+      ${live.length ? `<p class="sub">What the agreement allows, from what the inspection found. Add what you are charging; skip what you are not.</p>` : ''}
+      <div class="props">${suggestions}</div>${rows}
+      ${outstanding_cents > 0 ? `<div class="chgfoot"><div><strong>${esc(money(outstanding_cents))} outstanding</strong>
+          <div class="meta">${card ? `Charged to the card on file — ${esc(card.brand || 'card')} &bull;&bull;${esc(card.last4 || '')}, as §4 allows. Plus tax.`
+            : 'No card on file — this sends an invoice they pay themselves. Plus tax.'}</div></div>
+        ${owner ? `<button class="btn primary" id="c-invoice">${card ? 'Charge the card' : 'Send the invoice'}</button>` : '<span class="meta">An owner charges this.</span>'}</div>`
+        : owed_cents > 0 ? `<div class="chgfoot"><div class="meta">Settled — ${esc(money(owed_cents))} charged on this rental.</div></div>` : ''}
+      ${owner ? '<details class="manual"><summary>Add a charge by hand</summary><div id="c-manual"></div></details>' : ''}
       <div id="c-msg"></div>
     </div>`));
+    if (owner) manualForm(container.querySelector('#c-manual'));
 
     const q = id => container.querySelector('#' + id);
-    const fail = err => q('c-msg').replaceChildren(banner(err.message));
-
-    q('c-count-save')?.addEventListener('click', async () => {
-      try {
-        await api(`/rentals/${rentalId}/counted`, { method: 'POST',
-          body: JSON.stringify({ bins_returned: q('c-count').value }) });
-        openRental(rentalId);
-      } catch (err) { fail(err); }
-    });
-
+    const fail = err => q('c-msg')?.replaceChildren(banner(err.message));
     container.querySelectorAll('[data-prop]').forEach(b => b.addEventListener('click', async () => {
       const p = props[+b.dataset.prop];
-      if (p.confirm && !confirm(`${p.reason}\n\n${p.note}\n\n${p.confirm}`)) return;
+      if (p.confirm && !(await sure({ title: p.reason, body: `${esc(p.note)}<br><br><b>${esc(p.confirm)}</b>`, ok: 'Add the charge', danger: true }))) return;
       b.disabled = true;
       try {
-        await api(`/rentals/${rentalId}/charges`, { method: 'POST', body: JSON.stringify({
-          kind: p.kind, qty: p.qty, unit_cents: p.unit_cents,
-          taxable: !!p.taxable, reason: p.reason, bin_labels: p.bin_labels || null,
-        })});
+        await api(`/rentals/${rentalId}/charges`, { method: 'POST', body: JSON.stringify({ kind: p.kind, qty: p.qty, unit_cents: p.unit_cents, taxable: !!p.taxable, reason: p.reason, bin_labels: p.bin_labels || null }) });
         draw();
       } catch (err) { fail(err); b.disabled = false; }
     }));
-
     container.querySelectorAll('[data-waive]').forEach(b => b.addEventListener('click', async () => {
-      const why = prompt('Waiving this charge. Why?\n\nThis is the record of the decision.');
-      if (why === null || !why.trim()) return;
-      try {
-        await api(`/charges/${b.dataset.waive}/waive`, { method: 'POST', body: JSON.stringify({ reason: why }) });
-        draw();
-      } catch (err) { fail(err); }
+      const v = await ask({ title: 'Waive this charge', body: 'The reason is the record of the decision.', fields: [{ name: 'reason', label: 'Why', required: true, placeholder: 'Bereavement' }], ok: 'Waive it' });
+      if (!v) return;
+      try { await api(`/charges/${b.dataset.waive}/waive`, { method: 'POST', body: JSON.stringify({ reason: v.reason }) }); draw(); } catch (err) { fail(err); }
     }));
-
-    q('c-add')?.addEventListener('click', async () => {
-      const unit = Math.round(parseFloat(String(q('c-unit').value).replace(/[^\d.]/g, '')) * 100);
-      try {
-        await api(`/rentals/${rentalId}/charges`, { method: 'POST', body: JSON.stringify({
-          kind: q('c-kind').value, qty: q('c-qty').value, unit_cents: unit,
-          taxable: q('c-tax').value === '1', reason: q('c-why').value,
-        })});
-        draw();
-      } catch (err) { fail(err); }
-    });
-
     q('c-invoice')?.addEventListener('click', async () => {
-      const what = card
-        ? `Charge ${money(outstanding_cents)} plus tax to the ${card.brand || 'card'} ending ${card.last4}?`
-        : `Send an invoice for ${money(outstanding_cents)} plus tax?`;
-      if (!confirm(`${what}\n\nThey get an email either way.`)) return;
+      const okd = await sure({ title: card ? `Charge ${money(outstanding_cents)} plus tax to the card ending ${card.last4}?` : `Send an invoice for ${money(outstanding_cents)} plus tax?`,
+        body: 'They get an email either way.', ok: card ? 'Charge it' : 'Send it' });
+      if (!okd) return;
       q('c-invoice').disabled = true;
       try { await api(`/rentals/${rentalId}/charges/invoice`, { method: 'POST' }); draw(); }
       catch (err) { fail(err); q('c-invoice').disabled = false; }
+    });
+  };
+
+  const manualForm = box => {
+    if (!box) return;
+    box.replaceChildren($(`<div>
+      <div class="frow">
+        <div><label class="fl" for="c-kind">Kind</label><select id="c-kind">
+          <option value="late">Late return</option><option value="missing">Unreturned bins</option>
+          <option value="damage">Damage</option><option value="other" selected>Other</option></select></div>
+        <div><label class="fl" for="c-qty">Quantity</label><input id="c-qty" type="number" min="1" max="1000" value="1"></div>
+      </div>
+      <div class="frow">
+        <div><label class="fl" for="c-unit">Each</label><input id="c-unit" placeholder="15.00"></div>
+        <div><label class="fl" for="c-tax">Sales tax</label><select id="c-tax"><option value="1">Add tax</option><option value="0">No tax</option></select></div>
+      </div>
+      <label class="fl" for="c-why">What the customer sees on the invoice</label>
+      <input id="c-why" placeholder="Two bins returned with tape residue">
+      <div style="margin-top:12px"><button class="btn sm" id="c-add">Add charge</button></div>
+    </div>`));
+    box.querySelector('#c-add').addEventListener('click', async () => {
+      const g = id => box.querySelector('#' + id);
+      const unit = Math.round(parseFloat(String(g('c-unit').value).replace(/[^\d.]/g, '')) * 100);
+      try {
+        await api(`/rentals/${rentalId}/charges`, { method: 'POST', body: JSON.stringify({ kind: g('c-kind').value, qty: g('c-qty').value, unit_cents: unit, taxable: g('c-tax').value === '1', reason: g('c-why').value }) });
+        draw();
+      } catch (err) { container.querySelector('#c-msg')?.replaceChildren(banner(err.message)); }
     });
   };
   draw();
@@ -1340,7 +1811,7 @@ function notesPanel(container, entity, id) {
       catch (err) { container.prepend(banner(err.message)); }
     }));
     container.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
-      if (!confirm('Delete this note? It stays in the record, marked deleted.')) return;
+      if (!(await sure({ title: 'Delete this note?', body: 'It stays in the record, marked deleted.', ok: 'Delete', danger: true }))) return;
       try { render((await api(`/notes/${b.dataset.del}`, { method: 'PATCH', body: JSON.stringify({ deleted: true }) })).notes); }
       catch (err) { container.prepend(banner(err.message)); }
     }));
@@ -1469,7 +1940,7 @@ async function openRequest(id) {
          sometimes you know a set is coming back early, so it can be overridden
          on purpose and the override is recorded. */
       if (/approve anyway/i.test(err.message) && !extra.force) {
-        if (confirm(`${err.message}\n\nApprove anyway?`)) return act(action, { ...extra, force: true });
+        if (await sure({ title: 'Not enough bins free', body: esc(err.message.replace(/ Move the date.*$/, '')), ok: 'Approve anyway' })) return act(action, { ...extra, force: true });
         return;
       }
       msg.replaceChildren(banner(err.message));
@@ -1480,16 +1951,18 @@ async function openRequest(id) {
   historyPanel(drawer.querySelector('#req-history'), 'requests', id);
   drawer.querySelector('[data-act="approve"]')?.addEventListener('click', () => act('approve'));
   drawer.querySelector('#req-redate')?.addEventListener('click', async () => {
-    const to = prompt(`New delivery date for ${fullName(r)} (they asked for ${r.start_date}):`, todayISO());
-    if (!to) return;
-    try { await api(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ start_date: to.trim() }) }); close(); viewRequests(); }
+    const v = await ask({ title: 'A new date', body: `${esc(fullName(r))} asked for ${esc(niceDate(r.start_date))}, which has passed.`,
+      fields: [{ name: 'start_date', label: 'New delivery date', type: 'date', value: todayISO(), min: todayISO(), required: true }], ok: 'Set the date' });
+    if (!v) return;
+    try { await api(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ start_date: v.start_date }) }); close(); viewRequests(); }
     catch (err) { msg.replaceChildren(banner(err.message)); }
   });
   drawer.querySelector('[data-act="reopen"]')?.addEventListener('click', () => act('reopen'));
-  drawer.querySelector('[data-act="decline"]')?.addEventListener('click', () => {
-    const reason = prompt('Why is this being declined? (optional — the customer never sees it)');
-    if (reason === null) return;
-    act('decline', { reason });
+  drawer.querySelector('[data-act="decline"]')?.addEventListener('click', async () => {
+    const v = await ask({ title: 'Decline this request', body: 'The customer never sees the reason. They stay on the Customers tab for next time.',
+      fields: [{ name: 'reason', label: 'Why', optional: true, placeholder: 'Outside our area' }], ok: 'Decline', danger: true });
+    if (!v) return;
+    act('decline', { reason: v.reason });
   });
 }
 
@@ -1709,595 +2182,6 @@ const STEPS = [
   ['inspected', 'inspected_at',        'Inspected & cleaned'],
 ];
 
-/* A rental is a page, not a drawer. There is too much on it — five steps,
-   photos, addresses, the bins, charges, notes — for a panel that slides in
-   over the list. The work runs down the left; the facts sit on the right. */
-async function openRental(id) {
-  closeAnyDrawer();
-  const drawer = $('<div class="rentalpage"><div class="empty">Loading…</div></div>');
-  render('rentals', drawer);
-  const close = () => { location.hash = '#/rentals'; };
-  // Keep the scroll position across the many re-renders a rental goes through.
-  const scrollY = window.scrollY;
-
-  let r, photos = [];
-  try {
-    // Fetched together so the checklist can render its own evidence rather than
-    // filling in underneath a moment later.
-    const [rental, shots] = await Promise.all([
-      api(`/rentals/${id}`),
-      api(`/rentals/${id}/photos`).catch(() => ({ photos: [] })),
-    ]);
-    r = rental.rental;
-    photos = shots.photos || [];
-  }
-  catch (err) {
-    drawer.replaceChildren($(`<div class="banner err">${esc(err.message)}</div>`));
-    return;
-  }
-
-  const pref = r.contact_pref;
-  const actions = contactActions(r);
-
-  drawer.replaceChildren($(`
-    <div class="rhead">
-      <a class="back" href="#/rentals">&larr; Rentals</a>
-      <div class="title">
-        <h1>${esc(fullName(r))}</h1>
-        <div class="meta">Rental #${r.id}${r.request_id ? ` · from request #${r.request_id}` : ''}${
-          r.customer_id ? ` · <a href="#/customers/${r.customer_id}">customer record</a>` : ''}
-          · ${r.bins} bins · ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'} · ${esc(niceDate(r.start_date))} &rarr; ${esc(niceDate(r.due_date))}</div>
-      </div>
-      <span class="pill ${r.status}">${r.status}</span>
-    </div>
-    <div class="rgrid">
-      <div class="rmain">
-        ${isLate(r) ? '<div class="banner err">Past its return date and still out.</div>' : ''}
-      ${r.stalled ? `<div class="banner err">This never got confirmed and its start date
-        (${esc(niceDate(r.start_date))}) has passed. Chase it or cancel it &mdash; the bins
-        are not going anywhere while it sits here.</div>` : ''}
-
-      
-        ${/* Gated on the link being sent, not on an invoice existing — the invoice
-            is now raised by the customer's card at the end, so waiting for one
-            would hide the checklist for the whole rental. */
-        !r.confirm_sent_at ? `
-      <div class="kickoff">
-        <h4>Start this rental</h4>
-        <p>Nothing else can happen until the customer has their link &mdash; they
-        confirm the details, sign the agreement, put a card on file and pay from
-        it. The invoice is raised and charged when they do.</p>
-        ${isOwner() ? `<button class="btn primary" id="r-invoice"${r.email ? '' : ' disabled'}>
-          ${r.email ? 'Email them the link' : 'No email address on this rental'}</button>
-        <span class="to">${esc(money(r.total_cents))} + tax${r.email ? ` &rarr; ${esc(r.email)}` : ''}</span>`
-        : '<span class="to">An owner sends the link.</span>'}
-      </div>` : `
-      <div class="steps">${STEPS.map(([key, col, label]) => {
-        const done = r[col] ? 1 : 0;
-        if (key === 'inspected') return inspectRow(r, label, done);
-
-        /* Payment is the one row with anything to do, so the invoice controls
-           live in it rather than in a separate card repeating its status. */
-        if (key === 'paid') {
-          const locked = r.square_status === 'PAID';
-          // The checklist only renders once an invoice exists, so this row is
-          // never the place an invoice gets created.
-          const acts = r.square_invoice_id
-            ? `${r.square_invoice_url ? `<a class="btn sm" href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">Open</a>` : ''}
-               ${locked ? '' : '<button class="btn sm" id="r-sync">Check</button>'}`
-            : `<span class="amt">${r.square_card_id ? 'card saved, raising invoice…' : 'waiting on the customer'}</span>`;
-          return `
-          <div class="step payrow" data-done="${done}" data-locked="${locked ? 1 : 0}">
-            <button class="tick" data-step="paid" data-done="${done}"
-              data-locked="${locked ? 1 : 0}" title="${locked ? 'Square has this paid' : 'Mark paid by hand'}">✓</button>
-            <span class="lbl">Payment</span>
-            <span class="amt">${r.tax_cents != null
-              ? `${esc(money(r.total_cents + r.tax_cents))} inc. tax` : `${esc(money(r.total_cents))} + tax`}</span>
-            ${locked ? '<span class="src">via Square</span>'
-              : r.square_invoice_id ? `<span class="src">${esc(r.square_status || 'sent')}</span>` : ''}
-            <div class="acts">${acts}${
-              r[col] ? `<span class="when">${esc(ago(r[col]))}</span>` : ''}</div>
-          </div>`;
-        }
-
-        /* Delivery and pickup each carry the photo that proves them, in the row
-           that needs it — a separate gallery lower down meant taking the photo
-           and ticking the box were two different places on the screen. */
-        if (key === 'delivered' || key === 'returned') {
-          const kind = key === 'delivered' ? 'delivery' : 'pickup';
-          const mine = photos.filter(ph => ph.kind === kind);
-          // Nothing comes back before it goes out, so the pickup row waits.
-          const waiting = key === 'returned' && !r.delivered_at;
-          // Once the visit is marked done these are the record of it, so they
-          // stop being removable — the way out is reopening the step.
-          const committed = !!r[col];
-          const thumbs = mine.map(ph => `
-            <figure>
-              <img loading="lazy" src="/api/photo/${encodeURIComponent(ph.r2_key)}"
-                data-photo="${ph.id}" data-kind="${kind}"
-                alt="${kind} photo" title="Click to view · ${esc(ph.taken_by)} · ${esc(stamp(ph.taken_at))}">
-              ${committed ? '' : `<button class="rm" data-rm="${ph.id}" title="Remove">×</button>`}
-            </figure>`).join('');
-          /* Not due yet, and not unlocked. Openable, not forbidden — you drop
-             the evening before, or collect early when someone finishes — and
-             the history records that you did. Both ends behave the same way;
-             two cards that look identical should not follow different rules. */
-          const today = todayISO();
-          const notDue = !done && (
-            (key === 'delivered' && !r.delivery_unlocked_at && r.start_date && r.start_date > today) ||
-            (key === 'returned' && !waiting && !r.pickup_unlocked_at && r.due_date && r.due_date > today));
-          const dueOn = key === 'delivered' ? r.start_date : r.due_date;
-          return `
-          <div class="step photorow${waiting ? ' waiting' : ''}${notDue ? ' datelocked' : ''}" data-done="${done}">
-            <div class="top">
-              <button class="tick"${waiting || notDue ? ' disabled' : ` data-step="${key}"`} data-done="${done}">✓</button>
-              <span class="lbl">${label}</span>
-              ${waiting ? '<span class="soon">after the bins are delivered</span>' : ''}
-              ${notDue ? `<span class="notdue">not due ${key === 'delivered' ? 'out' : 'back'} until ${esc(niceDate(dueOn))}</span>
-                <button class="lockbtn" data-unlock="${key}" title="Open this step early">🔒 Unlock</button>`
-                : `<span class="when" style="margin-left:auto">${r[col] ? esc(ago(r[col])) : ''}</span>`}
-            </div>
-            ${r[col] ? `<div class="by">${key === 'delivered' ? 'Dropped off' : 'Collected'}
-              <strong>${esc(stamp(r[col]))}</strong>${
-                (key === 'delivered' ? r.delivered_by : r.returned_by)
-                  ? ` by <strong>${esc((key === 'delivered' ? r.delivered_by : r.returned_by).split('@')[0])}</strong>` : ''}
-              <span style="opacity:.7">&middot; Mountain Time</span></div>` : ''}
-            <div class="addr">
-              <label>${kind === 'delivery' ? 'Delivery address' : 'Pickup address'}</label>
-              ${(() => {
-                const val = (kind === 'delivery' ? r.delivery_address : r.pickup_address) || '';
-                const id = kind === 'delivery' ? 'r-daddr' : 'r-paddr';
-                return `
-                <div class="shown">
-                  <span class="val${val ? '' : ' empty'}">${
-                    esc(val || (kind === 'delivery' ? 'Not given yet' : 'Same as delivery'))}</span>
-                  ${r[col] ? '' : `<button class="btn sm" data-editaddr="${id}">${val ? 'Edit' : 'Add'}</button>`}
-                </div>
-                <div class="edit" hidden>
-                  <input data-part="${kind}_street" value="${esc(r[kind + '_street'] || '')}"
-                    placeholder="Street address">
-                  <input data-part="${kind}_unit" value="${esc(r[kind + '_unit'] || '')}"
-                    placeholder="Apartment or unit (optional)" style="margin-top:7px">
-                  <div style="display:flex;gap:7px;margin-top:7px">
-                    <input data-part="${kind}_city" value="${esc((kind === 'delivery' ? r.delivery_city : r.pickup_city) || '')}"
-                      placeholder="City" style="flex:1">
-                    <input data-part="${kind}_zip" value="${esc(r[kind + '_zip'] || '')}"
-                      placeholder="ZIP" maxlength="5" style="width:80px">
-                  </div>
-                  <div class="saverow">
-                    <button class="btn sm primary" data-saveaddr="1">Save</button>
-                    <button class="btn sm" data-canceladdr="1">Cancel</button>
-                    <span class="saved" data-savedmsg="1"></span>
-                  </div>
-                </div>`;
-              })()}
-              ${(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)
-                ? `<div class="cust"><b>From the customer</b>${
-                    esc(kind === 'delivery' ? r.delivery_notes : r.pickup_notes)}</div>` : ''}
-              ${r[col] ? '' : `<div class="win" data-winbox="${kind}">
-                <label for="w-${kind}">Window</label>
-                <input id="w-${kind}" data-window="${kind}_window" value="${esc(r[kind + '_window'] || '')}"
-                  placeholder="6–8pm" maxlength="40">
-                <span class="saved" data-winmsg="${kind}"></span>
-              </div>`}
-            </div>
-            <div class="ev">
-              ${notDue
-                ? `<span class="soon">Unlock this step to add a photo.</span>`
-                : waiting
-                ? '<span class="soon">The pickup photo is taken when the bins come back.</span>'
-                : `${thumbs || (committed ? '' : `<span class="need">Photo needed</span>`)}
-                   ${committed ? '' : `<label class="shoot">
-                     <input type="file" accept="image/*" capture="environment" data-kind="${kind}" data-step="${key}" multiple>
-                     <span>📷 ${mine.length ? 'Add another' : `Take ${kind} photo`}</span>
-                   </label>`}`}
-            </div>
-            ${committed ? '<div class="locked-note">Photos are part of this record and can no longer be removed.</div>' : `
-            <div class="staged" id="stage-${key}" hidden>
-              <div class="strip" id="strip-${key}"></div>
-              <button class="btn sm primary commit" data-commit="${key}"></button>
-            </div>`}
-          </div>`;
-        }
-
-        // A customer's own signature is locked here, the way Square's payment is.
-        const sigLocked = key === 'agreement' && r.signed_at && !r.agreement_manual;
-        return `
-        <button class="step" data-step="${key}" data-done="${done}" data-locked="${sigLocked ? 1 : 0}"${
-          sigLocked ? ' aria-disabled="true"' : ''}>
-          <span class="tick">✓</span><span class="lbl">${label}</span>
-          ${sigLocked ? '<span class="src">signed by customer</span>' : ''}
-          <span class="when">${r[col] ? esc(ago(r[col])) : ''}</span>
-        </button>`; }).join('')}</div>`}
-
-      
-        <div id="rent-charges"></div>
-        <div id="r-msg" style="margin-top:14px"></div>
-      
-      </div>
-      <aside class="rside">
-        <div class="card side">
-      ${actions ? `<div class="contactbar">${actions}${
-        pref ? `<span class="prefnote">prefers ${esc(pref)}</span>` : ''}</div>` : ''}
-
-      
-        <dl class="kv">
-        <dt>Package</dt><dd>${r.bins} bins · ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'}</dd>
-        <dt>Total</dt><dd>${esc(money(r.total_cents))} <span style="color:var(--muted);font-weight:400">before tax</span></dd>
-        <dt>Delivered</dt><dd>${esc(niceDate(r.start_date))}</dd>
-        <dt>Back by</dt><dd>${esc(niceDate(r.due_date))}</dd>
-        <dt>Phone</dt><dd>${esc(r.phone || '—')}</dd>
-        <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
-      </dl>
-        </div>
-        ${r.confirm_token ? `<div class="linkbox">
-          <h4>Confirmation link${r.confirm_sent_at
-            ? ` — emailed to ${esc(r.email)} ${esc(ago(r.confirm_sent_at))}`
-            : ' — not sent yet'}</h4>
-          <code>${esc(`https://${bookingHost}/${r.confirm_token}`)}</code>
-          <div class="row">
-            ${isOwner() ? `<button class="btn sm${r.confirm_sent_at ? '' : ' primary'}" id="r-send">${
-              r.confirm_sent_at ? 'Resend email' : 'Email it to them'}</button>` : ''}
-            <button class="btn sm" id="r-copy">Copy link</button>
-            <a class="btn sm" href="${esc(`https://${bookingHost}/${r.confirm_token}`)}" target="_blank" rel="noopener">Preview</a>
-          </div>
-        </div>` : ''}
-
-      ${r.signed_at ? (r.agreement_manual
-        ? `<p class="signed"><span style="color:var(--warn);font-weight:700">Recorded by staff</span> —
-           ${esc(r.agreement_manual_by || '—')} ${esc(ago(r.signed_at))}${
-             r.agreement_manual_reason ? ` · ${esc(r.agreement_manual_reason)}` : ''}.
-           Not a customer e-signature.</p>`
-        : `<p class="signed">Signed by <strong>${esc(r.agreement_name)}</strong>
-           ${esc(ago(r.signed_at))} · agreement ${esc(r.agreement_version || '—')}${
-             r.signed_on_behalf ? ` · <span style="color:var(--warn);font-weight:700">on behalf of ${esc(fullName(r))}</span>` : ''}</p>`) : ''}
-
-
-      
-        <div class="card side" id="rent-bins"></div>
-        
-
-
-      <div style="height:20px"></div>
-      ${r.square_invoice_id ? `<label class="holdline">
-        <input type="checkbox" id="ph-hold"${r.photo_hold ? ' checked' : ''}>
-        <span>Keep photos past the 90-day limit &mdash; there&rsquo;s a dispute open</span>
-      </label>` : ''}
-      
-      <div id="rent-exts"></div>
-      <div id="rent-notes"></div>
-      <div id="rent-history" style="margin-top:6px"></div>
-
-      
-        <div class="actions" style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
-        ${!isOwner() ? ''
-          : r.status === 'cancelled'
-          ? '<button class="btn" data-status="pending">Reinstate</button>'
-          : r.returned_at
-          /* Finished. Offering "cancel" on a rental that ran its course invites
-             erasing something that happened; the honest remedies are a refund
-             in Square and a note explaining it. */
-          ? `<span style="color:var(--muted);font-size:13px">Finished ${esc(stamp(r.returned_at))}.
-             Refunds are issued in Square.</span>`
-          : `${r.delivered_at ? '' : '<button class="btn" id="r-move">Change date</button>'}
-             <button class="btn danger" data-status="cancelled">Cancel rental</button>`}
-      </div>
-    
-      </aside>
-    </div>`));
-  window.scrollTo(0, scrollY);
-  const msg = drawer.querySelector('#r-msg');
-
-  const patch = async (body) => {
-    msg.replaceChildren();
-    const res = await api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
-    await refreshCounts();
-    return res;
-  };
-
-  drawer.querySelectorAll('.step[data-step], .payrow .tick, .photorow .tick, .inspectrow .tick').forEach(b => b.addEventListener('click', async () => {
-    if (b.dataset.locked === '1') return;
-    const done = b.dataset.done === '1';
-    // Undoing a milestone is a correction, not a routine action — a stray click
-    // should not quietly rewrite what happened.
-    const label = b.querySelector('.lbl')?.textContent || 'Payment';
-    if (done && !confirm(`Undo "${label}"?`)) return;
-    try {
-      await patch({ milestone: b.dataset.step, done: !done });
-      openRental(id);
-    } catch (err) {
-      // Delivering something unpaid is allowed, but only on purpose.
-      // A hard ordering rule — nothing comes back before it goes out. No reason
-      // makes it true, so there is nothing to prompt for.
-      if (/cannot come back|already marked back|nothing to photograph/i.test(err.message)) {
-        msg.replaceChildren(banner(err.message));
-        return;
-      }
-      // Delivering early is a decision, not an error.
-      if (/Deliver anyway\?/i.test(err.message)) {
-        if (!confirm(err.message)) return;
-        try { await patch({ milestone: b.dataset.step, done: true, force: true }); openRental(id); }
-        catch (e2) { msg.replaceChildren(banner(e2.message)); }
-        return;
-      }
-      // The customer signs through their own link; recording it here instead is
-      // allowed but has to say how they actually agreed.
-      if (/say how they agreed/i.test(err.message)) {
-        const why = prompt('The customer signs through their own link.\n\nIf they agreed another way — a paper copy at the door, or on a call — say how:');
-        if (why === null || !why.trim()) return;
-        try { await patch({ milestone: 'agreement', done: true, reason: why }); openRental(id); }
-        catch (e2) { msg.replaceChildren(banner(e2.message)); }
-        return;
-      }
-      // No photo. Allowed, but the reason is recorded rather than shrugged off.
-      if (/photo yet/i.test(err.message)) {
-        const why = prompt(`${err.message}\n\nWhy is there no photo?`);
-        if (why === null || !why.trim()) return;
-        try {
-          await patch({ milestone: b.dataset.step, done: true, force: true, photo_reason: why });
-          openRental(id);
-        } catch (e2) { msg.replaceChildren(banner(e2.message)); }
-        return;
-      }
-      msg.replaceChildren(banner(err.message));
-    }
-  }));
-
-  drawer.querySelectorAll('[data-unlock]').forEach(b => b.addEventListener('click', async () => {
-    const step = b.dataset.unlock;
-    const when = niceDate(step === 'delivered' ? r.start_date : r.due_date);
-    const what = step === 'delivered' ? "aren't due out" : "aren't due back";
-    if (!confirm(`These bins ${what} until ${when}.\n\nUnlock this step anyway? It'll be recorded.`)) return;
-    try { await api(`/rentals/${id}/unlock`, { method: 'POST', body: JSON.stringify({ step }) }); openRental(id); }
-    catch (err) { msg.replaceChildren(banner(err.message)); }
-  }));
-
-  /* Photos are staged in the browser and committed with the milestone in one
-     action. A visit is one event: uploading the first picture should not decide
-     the delivery happened while someone is still walking round taking the rest. */
-  const staged = { delivered: [], returned: [] };
-
-  const drawStage = step => {
-    const box = drawer.querySelector(`#stage-${step}`);
-    if (!box) return;
-    const strip = drawer.querySelector(`#strip-${step}`);
-    const list = staged[step];
-    box.hidden = !list.length;
-    strip.replaceChildren(...list.map((f, i) => {
-      const fig = $(`<figure><img alt="new photo"><button class="rm" title="Remove">×</button></figure>`);
-      fig.querySelector('img').src = URL.createObjectURL(f);
-      fig.querySelector('.rm').addEventListener('click', () => {
-        staged[step].splice(i, 1);
-        drawStage(step);
-      });
-      return fig;
-    }));
-    box.querySelector('[data-commit]').textContent =
-      `Upload ${list.length} photo${list.length === 1 ? '' : 's'} and mark ${
-        step === 'delivered' ? 'delivered' : 'returned'}`;
-  };
-
-  drawer.querySelectorAll('.photorow input[type="file"]').forEach(input =>
-    input.addEventListener('change', () => {
-      const step = input.dataset.step;
-      staged[step].push(...input.files);
-      input.value = '';
-      drawStage(step);
-    }));
-
-  drawer.querySelectorAll('[data-commit]').forEach(b => b.addEventListener('click', async () => {
-    const step = b.dataset.commit;
-    const kind = step === 'delivered' ? 'delivery' : 'pickup';
-    const files = staged[step];
-    if (!files.length) return;
-    b.disabled = true;
-    msg.replaceChildren();
-    try {
-      for (const [i, file] of files.entries()) {
-        b.textContent = `Uploading ${i + 1} of ${files.length}…`;
-        const res = await fetch(`/api/rentals/${id}/photos?kind=${kind}`, {
-          method: 'POST',
-          headers: { 'Content-Type': file.type || 'image/jpeg' },
-          body: file,
-        });
-        if (!res.ok) throw new Error((await res.json()).error || `Upload failed (${res.status})`);
-      }
-      b.textContent = 'Marking…';
-      // Photos are up; the milestone is the commit. Forced because the
-      // evidence is already stored — refusing now would leave them orphaned.
-      await patch({ milestone: step, done: true, force: true, photo_reason: 'photographed' });
-      openRental(id);
-    } catch (err) {
-      b.disabled = false;
-      drawStage(step);
-      msg.replaceChildren(banner(err.message));
-    }
-  }));
-
-  drawer.querySelectorAll('.photorow figure img[data-photo]').forEach(img =>
-    img.addEventListener('click', () => {
-      const kind = img.dataset.kind;
-      const set = photos.filter(p => p.kind === kind);
-      openLightbox(set, set.findIndex(p => String(p.id) === img.dataset.photo));
-    }));
-
-  drawer.querySelectorAll('.photorow [data-rm]').forEach(b => b.addEventListener('click', async () => {
-    if (!confirm('Remove this photo? The record that it existed stays.')) return;
-    try { await api(`/photos/${b.dataset.rm}`, { method: 'DELETE' }); openRental(id); }
-    catch (err) { msg.replaceChildren(banner(err.message)); }
-  }));
-
-  drawer.querySelector('#ph-hold')?.addEventListener('change', async e => {
-    try {
-      await api(`/rentals/${id}/photo-hold`, { method: 'POST', body: JSON.stringify({ hold: e.target.checked }) });
-    } catch (err) {
-      e.target.checked = !e.target.checked;
-      msg.replaceChildren(banner(err.message));
-    }
-  });
-
-  chargesPanel(drawer.querySelector('#rent-charges'), id, r);
-  binsPanel(drawer.querySelector('#rent-bins'), id, r);
-  extensionsPanel(drawer.querySelector('#rent-exts'), id, r);
-  notesPanel(drawer.querySelector('#rent-notes'), 'rentals', id);
-  historyPanel(drawer.querySelector('#rent-history'), 'rentals', id);
-
-  drawer.querySelector('#r-send')?.addEventListener('click', async e => {
-    const was = e.target.textContent;
-    e.target.disabled = true; e.target.textContent = 'Sending…';
-    msg.replaceChildren();
-    try {
-      await api(`/rentals/${id}/send`, { method: 'POST' });
-      openRental(id);
-    } catch (err) {
-      msg.replaceChildren(banner(err.message));
-      e.target.disabled = false; e.target.textContent = was;
-    }
-  });
-
-  drawer.querySelector('#r-copy')?.addEventListener('click', async e => {
-    try {
-      await navigator.clipboard.writeText(`https://${bookingHost}/${r.confirm_token}`);
-      e.target.textContent = 'Copied';
-      setTimeout(() => { e.target.textContent = 'Copy link'; }, 1500);
-    } catch { e.target.textContent = 'Copy failed'; }
-  });
-
-  drawer.querySelector('#r-invoice')?.addEventListener('click', async e => {
-    e.target.disabled = true;
-    e.target.textContent = 'Sending…';
-    msg.replaceChildren();
-    try {
-      await api(`/rentals/${id}/invoice`, { method: 'POST' });
-      await refreshCounts();
-      openRental(id);
-    } catch (err) {
-      msg.replaceChildren(banner(err.message));
-      e.target.disabled = false;
-      e.target.textContent = 'Create invoice & email the customer';
-    }
-  });
-
-  drawer.querySelector('#r-sync')?.addEventListener('click', async e => {
-    e.target.disabled = true;
-    e.target.textContent = 'Checking…';
-    msg.replaceChildren();
-    try {
-      await api(`/rentals/${id}/sync`, { method: 'POST' });
-      await refreshCounts();
-      openRental(id);
-    } catch (err) {
-      msg.replaceChildren(banner(err.message));
-      e.target.disabled = false;
-      e.target.textContent = 'Check for payment';
-    }
-  });
-
-  drawer.querySelectorAll('[data-editaddr]').forEach(b => b.addEventListener('click', () => {
-    const box = b.closest('.addr');
-    box.querySelector('.shown').hidden = true;
-    box.querySelector('.edit').hidden = false;
-    box.querySelector('input').focus();
-  }));
-
-  drawer.querySelectorAll('[data-canceladdr]').forEach(b => b.addEventListener('click', () => {
-    const box = b.closest('.addr');
-    box.querySelector('.edit').hidden = true;
-    box.querySelector('.shown').hidden = false;
-  }));
-
-  // Either row's Save writes both fields — they are one record, and a driver
-  // correcting the pickup address should not silently drop an edit to delivery.
-  drawer.querySelectorAll('[data-saveaddr]').forEach(b => b.addEventListener('click', async () => {
-    const state = b.parentElement.querySelector('[data-savedmsg]');
-    b.disabled = true; state.textContent = 'Saving…';
-    try {
-      const parts = {};
-      drawer.querySelectorAll('[data-part]').forEach(i => { parts[i.dataset.part] = i.value; });
-      await patch(parts);
-      openRental(id);
-      return;
-    } catch (err) { state.textContent = ''; msg.replaceChildren(banner(err.message)); }
-    b.disabled = false;
-  }));
-
-  drawer.querySelectorAll('[data-status]').forEach(b => b.addEventListener('click', async () => {
-    let reason;
-    if (b.dataset.status === 'cancelled') {
-      /* §8: full refund 48h or more before delivery, half under that. The
-         panel does the arithmetic so the person on the phone does not have to,
-         and says it before the reason is typed, not after. */
-      let head = 'Why is this being cancelled?';
-      if (r.paid_at) {
-        try {
-          const p = await api(`/rentals/${id}/cancel-preview`);
-          head = `They paid ${money(p.paid_cents)}. This is ${p.hours_before >= 48 ? '48 hours or more' : 'under 48 hours'} before delivery, so §8 says refund ${p.percent}% — ${money(p.cents)}.\n\nCancelling here does NOT move money: issue the ${money(p.cents)} refund in Square.\n\nWhy is it being cancelled?`;
-        } catch { head = 'This rental has been paid. Cancelling here does NOT refund anything — issue that in Square.\n\nWhy is it being cancelled?'; }
-      }
-      reason = prompt(head);
-      if (reason === null || !reason.trim()) return;
-    }
-    try {
-      const res = await patch({ status: b.dataset.status, reason });
-      if (res.refund?.cents) alert(`Cancelled. Refund ${money(res.refund.cents)} (${res.refund.percent}%) in Square — it is on the history for this rental.`);
-      openRental(id);
-    }
-    catch (err) { msg.replaceChildren(banner(err.message)); }
-  }));
-
-  /* Moving the dates. Only before the bins go out — after that it is an
-     extension, and the button is not there to tempt anyone. */
-  /* When hours have been entered, the window is one of tonight's slots with
-     room, not free text — the same list the customer chose from. Free text
-     stays for a rental whose day has nobody on (a favour, a one-off). */
-  for (const kind of ['delivery', 'pickup']) {
-    const box = drawer.querySelector(`[data-winbox="${kind}"]`);
-    if (!box) continue;
-    const date = kind === 'delivery' ? r.start_date : r.due_date;
-    if (!date) continue;
-    api(`/coverage?from=${date}&days=1`).then(({ days: [day] }) => {
-      if (!day.configured || !day.open) return;
-      // A window typed before slots existed still lights its button.
-      const cur = r[`${kind}_slot`] || day.slots.find(sl => sl.label === r[`${kind}_window`])?.start;
-      const opts = day.slots.map(sl => `<button class="slotbtn${sl.start === cur ? ' on' : ''}${sl.free <= 0 && sl.start !== cur ? ' full' : ''}"
-        data-slot="${sl.start}" title="${sl.free} of ${sl.capacity} free">${esc(sl.label)}</button>`).join('');
-      box.replaceChildren($(`<div class="slotrow"><label>Window</label>${opts}<span class="saved" data-winmsg="${kind}"></span></div>`));
-      box.querySelectorAll('.slotbtn').forEach(b => b.addEventListener('click', async () => {
-        const msg = box.querySelector('[data-winmsg]');
-        const full = b.classList.contains('full');
-        if (full && !confirm(`${b.textContent} is full. Book it anyway?`)) return;
-        try {
-          await api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify({ [`${kind}_slot`]: b.dataset.slot, force: full }) });
-          box.querySelectorAll('.slotbtn').forEach(x => x.classList.toggle('on', x === b));
-          msg.textContent = 'Saved';
-        } catch (err) { msg.textContent = err.message; }
-      }));
-    }).catch(() => {});
-  }
-
-  /* The window saves itself on the way out of the field — it is one phrase,
-     and a Save button for one phrase is a button nobody presses. */
-  drawer.querySelectorAll('[data-window]').forEach(inp => inp.addEventListener('change', async () => {
-    const msg = drawer.querySelector(`[data-winmsg="${inp.dataset.window.split('_')[0]}"]`);
-    try {
-      await api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify({ [inp.dataset.window]: inp.value }) });
-      msg.textContent = 'Saved';
-      r[inp.dataset.window] = inp.value.trim() || null;
-    } catch (err) { msg.textContent = err.message; }
-  }));
-
-  drawer.querySelector('#r-move')?.addEventListener('click', async () => {
-    const to = prompt(`New delivery date (currently ${r.start_date}). The return date moves with it — ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'} stays ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'}.\n\nYYYY-MM-DD:`, r.start_date);
-    if (to === null || !to.trim() || to.trim() === r.start_date) return;
-    const reason = prompt('Why? (optional — goes on the history and in the email to the customer)') ?? '';
-    try {
-      const res = await api(`/rentals/${id}/reschedule`, { method: 'POST', body: JSON.stringify({ start_date: to.trim(), reason }) });
-      if (res.note) alert(res.note);
-      openRental(id);
-    } catch (err) { msg.replaceChildren(banner(err.message)); }
-  });
-}
-
 /* ---------- availability ----------
 
    When each person can drive: a weekly pattern, and days that differ. Shown
@@ -2348,32 +2232,27 @@ function availabilityPanel(container, employees) {
       if (!canEdit(e)) return;
       const wd = +td.dataset.wd;
       const cur = shifts.find(s => s.employee_id === e.id && s.weekday === wd);
-      const ans = prompt(`${e.name || e.email} on ${WD[wd]}s — hours as HH:MM-HH:MM (24h), or blank for not working:`, cur ? `${cur.start}-${cur.end}` : '17:00-21:00');
-      if (ans === null) return;
+      const v = await ask({ title: `${e.name || e.email} on ${WD[wd]}s`,
+        fields: [{ name: 'on', type: 'choice', value: cur ? 'on' : 'off', required: true, options: [['on', 'Working', 'Set the hours below'], ['off', 'Not working']] },
+                 { name: 'start', label: 'From', type: 'time', value: cur?.start || '17:00' }, { name: 'end', label: 'To', type: 'time', value: cur?.end || '21:00' }], ok: 'Save' });
+      if (!v) return;
       try {
-        if (!ans.trim()) { if (cur) await api(`/shifts/${cur.id}`, { method: 'DELETE' }); }
-        else {
-          const [a, b] = ans.split(/\s*[-–]\s*/);
-          if (!hhmm(a) || !hhmm(b)) throw new Error('Use HH:MM-HH:MM, like 17:00-21:00.');
-          await api('/shifts', { method: 'POST', body: JSON.stringify({ employee_id: e.id, weekday: wd, start: a, end: b }) });
-        }
+        if (v.on === 'off') { if (cur) await api(`/shifts/${cur.id}`, { method: 'DELETE' }); }
+        else await api('/shifts', { method: 'POST', body: JSON.stringify({ employee_id: e.id, weekday: wd, start: v.start, end: v.end }) });
         draw();
       } catch (err) { fail(err); }
     }));
     container.querySelectorAll('[data-addday]').forEach(b => b.addEventListener('click', async () => {
       const e = people.find(p => p.id === +b.dataset.addday);
-      const date = prompt('Which date? (YYYY-MM-DD)', todayISO());
-      if (!date) return;
-      const ans = prompt('Hours as HH:MM-HH:MM, or "off" (add a reason after: off Dentist):', 'off');
-      if (ans === null) return;
+      const v = await ask({ title: `A day that differs for ${e.name || e.email}`,
+        fields: [{ name: 'date', label: 'Date', type: 'date', value: todayISO(), required: true },
+                 { name: 'what', type: 'choice', value: 'off', required: true, options: [['off', 'Off that day', 'Whatever the weekly pattern says'], ['on', 'Working these hours', 'Extra, or different, hours']] },
+                 { name: 'start', label: 'From', type: 'time', value: '17:00' }, { name: 'end', label: 'To', type: 'time', value: '21:00' },
+                 { name: 'note', label: 'Note', optional: true, placeholder: 'Dentist' }], ok: 'Save' });
+      if (!v) return;
       try {
-        const m = /^off\s*(.*)$/i.exec(ans.trim());
-        if (m) await api('/shifts', { method: 'POST', body: JSON.stringify({ employee_id: e.id, date, off: true, note: m[1] }) });
-        else {
-          const [a, c] = ans.split(/\s*[-–]\s*/);
-          if (!hhmm(a) || !hhmm(c)) throw new Error('Use HH:MM-HH:MM, or "off".');
-          await api('/shifts', { method: 'POST', body: JSON.stringify({ employee_id: e.id, date, start: a, end: c }) });
-        }
+        if (v.what === 'off') await api('/shifts', { method: 'POST', body: JSON.stringify({ employee_id: e.id, date: v.date, off: true, note: v.note }) });
+        else await api('/shifts', { method: 'POST', body: JSON.stringify({ employee_id: e.id, date: v.date, start: v.start, end: v.end, note: v.note }) });
         draw();
       } catch (err) { fail(err); }
     }));
@@ -2574,13 +2453,13 @@ async function viewCustomer(id) {
   page.querySelectorAll('[data-request]').forEach(tr => tr.addEventListener('click', () => openRequest(tr.dataset.request)));
   notesPanel(page.querySelector('#cust-notes'), 'customers', id);
   page.querySelector('#c-edit')?.addEventListener('click', async () => {
-    const first = prompt('First name', c.first_name || ''); if (first === null) return;
-    const last = prompt('Last name', c.last_name || ''); if (last === null) return;
-    const email = prompt('Email', c.email || ''); if (email === null) return;
-    const phone = prompt('Phone', fmtPhone(c.phone)); if (phone === null) return;
-    const city = prompt('City', c.city || ''); if (city === null) return;
+    const v = await ask({ title: 'Customer details', fields: [
+      { name: 'first_name', label: 'First name', value: c.first_name || '' }, { name: 'last_name', label: 'Last name', value: c.last_name || '' },
+      { name: 'email', label: 'Email', type: 'email', value: c.email || '' }, { name: 'phone', label: 'Phone', type: 'tel', value: fmtPhone(c.phone) },
+      { name: 'city', label: 'City', value: c.city || '' }], ok: 'Save' });
+    if (!v) return;
     try {
-      await api(`/customers/${id}`, { method: 'PATCH', body: JSON.stringify({ first_name: first, last_name: last, email, phone, city }) });
+      await api(`/customers/${id}`, { method: 'PATCH', body: JSON.stringify(v) });
       viewCustomer(id);
     } catch (err) { page.querySelector('.rside').prepend(banner(err.message)); }
   });
@@ -3054,7 +2933,7 @@ function openItem(item) {
   q('b-del')?.addEventListener('click', async () => {
     // Sold or scrapped is a removal; broken is a condition. Deleting loses the
     // history, so it asks.
-    if (!confirm(`Remove ${item.label} from the list? Mark it retired instead if you still own it.`)) return;
+    if (!(await sure({ title: `Remove ${item.label} from the list?`, body: 'If you still own it, mark it retired instead — removing loses its history.', ok: 'Remove', danger: true }))) return;
     try {
       await api(`/items/${item.id}`, { method: 'DELETE' });
       close();
@@ -3280,7 +3159,7 @@ async function viewSettings() {
       try {
         const res = await api('/blackouts', { method: 'POST', body: JSON.stringify({ date, to, reason: black.querySelector('#b-why').value }) });
         if (res.affected?.length) {
-          alert(`Added ${res.days === 1 ? 'the day' : res.days + ' days'}. Already booked in that time:\n\n${res.affected.map(a => `• ${a.name} — ${a.job === 'deliver' ? 'delivery' : 'pickup'} ${niceDate(a.date)} (rental #${a.id})`).join('\n')}\n\nMove or contact them.`);
+          await tell({ title: `Added ${res.days === 1 ? 'the day' : res.days + ' days'} off`, body: `Already booked in that time:<br><br>${res.affected.map(a => `&bull; <a href="#/rentals/${a.id}">${esc(a.name)}</a> — ${a.job === 'deliver' ? 'delivery' : 'pickup'} ${esc(niceDate(a.date))}`).join('<br>')}<br><br>Move them, or get in touch.` });
         }
         drawBlackouts(false);
       } catch (err) { black.querySelector('#b-msg').replaceChildren(banner(err.message)); }

@@ -31,9 +31,13 @@ reserve/contact form ──POST──▶ beehive-forms ──┬─▶ D1 `reque
 is a person. Requests lists open questions (new and lapsed). Approving makes
 a rental and the request leaves the list; declining files the person under
 Customers. Rentals lists live jobs — through inspection — and a finished or
-cancelled one is history on the customer. A rental is a full page: the work
-down the left (link → agreement → payment → delivery → back → inspected &
-cleaned), the facts down the right.
+cancelled one is history on the customer. A rental is a full page built around
+its five stages — Booked, Delivered, Collected, Inspected & cleaned, Settled.
+The current stage is open with the work it needs; passed stages are a line
+each (the last one undoable); stages ahead are dim. The bins are chosen only
+while loading the van; flagging an issue happens only at inspection; charges
+are only ever the Settled stage. The panel never uses a browser prompt —
+every question is a sheet in the panel's own type (`ask`, `sure`, `tell`).
 
 **Which bins.** `rental_items` ties each bin to the rental it went out on:
 auto-picked from the free ones at delivery, or chosen by label, adjustable
