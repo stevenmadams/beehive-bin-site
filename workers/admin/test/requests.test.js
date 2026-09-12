@@ -60,7 +60,7 @@ describe('requests', () => {
     const req = await ok('/requests', { method: 'POST', body: { kind: 'contact', first_name: 'Q', email: 'q@example.com', message: 'Do you deliver to Ogden?' } });
     const d = await api(`/requests/${req.request.id}/decision`, { method: 'POST', body: { action: 'approve' } });
     expect(d.status).toBe(400);
-    expect(d.error).toMatch(/Only a reservation/);
+    expect(d.error).toMatch(/A question is not a booking/);
   });
 
   it('S8 declining records the reason; reopening clears it', async () => {

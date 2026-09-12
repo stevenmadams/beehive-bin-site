@@ -140,7 +140,7 @@ const REQUEST_COLUMNS = () => `id, created_at, kind, source, status, contact_pre
   customer_notes, message, internal_notes, decided_at, decided_by, decline_reason, customer_id,
   (SELECT id FROM rentals WHERE rentals.request_id = requests.id LIMIT 1) AS rental_id`;
 
-const STATUSES = ['new', 'approved', 'declined', 'converted'];
+const STATUSES = ['new', 'approved', 'declined', 'converted', 'answered'];
 
 async function listRequests(env, url) {
   // The list is the open questions. Everything else is on the customer.
@@ -261,6 +261,16 @@ async function createRequest(env, user, body) {
   if (customerId) await env.DB.prepare('UPDATE requests SET customer_id = ?1 WHERE id = ?2').bind(customerId, id).run();
   await audit(env, user.email, 'request.create', 'request', id, `source=manual kind=${kind}`);
 
+  // Taken in reply to a question: that question is answered by this booking.
+  const answers = Number(body.answers);
+  if (answers) {
+    await env.DB.prepare(
+      `UPDATE requests SET status = 'answered', decided_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'), decided_by = ?1, decline_reason = ?2
+       WHERE id = ?3 AND kind = 'contact' AND status = 'new'`,
+    ).bind(user.email, `Became request #${id}`, answers).run();
+    await audit(env, user.email, 'request.answer', 'request', answers, `became request #${id}`);
+  }
+
   // What was typed under "Internal notes" is a note — attributed, in the
   // notes list — not a column that nothing displays.
   const internal = clean(body.internal_notes, 4000);
@@ -271,11 +281,17 @@ async function createRequest(env, user, body) {
 
 async function decideRequest(env, user, id, body) {
   const action = body.action;
-  if (!['approve', 'decline', 'reopen'].includes(action)) throw new HttpError(400, 'unknown action');
+  if (!['approve', 'decline', 'reopen', 'answer'].includes(action)) throw new HttpError(400, 'unknown action');
 
   const existing = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS()} FROM requests WHERE id = ?1`)
     .bind(id).first();
   if (!existing) throw new HttpError(404, 'no such request');
+
+  /* A question is answered, not approved. A reservation is approved or
+     declined, not answered. Mixing them up is how a question grows an
+     Approve button that cannot work. */
+  if (action === 'answer' && existing.kind !== 'contact') throw new HttpError(400, 'A reservation is approved or declined, not answered.');
+  if (action === 'approve' && existing.kind === 'contact') throw new HttpError(400, 'A question is not a booking. Turn it into one, or mark it answered.');
 
   // Approving is the moment the job becomes real, so it produces the rental
   // record the schedule and run sheet are built from.
@@ -294,8 +310,8 @@ async function decideRequest(env, user, id, body) {
     rentalId = already ? already.id : await createRentalFromRequest(env, user, existing, body.force === true);
   }
 
-  const status = action === 'approve' ? 'converted' : action === 'decline' ? 'declined' : 'new';
-  const reason = action === 'decline' ? String(body.reason || '').trim().slice(0, 500) || null : null;
+  const status = action === 'approve' ? 'converted' : action === 'decline' ? 'declined' : action === 'answer' ? 'answered' : 'new';
+  const reason = action === 'decline' || action === 'answer' ? String(body.reason || '').trim().slice(0, 500) || null : null;
   const decidedAt = action === 'reopen' ? null : new Date().toISOString().replace(/\.\d+/, '');
   const decidedBy = action === 'reopen' ? null : user.email;
 

@@ -129,6 +129,8 @@ was asked of them.
 | Q1 | A converted request cannot be moved back to new — its rental is real | ✅ | admin/customers |
 | Q2 | Requests lists open questions only (new, lapsed); answered ones live on the customer | ✅ | admin/customers |
 | Q3 | A lapsed request gets a new date (back to new) or is declined (to the customer) | ✅ | admin/customers |
+| Q4 | A question from the contact form is answered (with what was said), never approved; it then leaves the list | ✅ | admin/customers |
+| Q5 | A question can become a booking — a reservation pre-filled from it, which marks the question answered | ✅ | admin/customers |
 | J1 | Rentals lists live jobs; inspected and cancelled are history on the customer | ✅ | admin/customers |
 | K1 | One customer per person, merged by email (or phone when there is no email), across requests and rentals | ✅ | admin/customers |
 | K2 | Declined and lapsed people are leads, filterable; past renters too | ✅ | admin/customers |

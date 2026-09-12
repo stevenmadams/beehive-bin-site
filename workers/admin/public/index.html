@@ -95,6 +95,8 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
   font-weight:600;cursor:pointer}
 .btn:hover{border-color:rgba(21,19,15,.3)}
 .btn.primary{background:var(--yellow);border-color:var(--yellow-deep);color:var(--ink)}
+/* The way they asked to be reached: marked, not filled — a filled button reads as the action to take. */
+.btn.pref{box-shadow:0 0 0 2px var(--yellow) inset;border-color:var(--yellow-deep)}
 .btn.primary:hover{background:var(--yellow-deep)}
 .btn.danger{color:var(--bad);border-color:rgba(163,44,44,.3)}
 .btn.danger:hover{background:rgba(163,44,44,.06)}
@@ -120,6 +122,8 @@ tbody tr.clickable:hover{background:rgba(255,196,0,.09)}
 .pill.new{background:rgba(255,196,0,.25);color:#7A5B00}
 .pill.approved{background:rgba(31,122,76,.14);color:var(--ok)}
 .pill.declined{background:rgba(163,44,44,.12);color:var(--bad)}
+.pill.answered{background:rgba(31,122,76,.14);color:var(--ok)}
+.pill.question{background:rgba(21,19,15,.1);color:var(--char)}
 .pill.converted{background:rgba(31,122,76,.14);color:var(--ok)}
 .pill.booked{background:rgba(255,196,0,.25);color:#7A5B00}
 .pill.confirmed{background:rgba(31,122,76,.14);color:var(--ok)}
@@ -1893,20 +1897,8 @@ async function openRequest(id) {
   }
 
   /* tel:/sms: want E.164; the stored string is whatever the customer typed. */
-  const digits = String(r.phone || '').replace(/\D/g, '');
-  const tel = digits.length === 10 ? `+1${digits}`
-    : digits.length === 11 && digits[0] === '1' ? `+${digits}`
-    : digits;
   const pref = r.contact_pref;
-  // The preferred method is the filled button, so the right move is obvious
-  // before reading anything.
-  const contactBtn = (kind, href, label) =>
-    `<a class="btn sm${pref === kind ? ' primary' : ''}" href="${href}">${label}</a>`;
-  const actions = [
-    r.phone && digits ? contactBtn('text', `sms:${tel}`, 'Text') : '',
-    r.phone && digits ? contactBtn('call', `tel:${tel}`, 'Call') : '',
-    r.email ? contactBtn('email', `mailto:${esc(r.email)}`, 'Email') : '',
-  ].filter(Boolean).join('');
+  const actions = contactActions(r);
 
   const extras = [];
   if (r.kind === 'reserve' && r.return_date) extras.push(['Back by', niceDate(r.return_date)]);
@@ -1948,6 +1940,10 @@ async function openRequest(id) {
         ${!isOwner() ? '<span style="color:var(--muted);font-size:13px">An owner approves or declines this.</span>'
         : r.status === 'converted' ? `<a class="btn" href="#/rentals/${r.rental_id}">Open rental #${r.rental_id}</a>
           <span style="color:var(--muted);font-size:13px">Booked. To call it off, cancel the rental.</span>`
+        : r.status === 'new' && r.kind === 'contact' ? `
+          <button class="btn primary" id="req-book">Turn into a booking</button>
+          <button class="btn" data-act="answer">Mark answered</button>
+          <span style="color:var(--muted);font-size:13px">Reply with the buttons above; this just closes it.</span>`
         : r.status === 'new' && r.lapsed ? `
           <button class="btn primary" id="req-redate">New date</button>
           <button class="btn danger" data-act="decline">Decline</button>
@@ -1955,6 +1951,8 @@ async function openRequest(id) {
         : r.status === 'new' ? `
           <button class="btn primary" data-act="approve">Approve</button>
           <button class="btn danger" data-act="decline">Decline</button>`
+        : r.status === 'answered' ? `<span style="color:var(--muted);font-size:13px">Answered${r.decline_reason ? ` — ${esc(r.decline_reason)}` : ''}.</span>
+          <button class="btn" data-act="reopen">Reopen</button>`
         : `<button class="btn" data-act="reopen">Reopen as new</button>`}
         ${r.customer_id ? `<a class="linkish" href="#/customers/${r.customer_id}" style="margin-left:auto">Customer record</a>` : ''}
       </div>
@@ -1998,6 +1996,13 @@ async function openRequest(id) {
     catch (err) { msg.replaceChildren(banner(err.message)); }
   });
   drawer.querySelector('[data-act="reopen"]')?.addEventListener('click', () => act('reopen'));
+  drawer.querySelector('#req-book')?.addEventListener('click', () => openNewRequest(r));
+  drawer.querySelector('[data-act="answer"]')?.addEventListener('click', async () => {
+    const v = await ask({ title: 'Mark this question answered', body: 'It leaves the list and stays on the customer. What did you tell them?',
+      fields: [{ name: 'reason', label: 'The answer, in a line', optional: true, placeholder: 'Yes to Hooper — 20 is the smallest package' }], ok: 'Answered' });
+    if (!v) return;
+    act('answer', { reason: v.reason });
+  });
   drawer.querySelector('[data-act="decline"]')?.addEventListener('click', async () => {
     const v = await ask({ title: 'Decline this request', body: 'The customer never sees the reason. They stay on the Customers tab for next time.',
       fields: [{ name: 'reason', label: 'Why', optional: true, placeholder: 'Outside our area' }], ok: 'Decline', danger: true });
@@ -2012,7 +2017,7 @@ const PRICES = { 10: 39, 20: 79, 40: 129, 60: 179 };
 const EXTRA  = { 10: 25, 20: 40, 40: 65, 60: 90 };
 // PRICING:end
 
-function openNewRequest() {
+function openNewRequest(from = null) {
   closeAnyDrawer();
   const scrim = $('<div class="scrim"></div>');
   const drawer = $('<div class="drawer" role="dialog" aria-modal="true"></div>');
@@ -2100,6 +2105,18 @@ function openNewRequest() {
   document.body.append(scrim, drawer);
   const q = id => drawer.querySelector('#' + id);
 
+  // Started from a question: their details are already known.
+  if (from) {
+    q('n-first').value = from.first_name || '';
+    q('n-last').value = from.last_name || '';
+    q('n-phone').value = from.phone || '';
+    q('n-email').value = from.email || '';
+    if (from.contact_pref) q('n-pref').value = from.contact_pref;
+    if (from.delivery_city) q('n-dcity').value = from.delivery_city;
+    if (from.start_date) q('n-start').value = from.start_date;
+    drawer.querySelector('.dhead .meta').textContent = `In reply to their question: “${(from.message || '').slice(0, 80)}${(from.message || '').length > 80 ? '…' : ''}”`;
+  }
+
   // Mirror the site's quote so a phoned-in customer hears the same number the
   // website would have shown them.
   const sync = () => {
@@ -2138,6 +2155,7 @@ function openNewRequest() {
         customer_notes: isReserve() ? q('n-notes').value : '',
         message: isReserve() ? '' : q('n-notes').value,
         internal_notes: q('n-internal').value,
+        answers: from?.id || null,
       })});
       close();
       await refreshCounts();
@@ -2710,7 +2728,7 @@ function contactActions(r) {
   const tel = digits.length === 10 ? `+1${digits}`
     : digits.length === 11 && digits[0] === '1' ? `+${digits}` : digits;
   const btn = (kind, href, label) =>
-    `<a class="btn sm${r.contact_pref === kind ? ' primary' : ''}" href="${href}">${label}</a>`;
+    `<a class="btn sm${r.contact_pref === kind ? ' pref' : ''}" href="${href}">${label}</a>`;
   return [
     digits ? btn('text', `sms:${tel}`, 'Text') : '',
     digits ? btn('call', `tel:${tel}`, 'Call') : '',

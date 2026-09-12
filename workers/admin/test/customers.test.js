@@ -169,3 +169,35 @@ describe('statuses match the stages', () => {
     expect((await ok(`/rentals/${late.id}`)).rental.phase).toBe('settling');
   });
 });
+
+describe('a question from the contact form', () => {
+  const question = (over = {}) => ok('/requests', { method: 'POST', body: { kind: 'contact', first_name: 'Quinn', phone: '801-555-0111', message: 'Do you deliver to Hooper?', ...over } });
+
+  it('Q4 cannot be approved or declined — it is answered, and then it leaves the list', async () => {
+    const q = await question();
+    expect((await api(`/requests/${q.request.id}/decision`, { method: 'POST', body: { action: 'approve' } })).status).toBe(400);
+    const a = await ok(`/requests/${q.request.id}/decision`, { method: 'POST', body: { action: 'answer', reason: 'Yes to Hooper; 20 is the smallest package' } });
+    expect(a.request.status).toBe('answered');
+    expect(a.request.decline_reason).toBe('Yes to Hooper; 20 is the smallest package');
+    expect((await ok('/requests')).requests).toHaveLength(0);
+    const { customers } = await ok('/customers?q=0111');
+    const one = await ok(`/customers/${customers[0].id}`);
+    expect(one.requests[0].status).toBe('answered');
+  });
+
+  it('Q5 becomes a booking: a new reservation for the same person, and the question is marked answered by it', async () => {
+    await fleet(40);
+    const q = await question();
+    const r = await ok('/requests', { method: 'POST', body: { kind: 'reserve', first_name: 'Quinn', last_name: 'Park', phone: '801-555-0111', email: 'quinn@example.com', bins: 20, weeks: 1, start_date: weekday(4), delivery_city: 'Hooper', answers: q.request.id } });
+    expect(r.request.customer_id).toBe(q.request.customer_id);
+    const asked = await ok(`/requests/${q.request.id}`);
+    expect(asked.request.status).toBe('answered');
+    expect(asked.request.decline_reason).toMatch(new RegExp(`request #${r.request.id}`));
+    expect((await ok('/requests')).requests.map(x => x.id)).toEqual([r.request.id]);
+  });
+
+  it('a reservation cannot be "answered" — it is approved or declined', async () => {
+    const r = await request();
+    expect((await api(`/requests/${r.id}/decision`, { method: 'POST', body: { action: 'answer' } })).status).toBe(400);
+  });
+});
