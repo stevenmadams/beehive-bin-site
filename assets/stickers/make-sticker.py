@@ -26,11 +26,16 @@ YELLOW = "#FFC400"
 WHITE  = "#FFFFFF"
 
 CX = CY = 600.0
-R_OUTER = 600.0
-R_INK   = 582.0     # ink disc inside the yellow rim
-R_RING_KEYLINE = 452.0
-R_WHITE = 444.0
-TEXT_OUTER = 548.0  # outer edge both text arcs align to
+# Canvas is 1200 px = 4.0945 in (4 in sticker + bleed). Printer cuts at 4 in,
+# safety line sits near r=525 -- keep every glyph inside r=495.
+PX_PER_IN = 1200 / 4.0945
+R_OUTER = 600.0                         # yellow: bleed + visible rim after the cut
+R_CUT   = 4.0 / 2 * PX_PER_IN           # ~586: where the printer cuts
+R_INK   = R_CUT - 0.10 * PX_PER_IN      # ~557: 0.1 in yellow border stays visible
+R_WHITE = R_INK - 0.14 * PX_PER_IN      # ~516: ink frame band
+FINE_OUTER_R = 492.0  # baseline of the outer fine-print arc (caps grow inward)
+FINE_INNER_R = 458.0
+FINE_SIZE = 24.0
 CAP = 0.73          # cap-height as fraction of em (Archivo Black)
 
 font = TTFont(FONT)
@@ -53,14 +58,14 @@ def path_for(gname):
     gset[gname].draw(pen)
     return pen.getCommands()
 
-def arc_text(text, center_deg, span_deg, baseline_r, direction, track_em=0.06, color=YELLOW):
+def arc_text(text, center_deg, span_deg, baseline_r, direction, track_em=0.06, color=YELLOW, size=None):
     """Lay `text` along a circular arc as outlined glyph paths.
     direction=+1 -> angle increases with reading order (top arc, glyphs face outward)
     direction=-1 -> angle decreases with reading order (bottom arc, glyphs face inward)"""
     gl = glyphs(text)
     em_width = sum(a for _, a in gl) + track_em * (len(gl) - 1)
-    target_arc = math.radians(span_deg) * baseline_r
-    size = target_arc / em_width
+    if size is None:
+        size = math.radians(span_deg) * baseline_r / em_width
     k = size / upem
     track = track_em * size
 
@@ -90,48 +95,42 @@ def hexagon(cx, cy, r, fill):
         pts.append(f"{cx + r*math.cos(ang):.2f},{cy + r*math.sin(ang):.2f}")
     return f'<polygon points="{" ".join(pts)}" fill="{fill}"/>'
 
-# ---- centre logo: reuse the real stacked lockup ------------------------------
+# ---- centre logo: reuse the real stacked lockup, scaled up as the focal point
 raw = open(os.path.join(REPO, "assets", "logo", "beehive-stacked.svg")).read()
 inner = re.sub(r"^.*?<title>.*?</title>", "", raw, flags=re.S).replace("</svg>", "")
 LOGO_W, LOGO_H = 514.0, 355.0
-target_w = 640.0
+target_w = 750.0
 sc = target_w / LOGO_W
-logo = (f'<g transform="translate({CX - target_w/2:.2f},{CY - LOGO_H*sc/2:.2f}) '
+logo_cy = CY + 6.0    # optically centred above the fine-print footer
+logo = (f'<g transform="translate({CX - target_w/2:.2f},{logo_cy - LOGO_H*sc/2:.2f}) '
         f'scale({sc:.6f})">{inner}</g>')
 
-# ---- ring text ---------------------------------------------------------------
-TOP = "PROPERTY OF BEEHIVE BIN CO."
-BOTTOM = "IF FOUND PLEASE CONTACT SUPPORT@BEEHIVEBIN.CO"
+# ---- fine print: two short arcs under the logo, ink on white -----------------
+LINE1 = "PROPERTY OF BEEHIVE BIN CO."
+LINE2 = "IF FOUND PLEASE CONTACT SUPPORT@BEEHIVEBIN.CO"
+# LINE1 sits on the inner (upper) arc, LINE2 on the outer (lower) arc
+line1_svg, _ = arc_text(LINE1, 90, 0, FINE_INNER_R, -1, track_em=0.08, color=INK, size=FINE_SIZE)
+line2_svg, _ = arc_text(LINE2, 90, 0, FINE_OUTER_R, -1, track_em=0.06, color=INK, size=FINE_SIZE)
 
-TOP_SPAN, BOT_SPAN = 132.0, 150.0
-# solve baseline radius for the top arc (its caps grow outward from the baseline)
-size_guess = 64.0
-for _ in range(6):
-    r_top = TEXT_OUTER - CAP * size_guess
-    _, size_guess = arc_text(TOP, -90, TOP_SPAN, r_top, +1)
-top_svg, top_size = arc_text(TOP, -90, TOP_SPAN, r_top, +1)
-bot_svg, bot_size = arc_text(BOTTOM, 90, BOT_SPAN, TEXT_OUTER, -1, track_em=0.05)
+def span_deg(text, r, track_em):
+    gl = glyphs(text)
+    w = (sum(a for _, a in gl) + track_em * (len(gl) - 1)) * FINE_SIZE
+    return math.degrees(w / r)
+print(f"fine print: line1 {span_deg(LINE1, FINE_INNER_R, 0.08):.0f}deg, "
+      f"line2 {span_deg(LINE2, FINE_OUTER_R, 0.06):.0f}deg, "
+      f"outermost glyph r={FINE_OUTER_R:.0f}, logo corner r="
+      f"{math.hypot(target_w/2, LOGO_H*sc/2 + (logo_cy - CY)):.0f}")
 
-print(f"top size {top_size:.1f}px  baseline r {r_top:.1f}")
-print(f"bottom size {bot_size:.1f}px  cap reaches r {TEXT_OUTER - CAP*bot_size:.1f}")
-
-hex_r = 33.0
-hex_ring_r = TEXT_OUTER - 0.5 * CAP * max(top_size, bot_size)
-seps = (hexagon(CX + hex_ring_r, CY, hex_r, YELLOW)
-        + hexagon(CX - hex_ring_r, CY, hex_r, YELLOW))
-
-svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width="1200" height="1200" role="img" aria-label="Property of Beehive Bin Co. If found please contact support@beehivebin.co">
-<title>Beehive Bin Co. — bin asset sticker</title>
-<desc>Round 4 in / 102 mm die-cut sticker. Ring text is outlined (no fonts required).</desc>
+svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width="1200" height="1200" role="img" aria-label="Beehive Bin Co. Property of Beehive Bin Co. If found please contact support@beehivebin.co">
+<title>Beehive Bin Co. bin sticker</title>
+<desc>Round die-cut sticker. Canvas 4.0945 in incl. bleed, cut at 4 in, 0.1 in yellow border. Text is outlined (no fonts required).</desc>
 <circle cx="600" cy="600" r="{R_OUTER}" fill="{YELLOW}"/>
 <circle cx="600" cy="600" r="{R_INK}" fill="{INK}"/>
-<circle cx="600" cy="600" r="{R_RING_KEYLINE}" fill="{YELLOW}"/>
 <circle cx="600" cy="600" r="{R_WHITE}" fill="{WHITE}"/>
-{top_svg}
-{bot_svg}
-{seps}
 {logo}
+{line1_svg}
+{line2_svg}
 </svg>
-'''
+"""
 open(OUT, "w").write(svg)
 print("wrote", OUT, len(svg), "bytes")

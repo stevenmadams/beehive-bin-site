@@ -300,6 +300,7 @@ tr.late td{background:rgba(163,44,44,.05)}
 .cal .d.over{background:rgba(163,44,44,.12);border-color:rgba(163,44,44,.4)}
 .cal .d.over .av{color:var(--bad)}
 .binrow td{font-variant-numeric:tabular-nums}
+.light{margin-right:7px;cursor:help;font-size:13px;vertical-align:-1px}
 .seg button .n{opacity:.55;margin-left:4px;font-weight:400}
 .cond{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
   padding:3px 9px;border-radius:999px}
@@ -580,6 +581,20 @@ function render(active, node) {
 
 const banner = (msg, kind = 'err') => $(`<div class="banner ${kind}">${esc(msg)}</div>`);
 
+/* The stoplight: can this request be said yes to? The Worker judges each
+   request against the fleet over its whole span; this just draws the answer
+   and explains it on hover, so nobody presses Approve to find out. */
+const LIGHT = { green: '🟢', yellow: '🟡', red: '🔴', grey: '⚪' };
+function lightTitle(f, r) {
+  if (!f || f.light === 'grey') return f?.fleet === 0 ? 'No bins on the inventory list yet' : 'Nothing to check';
+  const day = f.tightest_day === r.start_date ? 'on the start date' : `on ${niceDate(f.tightest_day)}`;
+  if (f.light === 'red') return `Does not fit — only ${f.available} of ${f.fleet} bins free ${day}, ${f.short_by} short`;
+  if (f.light === 'yellow') return `Fits, but leaves only ${f.available - r.bins} of ${f.fleet} bins ${day}`;
+  return `Fits — ${f.available} of ${f.fleet} bins free ${day}`;
+}
+const light = (r, cls = '') => r.kind === 'reserve'
+  ? `<span class="light ${cls}" title="${esc(lightTitle(r.fit, r))}">${LIGHT[r.fit?.light || 'grey']}</span>` : '';
+
 /* ---------- requests ---------- */
 const reqState = { status: 'new', q: '' };
 
@@ -642,7 +657,7 @@ async function loadList(list, head) {
         : `<span class="pill ${r.status}">${r.status}</span>`}${
         r.source === 'manual' ? ' <span class="pill manual" title="Taken by phone">phone</span>' : ''}</td>
       <td><div class="who">${esc(fullName(r))}<small>${esc(r.email || r.phone || '—')}</small></div></td>
-      <td class="nowrap">${r.kind === 'contact' ? '<em style="color:var(--muted)">Question</em>' : esc(pkg(r))}</td>
+      <td class="nowrap">${light(r)}${r.kind === 'contact' ? '<em style="color:var(--muted)">Question</em>' : esc(pkg(r))}</td>
       <td class="nowrap num">${esc(niceDate(r.start_date))}</td>
       <td class="hide-sm">${esc(r.delivery_city || '—')}</td>
       <td class="nowrap num hide-sm">${esc(money(r.quoted_total_cents))}</td>
@@ -1169,6 +1184,7 @@ async function openRequest(id) {
         <dt>Email</dt><dd>${esc(r.email || '—')}</dd>
         ${r.kind === 'reserve' ? `
         <dt>Package</dt><dd>${esc(pkg(r))}</dd>
+        <dt>Bins free</dt><dd>${light(r)} <span style="font-weight:400">${esc(lightTitle(r.fit, r))}</span></dd>
         <dt>Quoted</dt><dd>${esc(money(r.quoted_total_cents))} <span style="color:var(--muted);font-weight:400">before tax</span></dd>` : ''}
         <dt>${r.kind === 'reserve' ? 'Starts' : 'Needs bins'}</dt><dd>${esc(niceDate(r.start_date))}</dd>
         ${extras.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}

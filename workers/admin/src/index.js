@@ -9,7 +9,7 @@ import { WorkerEntrypoint } from 'cloudflare:workers';
 import { createInvoice, fetchInvoice, ping as squarePing, storeCard, ensureCustomer, SquareError } from './square.js';
 import { PRICES, EXTRA, quoteCents } from './pricing.js';
 import { rateFor, serviceCity, SERVICE_CITIES } from './tax.js';
-import { availability, canFit, getSettings } from './inventory.js';
+import { availability, canFit, getSettings, stoplights } from './inventory.js';
 import { today, addDays, addWeeks, isoDate, isSunday, dayDiff, startOfDay } from '../../shared/clock.js';
 import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
@@ -128,7 +128,8 @@ const REQUEST_COLUMNS = () => `id, created_at, kind, source, status, contact_pre
   CASE WHEN status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')
        THEN 1 ELSE 0 END AS lapsed, first_name, last_name, email, phone,
   bins, weeks, start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
-  customer_notes, message, internal_notes, decided_at, decided_by, decline_reason`;
+  customer_notes, message, internal_notes, decided_at, decided_by, decline_reason,
+  (SELECT id FROM rentals WHERE rentals.request_id = requests.id LIMIT 1) AS rental_id`;
 
 const STATUSES = ['new', 'approved', 'declined', 'converted'];
 
@@ -1430,7 +1431,11 @@ async function api(request, env, url) {
   }
 
   if (path === '/requests') {
-    if (method === 'GET') return json({ requests: await listRequests(env, url) });
+    if (method === 'GET') {
+      const requests = await listRequests(env, url);
+      const fit = await stoplights(env, requests);
+      return json({ requests: requests.map(r => ({ ...r, fit: fit[r.id] })) });
+    }
     if (method === 'POST') return json({ request: await createRequest(env, user, body) }, 201);
   }
 
@@ -1440,6 +1445,7 @@ async function api(request, env, url) {
       const row = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS()}, raw_json FROM requests WHERE id = ?1`)
         .bind(id).first();
       if (!row) throw new HttpError(404, 'no such request');
+      row.fit = (await stoplights(env, [row]))[row.id];
       return json({ request: row });
     }
     if (method === 'PATCH') {
