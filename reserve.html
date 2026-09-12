@@ -63,13 +63,21 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
 .cal-day.off{opacity:.45}
 .cal-day.full{text-decoration:line-through}
 .cal-day.today::after{content:"";position:absolute;bottom:4px;left:50%;width:4px;height:4px;border-radius:50%;background:var(--ink);transform:translateX(-50%)}
-.cal-day.on{background:var(--yellow);box-shadow:0 0 0 2px var(--ink) inset}
+.cal-day.in,.cal-day.peek{background:rgba(255,196,0,.22);border-radius:0}
+.cal-day.in.off,.cal-day.peek.off{opacity:.6}
+.cal-day.end,.cal-day.peek-end{background:rgba(255,196,0,.22);border-radius:0 8px 8px 0;box-shadow:0 0 0 2px var(--ink) inset;color:var(--ink);opacity:1;text-decoration:none}
+.cal-day.peek-end{box-shadow:0 0 0 2px rgba(21,19,15,.35) inset}
+.cal-day.on{background:var(--yellow);box-shadow:0 0 0 2px var(--ink) inset;border-radius:8px 0 0 8px;position:relative;z-index:1}
+.cal-grid{gap:4px 0}
+.cal-day{margin:0 2px}
+.cal-day.in,.cal-day.peek,.cal-day.on,.cal-day.end,.cal-day.peek-end{margin:0}
 .cal-day.on:hover{background:var(--yellow)}
 .cal-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--muted)}
 .cal-legend .k{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:5px}
 .cal-legend .k.open{background:var(--yellow)}
 .cal-legend .k.full{background:none;border:1.5px solid var(--muted)}
 .cal-legend .k.off{background:rgba(21,19,15,.15)}
+.cal-legend .k.span{background:rgba(255,196,0,.35)}
 .cal-why{margin-top:8px;font-size:13px;color:#B3261E;font-weight:600;min-height:1.2em}
 .choice .mini-scene{aspect-ratio:16/9;margin-top:14px}
 #reserve-form .summary{margin:0 0 24px}
@@ -208,6 +216,7 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
             <div class="cal-months" id="cal-months"></div>
             <div class="cal-legend">
               <span><i class="k open"></i> Open</span>
+              <span><i class="k span"></i> Your rental</span>
               <span><i class="k off"></i> Closed</span>
             </div>
           </div>
@@ -564,14 +573,21 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
       for (const d of ['Su','Mo','Tu','We','Th','Fr','Sa']) { const e = document.createElement('div'); e.className = 'cal-dow'; e.textContent = d; grid.append(e); }
       for (let i = 0; i < first.getDay(); i++) { const e = document.createElement('button'); e.type = 'button'; e.className = 'cal-day pad'; e.tabIndex = -1; grid.append(e); }
       const daysIn = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+      // The rental itself: start day, the days in between, the return day.
+      const startISO = startInput.value;
+      let endISO = null;
+      if (startISO) { const e = new Date(startISO + 'T12:00:00'); e.setDate(e.getDate() + 7 * selectedWeeks()); endISO = iso(e); }
       for (let n = 1; n <= daysIn; n++) {
         const date = iso(new Date(first.getFullYear(), first.getMonth(), n));
         const info = calState.days.get(date);
         const b = document.createElement('button'); b.type = 'button'; b.textContent = n;
         const bad = !info || !info.open ? 'off' : !info.fits ? 'full' : '';
-        b.className = `cal-day ${bad}${date === t ? ' today' : ''}${date === startInput.value ? ' on' : ''}`;
+        const span = startISO && date > startISO && date < endISO ? ' in' : date === endISO ? ' end' : '';
+        b.className = `cal-day ${bad}${date === t ? ' today' : ''}${date === startISO ? ' on' : ''}${span}`;
         b.title = !info ? '' : !info.open ? info.why : !info.fits ? `Full for ${selectedBins()} bins that week` : `Open`;
         b.setAttribute('aria-label', `${date}${b.title ? ' — ' + b.title : ''}`);
+        b.addEventListener('mouseenter', () => previewSpan(bad ? null : date));
+        b.addEventListener('mouseleave', () => previewSpan(null));
         b.addEventListener('click', () => {
           if (bad) { showWhy(b.title === 'Past' ? '' : b.title, date); return; }
           startInput.value = date;
@@ -588,6 +604,20 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
     const now = new Date(); now.setDate(1);
     document.getElementById('cal-prev').disabled = calState.first <= now;
   }
+  /* Hovering an open day shows where the rental would run to, so the length
+     is understood before the click. */
+  function previewSpan(from) {
+    const cells = document.querySelectorAll('.cal-day:not(.pad)');
+    cells.forEach(c => c.classList.remove('peek', 'peek-end'));
+    if (!from) return;
+    const e = new Date(from + 'T12:00:00'); e.setDate(e.getDate() + 7 * selectedWeeks());
+    const end = iso(e);
+    cells.forEach(c => {
+      const d = c.getAttribute('aria-label').slice(0, 10);
+      if (d > from && d < end) c.classList.add('peek');
+      if (d === end) c.classList.add('peek-end');
+    });
+  }
   function showWhy(text, date) {
     let el = cal.querySelector('.cal-why');
     if (!el) { el = document.createElement('div'); el.className = 'cal-why'; cal.querySelector('.cal-legend').before(el); }
@@ -595,6 +625,7 @@ legend{font-family:var(--font-display);font-size:21px;margin-bottom:16px;padding
   }
   document.getElementById('cal-prev').addEventListener('click', () => { calState.first.setMonth(calState.first.getMonth() - 1); loadCalendar(); });
   document.getElementById('cal-next').addEventListener('click', () => { calState.first.setMonth(calState.first.getMonth() + 1); loadCalendar(); });
+  form.querySelectorAll('input[name="weeks"]').forEach(i => i.addEventListener('change', () => { if (!cal.hidden) drawCalendar(); }));
   // When fit is switched on, the calendar should follow the package:
   // form.querySelectorAll('input[name="bins"], input[name="weeks"]').forEach(i => i.addEventListener('change', loadCalendar));
   if (matchMedia('(max-width:640px)').matches) calState.months = 1;
