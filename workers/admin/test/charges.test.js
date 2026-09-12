@@ -179,3 +179,17 @@ describe('collecting', () => {
     expect((await api(`/rentals/${r.id}/charges/invoice`, { method: 'POST' })).status).toBe(400);
   });
 });
+
+describe('a remembered Square customer id', () => {
+  it('is checked before it is reused; one Square no longer knows is replaced, not sent', async () => {
+    const r = await lateRental({ dueDaysAgo: 3, returned: true });
+    // The same person's earlier rental remembers an id Square never issued.
+    await sql("INSERT INTO rentals (created_by, first_name, email, bins, weeks, start_date, due_date, total_cents, delivery_city, status, square_customer_id) VALUES ('t','Dana','dana@example.com',10,1,'2026-01-05','2026-01-12',3900,'Clinton','inspected','cust_demo')");
+    await ok(`/rentals/${r.id}/charges`, { method: 'POST', body: { kind: 'late', qty: 1, unit_cents: 4000, reason: 'Late' } });
+    const inv = await ok(`/rentals/${r.id}/charges/invoice`, { method: 'POST' });
+    expect(inv.charges[0].square_invoice_id).toBeTruthy();
+    const calls = await squareCalls();
+    expect(calls.some(c => c.path === '/v2/customers/cust_demo' && c.method === 'GET')).toBe(true);
+    expect(calls.some(c => c.path === '/v2/customers' && c.method === 'POST')).toBe(true);   // a fresh one
+  });
+});

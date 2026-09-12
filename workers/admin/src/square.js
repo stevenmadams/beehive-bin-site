@@ -52,16 +52,26 @@ function client(env) {
 const uuid = () => crypto.randomUUID();
 
 /* Reuse a customer when we already have their id on a previous rental, so a
-   repeat renter stays one person in Square rather than accumulating duplicates. */
-async function findOrCreateCustomer(call, env, rental) {
-  if (rental.square_customer_id) return rental.square_customer_id;
+   repeat renter stays one person in Square rather than accumulating duplicates.
 
-  const prior = await env.DB.prepare(
+   A remembered Square customer id is checked before it is reused. Square
+   customers get merged and deleted in the dashboard, sandbox ids do not
+   exist in production, and a demo row can carry an id that was never real
+   — any of which turns a stored id into "Customer not found" at the one
+   moment the customer is holding their card. Confirm it, or make a new one. */
+async function customerExists(call, id) {
+  try { await call('GET', `/v2/customers/${id}`); return true; }
+  catch (err) { if (err instanceof SquareError && err.status === 404) return false; throw err; }
+}
+
+async function findOrCreateCustomer(call, env, rental) {
+  const remembered = rental.square_customer_id || (await env.DB.prepare(
     `SELECT square_customer_id FROM rentals
      WHERE square_customer_id IS NOT NULL AND email IS NOT NULL AND lower(email) = lower(?1)
      ORDER BY id DESC LIMIT 1`,
-  ).bind(rental.email || '').first();
-  if (prior?.square_customer_id) return prior.square_customer_id;
+  ).bind(rental.email || '').first())?.square_customer_id;
+  if (remembered && await customerExists(call, remembered)) return remembered;
+  if (remembered) console.log('square customer', remembered, 'not found; creating a new one for rental', rental.id);
 
   const { customer } = await call('POST', '/v2/customers', {
     idempotency_key: uuid(),

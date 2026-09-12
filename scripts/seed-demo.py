@@ -132,9 +132,13 @@ def build():
 
     signed = lambda key, n: dict(agreement_signed_at=ts(n, 20, 5), agreement_name=f'{P[key][1]} {P[key][2]}', agreement_ip='203.0.113.9',
                                  agreement_ua='Mozilla/5.0 (iPhone)', agreement_version='ce7dff2a2378', details_confirmed_at=ts(n, 20), confirm_sent_at=ts(n, 9))
-    paid = lambda n, cents: dict(paid_at=ts(n, 20, 9), square_customer_id='cust_demo', square_order_id='ord_demo', square_invoice_id=f'inv_demo_{n}',
-                                 square_invoice_url='https://squareup.com/pay-invoice/demo', square_status='PAID',
-                                 square_card_id='card_demo', card_brand='VISA', card_last4='4242', card_exp='12/30', card_stored_at=ts(n, 20, 8))
+    # Paid, as the panel shows it. No Square ids: the code reuses a customer's
+    # known Square id across their rentals, and a made-up one would be sent to
+    # Square the moment that person books again. Card on file is shown by brand
+    # and last four only, so "charge the card" on a demo rental goes the
+    # no-card route (an emailed invoice) rather than to Square with a fake id.
+    paid = lambda n, cents: dict(paid_at=ts(n, 20, 9), square_status='PAID',
+                                 card_brand='VISA', card_last4='4242', card_exp='12/30', card_stored_at=ts(n, 20, 8))
 
     # A. booked, link not sent yet — approved an hour ago
     rental('priya', 'A', 10, 1, wd(6), 'booked', created=ts(0, 8), addr=None)
@@ -213,13 +217,12 @@ def build():
                    waived_at=ts(-1, 10, 40), waived_by='admin@beehivebin.co', waive_reason='Residue came off with the steamer'))
     sql.append(ins('charges', rental_id=R['K'], kind='late', qty=1, unit_cents=6500, amount_cents=6500, taxable=1,
                    reason=f'Late return — 1 week past {d(-26)} (collected {d(-24)})', created_by='admin@beehivebin.co', created_at=ts(-23, 10, 30),
-                   square_invoice_id='inv_demo_late_k', square_invoice_url='https://squareup.com/pay-invoice/demo-k', square_status='PAID',
-                   invoiced_at=ts(-23, 10, 35), paid_at=ts(-23, 10, 36)))
+                   square_status='PAID', invoiced_at=ts(-23, 10, 35), paid_at=ts(-23, 10, 36)))
 
     # ---- an extension on M ------------------------------------------------
     sql.append(ins('rental_extensions', rental_id=R['M'], weeks=1, amount_cents=9000, previous_due_date=d(2), new_due_date=d(9),
                    reason='Closing pushed a week', created_by='admin@beehivebin.co', created_at=ts(-1, 14),
-                   square_invoice_id='inv_demo_ext_m', square_invoice_url='https://squareup.com/pay-invoice/demo-m', square_status='PAID', paid_at=ts(-1, 14, 20)))
+                   square_status='PAID', paid_at=ts(-1, 14, 20)))
 
     # ---- notes, history, hours, days off ----------------------------------
     note = lambda entity, eid, body, who='admin@beehivebin.co', n=-1, pinned=0: sql.append(

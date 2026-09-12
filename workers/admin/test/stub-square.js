@@ -35,6 +35,12 @@ export default {
       return Response.json({ locations: [{ id: 'LJR9D95SRQSN7', name: 'Test', currency: 'USD', status: 'ACTIVE' }] });
     }
     if (url.pathname === '/v2/customers') return Response.json({ customer: { id: id('cust') } });
+    const cust = /^\/v2\/customers\/([^/]+)$/.exec(url.pathname);
+    if (cust && request.method === 'GET') {
+      // Ids this fake handed out exist; anything else (a seeded 'cust_demo') does not.
+      return /^cust_\d+$/.test(cust[1]) ? Response.json({ customer: { id: cust[1] } })
+        : Response.json({ errors: [{ category: 'INVALID_REQUEST_ERROR', code: 'NOT_FOUND', detail: `Customer with ID \`${cust[1]}\` not found.` }] }, { status: 404 });
+    }
     if (url.pathname === '/v2/orders') return Response.json({ order: { id: id('order'), ...body.order } });
     if (url.pathname === '/v2/cards') {
       return Response.json({ card: { id: id('card'), card_brand: 'VISA', last_4: '1111', exp_month: 12, exp_year: 2030 } });
