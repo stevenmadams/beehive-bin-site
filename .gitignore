@@ -3,3 +3,4 @@
 .wrangler/
 node_modules/
 assets/stickers/ArchivoBlack.ttf
+package-lock.json

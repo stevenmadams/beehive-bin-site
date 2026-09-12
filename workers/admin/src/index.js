@@ -8,7 +8,7 @@ import { verifyAccessJwt } from './auth.js';
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { createInvoice, fetchInvoice, ping as squarePing, storeCard, ensureCustomer, SquareError } from './square.js';
 import { PRICES, EXTRA, quoteCents } from './pricing.js';
-import { rateFor } from './tax.js';
+import { rateFor, serviceCity, SERVICE_CITIES } from './tax.js';
 import { availability, canFit, getSettings, addDays } from './inventory.js';
 import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
@@ -47,7 +47,10 @@ function devEmail(request, env) {
     console.log('ACCESS_DEV_EMAIL ignored: request came through the Cloudflare edge');
     return null;
   }
-  return String(env.ACCESS_DEV_EMAIL).trim().toLowerCase();
+  // Under the same lock, a request may say who it is — so a test can be the
+  // owner on one line and a staff member on the next.
+  const asked = request.headers.get('x-dev-email');
+  return String(asked || env.ACCESS_DEV_EMAIL).trim().toLowerCase();
 }
 
 /* Access has already verified the email address itself. The employees table
@@ -200,6 +203,13 @@ async function createRequest(env, user, body) {
     if (!Number.isFinite(weeks) || weeks < 1 || weeks > 26) throw new HttpError(400, 'Weeks must be between 1 and 26.');
     if (!start) throw new HttpError(400, 'A start date is required.');
     if (!dcity) throw new HttpError(400, 'A delivery city is required.');
+    // The city decides the tax rate and whether we go there at all. A typo
+    // here becomes an invoice that cannot be raised three weeks from now.
+    if (!serviceCity(dcity)) throw new HttpError(400, `We don't serve "${dcity}" — pick a city from the service area.`);
+    dcity = serviceCity(dcity);
+    if (body.pickup_city && !serviceCity(body.pickup_city)) {
+      throw new HttpError(400, `We don't serve "${clean(body.pickup_city, 120)}" for pickup — pick a city from the service area.`);
+    }
     if (!phone && !email) throw new HttpError(400, 'A phone number or email is required.');
 
     returnDate = addWeeks(start, weeks);
@@ -226,14 +236,20 @@ async function createRequest(env, user, body) {
      VALUES (?1,'manual',?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)`,
   ).bind(
     kind, first, clean(body.last_name, 100), email, phone, bins, weeks,
-    start, returnDate, quoted, dcity, clean(body.pickup_city, 120),
+    start, returnDate, quoted, dcity, body.pickup_city ? serviceCity(body.pickup_city) : null,
     clean(body.customer_notes, 4000), clean(body.message, 4000),
-    clean(body.internal_notes, 4000), pref,
+    null, pref,
     JSON.stringify({ entered_by: user.email }),
   ).run();
 
   const id = res.meta.last_row_id;
   await audit(env, user.email, 'request.create', 'request', id, `source=manual kind=${kind}`);
+
+  // What was typed under "Internal notes" is a note — attributed, in the
+  // notes list — not a column that nothing displays.
+  const internal = clean(body.internal_notes, 4000);
+  if (internal) await addNote(env, user, 'request', id, { body: internal });
+
   return env.DB.prepare(`SELECT ${REQUEST_COLUMNS} FROM requests WHERE id = ?1`).bind(id).first();
 }
 
@@ -651,8 +667,16 @@ async function updateRental(env, user, id, body) {
     id,
   ).run();
 
-  await audit(env, user.email, body.milestone ? `rental.${body.milestone}` : 'rental.update',
-    'rental', id, body.milestone ? `done=${body.done !== false}` : null);
+  // A milestone or a cancellation has already been written up above; only an
+  // address or notes edit needs its own line, and it should say what changed.
+  if (body.milestone) {
+    await audit(env, user.email, `rental.${body.milestone}`, 'rental', id, `done=${body.done !== false}`);
+  } else if (!('status' in body)) {
+    const changed = Object.keys(body).filter(k => ADDRESS_PARTS.includes(k) || k === 'notes');
+    if (changed.length) await audit(env, user.email, 'rental.update', 'rental', id, changed.join(', '));
+  } else if (body.status !== 'cancelled') {
+    await audit(env, user.email, 'rental.reinstate', 'rental', id, null);
+  }
 
   return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
 }
@@ -1297,7 +1321,7 @@ async function api(request, env, url) {
   const match = re => re.exec(path);
   let m;
 
-  if (path === '/me' && method === 'GET') return json({ user, booking_host: env.BOOKING_HOST });
+  if (path === '/me' && method === 'GET') return json({ user, booking_host: env.BOOKING_HOST, cities: SERVICE_CITIES });
 
   if (path === '/stats' && method === 'GET') {
     const { results } = await env.DB.prepare(

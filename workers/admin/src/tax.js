@@ -98,3 +98,48 @@ export function rateFor(city, onDate) {
 }
 
 export const knownCities = () => Object.keys(RATES).sort();
+
+/* The cities a booking may name, in their proper form. A request typed in by
+   hand goes through this too — "Clnton" cannot be invoiced, and the moment to
+   find that out is when the phone is still in your hand. */
+export const SERVICE_CITIES = [
+  "Bountiful",
+  "Centerville",
+  "Clearfield",
+  "Clinton",
+  "Farmington",
+  "Fruit Heights",
+  "Kaysville",
+  "Layton",
+  "North Salt Lake",
+  "South Weber",
+  "Sunset",
+  "Syracuse",
+  "West Bountiful",
+  "West Point",
+  "Woods Cross",
+  "Eden",
+  "Farr West",
+  "Harrisville",
+  "Hooper",
+  "Huntsville",
+  "Liberty",
+  "Marriott-Slaterville",
+  "North Ogden",
+  "Ogden",
+  "Plain City",
+  "Pleasant View",
+  "Reese",
+  "Riverdale",
+  "Roy",
+  "South Ogden",
+  "Taylor",
+  "Uintah",
+  "Warren",
+  "Washington Terrace",
+  "West Haven",
+  "West Weber",
+  "Wolf Creek"
+];
+const display = new Map(SERVICE_CITIES.map(c => [normalizeCity(c), c]));
+export const serviceCity = input => display.get(normalizeCity(input)) || null;

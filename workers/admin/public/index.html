@@ -489,6 +489,7 @@ let me = null;
 let counts = {};
 let rentalCounts = {};
 let bookingHost = 'book.beehivebin.co';
+let cities = [];   // the service area, from the Worker — the same list the website offers
 
 /* ---------- api ---------- */
 async function api(path, opts = {}) {
@@ -1299,8 +1300,10 @@ function openNewRequest() {
       </div>
 
       <div class="frow">
-        <div><label class="fl" for="n-dcity">Delivery city</label><input id="n-dcity"></div>
-        <div><label class="fl" for="n-pcity">Pickup city</label><input id="n-pcity" placeholder="If different"></div>
+        <div><label class="fl" for="n-dcity">Delivery city</label>
+          <select id="n-dcity"><option value="">Pick a city…</option>${cities.map(c => `<option>${esc(c)}</option>`).join('')}</select></div>
+        <div><label class="fl" for="n-pcity">Pickup city</label>
+          <select id="n-pcity"><option value="">Same as delivery</option>${cities.map(c => `<option>${esc(c)}</option>`).join('')}</select></div>
       </div>
 
       <label class="fl" for="n-notes">Notes from the customer</label>
@@ -2609,6 +2612,7 @@ function route() {
     const meRes = await api('/me');
     me = meRes.user;
     bookingHost = meRes.booking_host || 'book.beehivebin.co';
+    cities = meRes.cities || [];
   } catch (err) {
     root.replaceChildren($(`<div class="gate"><div class="box">
       <h1>No access</h1>

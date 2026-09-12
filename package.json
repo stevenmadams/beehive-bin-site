@@ -1,0 +1,15 @@
+{
+  "name": "beehive-bin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --config workers/admin/vitest.config.js && vitest run --config workers/form-handler/vitest.config.js",
+    "test:admin": "vitest run --config workers/admin/vitest.config.js",
+    "test:forms": "vitest run --config workers/form-handler/vitest.config.js"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "vitest": "4.1",
+    "wrangler": "^4.131.1"
+  }
+}
