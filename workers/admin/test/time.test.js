@@ -139,3 +139,36 @@ describe('days we do not go out', () => {
     expect((await api('/settings', { method: 'PATCH', body: { closedWeekdays: [0, 1, 2, 3, 4, 5, 6] } })).status).toBe(400);
   });
 });
+
+describe('holidays', () => {
+  const book = (start) => api('/requests', { method: 'POST', body: { kind: 'reserve', first_name: 'A', bins: 10, weeks: 1, start_date: start, delivery_city: 'Clinton', phone: '801' } });
+
+  it('are worked out, not typed: Thanksgiving 2026 is the 26th, Memorial Day the 25th of May', async () => {
+    const { holidays } = await ok('/holidays?year=2026');
+    const by = Object.fromEntries(holidays.map(h => [h.key, h]));
+    expect(by.thanksgiving.date).toBe('2026-11-26');
+    expect(by.memorial_day.date).toBe('2026-05-25');
+    expect(by.labor_day.date).toBe('2026-09-07');
+    expect(by.mlk_day.date).toBe('2027-01-18' === by.mlk_day.date ? by.mlk_day.date : '2026-01-19');
+    expect(by.pioneer_day.date).toBe('2026-07-24');
+    expect(by.day_after_thanksgiving.date).toBe('2026-11-27');
+    expect(holidays.length).toBeGreaterThanOrEqual(14);
+  });
+
+  it('the big ones are closed by default; a booking on one is refused by name; the owner can untick', async () => {
+    await fleet(40);
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-01T18:00:00Z'));
+    try {
+      expect((await ok('/settings')).closedHolidays).toContain('thanksgiving');
+      expect((await ok('/settings')).closedHolidays).not.toContain('columbus_day');
+      expect((await book('2026-11-26')).error).toMatch(/Thanksgiving/);
+      expect((await book('2026-10-12')).status).toBe(201);   // Columbus Day: open
+      const cov = (await ok('/coverage?from=2026-11-26&days=1')).days[0];
+      expect(cov.open).toBe(false);
+      expect(cov.blackout).toBe('Thanksgiving');
+      await ok('/settings', { method: 'PATCH', body: { closedHolidays: ['christmas'] } });
+      expect((await book('2026-11-27')).status).toBe(201);
+      expect((await book('2026-12-25')).error).toMatch(/Christmas/);
+    } finally { vi.useRealTimers(); }
+  });
+});

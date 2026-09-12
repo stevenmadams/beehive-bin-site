@@ -10,6 +10,7 @@
    real return date is better information than the planned one. */
 
 import { addDays } from '../../shared/clock.js';
+import { closedHolidayOn, closedHolidays, DEFAULT_CLOSED } from '../../shared/holidays.js';
 
 /* The fleet is however many usable bins are on the list — not a number someone
    typed. A count kept separately from the list will drift from it, and the list
@@ -36,13 +37,15 @@ export async function getSettings(env) {
     // Sunday unless told otherwise. Stored as "0,1" style; blank means none.
     closedWeekdays: map.closed_weekdays == null ? [0]
       : String(map.closed_weekdays).split(',').filter(v => v !== '').map(Number),
+    closedHolidays: await closedHolidays(env),
   };
 }
 
 /* Days off. Returns the reason if `date` is blacked out, else null. */
 export async function blackoutOn(env, date) {
   const row = await env.DB.prepare('SELECT reason FROM blackouts WHERE date = ?1').bind(date).first();
-  return row ? (row.reason || 'closed') : null;
+  if (row) return row.reason || 'closed';
+  return closedHolidayOn(env, date);
 }
 
 /* Which rentals hold bins, and over what span. Cancelled ones hold nothing;

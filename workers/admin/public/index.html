@@ -37,7 +37,8 @@ nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9p
   color:rgba(255,255,255,.72);font-weight:500;margin-bottom:2px}
 nav a:hover{background:rgba(255,255,255,.07);color:#fff}
 nav a[aria-current="page"]{background:var(--yellow);color:var(--ink);font-weight:600}
-nav a .ico{width:17px;text-align:center;flex:none;opacity:.9}
+nav a .ico{width:17px;height:17px;flex:none;opacity:.9;display:inline-flex}
+nav a .ico svg{width:17px;height:17px}
 nav a .badge{margin-left:auto;background:var(--yellow);color:var(--ink);font-size:11px;font-weight:700;
   border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
 nav a[aria-current="page"] .badge{background:var(--ink);color:var(--yellow)}
@@ -337,9 +338,14 @@ tr.late td{background:rgba(163,44,44,.05)}
 .binrow td{font-variant-numeric:tabular-nums}
 .light{margin-right:7px;cursor:help;font-size:13px;vertical-align:-1px}
 #sform input{width:100%;max-width:260px}
+#sform .dayrow input,#sform .holrow input{width:auto;max-width:none;margin:0}
 .dayrow{display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
 .dayrow label{display:flex;align-items:center;gap:5px;font-weight:600}
 .dayrow input{width:auto}
+.holrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 18px;margin-top:4px}
+.holrow label{display:flex;align-items:center;gap:6px;font-weight:500;white-space:nowrap}
+.holrow input{width:auto}
+.holrow small{color:var(--muted);font-weight:400;margin-left:2px}
 .seg button .n{opacity:.55;margin-left:4px;font-weight:400}
 .cond{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
   padding:3px 9px;border-radius:999px}
@@ -582,14 +588,26 @@ function ago(iso) {
 const pkg = r => (r.bins ? `${r.bins} bins · ${r.weeks === 1 ? '1 week' : `${r.weeks} weeks`}` : '—');
 
 /* ---------- shell ---------- */
+/* Drawn, not typed: a Unicode glyph is rendered by whichever font the OS
+   finds it in, so ◎ ▦ ☺ come out at three weights and one as an emoji. */
+const ICONS = {
+  requests:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 3h6l2-3h4"/><path d="M5 4h14l2 8v8H3v-8z"/></svg>',
+  rentals:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l9-4 9 4-9 4z"/><path d="M3 8v9l9 4 9-4V8"/><path d="M12 12v9"/></svg>',
+  schedule:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  inventory: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="4" cy="6" r="0.5"/></svg>',
+  customers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
+  employees: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><circle cx="17" cy="9" r="3"/><path d="M17 15c3 0 5 2 5 5"/></svg>',
+  settings:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  hours:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+};
 const NAV = [
-  { id: 'requests',  label: 'Requests',  ico: '◎', live: true },
-  { id: 'rentals',   label: 'Rentals',   ico: '▦', live: true },
-  { id: 'schedule',  label: 'Schedule',  ico: '◫', live: true },
-  { id: 'inventory', label: 'Inventory', ico: '▤', live: true },
-  { id: 'customers', label: 'Customers', ico: '☺' },
-  { id: 'employees', label: 'Employees', ico: '⚑', live: true },
-  { id: 'settings',  label: 'Settings',  ico: '⚙', live: true },
+  { id: 'requests',  label: 'Requests',  live: true },
+  { id: 'rentals',   label: 'Rentals',   live: true },
+  { id: 'schedule',  label: 'Schedule',  live: true },
+  { id: 'inventory', label: 'Inventory', live: true },
+  { id: 'customers', label: 'Customers' },
+  { id: 'employees', label: 'Employees', live: true },
+  { id: 'settings',  label: 'Settings',  live: true },
 ];
 
 const isOwner = () => me?.role === 'owner';
@@ -597,13 +615,14 @@ const isOwner = () => me?.role === 'owner';
 function shell(active) {
   const links = NAV.map(n => {
     // Staff have one thing to do on the Employees page — their own hours.
-    if (n.id === 'employees' && !isOwner()) n = { ...n, label: 'My hours', ico: '◷' };
+    const ico = ICONS[n.id === 'employees' && !isOwner() ? 'hours' : n.id];
+    if (n.id === 'employees' && !isOwner()) n = { ...n, label: 'My hours' };
     let badge = '';
     if (n.id === 'requests' && counts.new) badge = `<span class="badge">${counts.new}</span>`;
     // Overdue is the only rental number worth interrupting someone for.
     if (n.id === 'rentals' && rentalCounts.overdue) badge = `<span class="badge overdue">${rentalCounts.overdue}</span>`;
-    if (!n.live) return `<a class="soon" title="Coming next" href="#/${n.id}"><span class="ico">${n.ico}</span>${n.label}</a>`;
-    return `<a href="#/${n.id}"${n.id === active ? ' aria-current="page"' : ''}><span class="ico">${n.ico}</span>${n.label}${badge}</a>`;
+    if (!n.live) return `<a class="soon" title="Coming next" href="#/${n.id}"><span class="ico">${ico}</span>${n.label}</a>`;
+    return `<a href="#/${n.id}"${n.id === active ? ' aria-current="page"' : ''}><span class="ico">${ico}</span>${n.label}${badge}</a>`;
   }).join('');
 
   return $(`<div id="app">
@@ -2847,6 +2866,11 @@ async function viewSettings() {
             `<label><input type="checkbox" data-closed="${i}"${(st.closedWeekdays || []).includes(i) ? ' checked' : ''}${owner ? '' : ' disabled'}> ${d}</label>`).join('')}</div>
           <p class="sub" style="margin:6px 0 0">No deliveries or pickups start on a ticked day, online or by phone. The rental agreement says Sundays — if you change this, change the agreement too.</p></div>
       </div>
+      <div class="frow one">
+        <div><label class="fl">Holidays we close on</label>
+          <div id="s-hols">Loading…</div>
+          <p class="sub" style="margin:6px 0 0">Worked out each year — nothing to type. The actual day, not the observed Monday. One-off days go under Days off below.</p></div>
+      </div>
       <div class="frow">
         <div><label class="fl" for="s-jobs">Jobs per driver per hour</label>
           <input id="s-jobs" type="number" min="1" max="10" value="${st.jobsPerSlot ?? 2}" ${owner ? '' : 'disabled'}>
@@ -2878,6 +2902,12 @@ async function viewSettings() {
       <div id="b-msg" style="padding:0 18px 14px"></div>
     </div>`));
 
+    api(`/holidays?year=${todayISO().slice(0, 4)}`).then(({ holidays }) => {
+      const closedSet = new Set(st.closedHolidays || []);
+      view.querySelector('#s-hols').replaceChildren($(`<div class="holrow">${holidays.map(h =>
+        `<label title="${esc(niceDate(h.date))} this year"><input type="checkbox" data-hol="${esc(h.key)}"${closedSet.has(h.key) ? ' checked' : ''}${owner ? '' : ' disabled'}> ${esc(h.name)} <small>${esc(niceDate(h.date).replace(/^\w+, /, ''))}</small></label>`).join('')}</div>`));
+    }).catch(() => {});
+
     view.querySelector('#s-save')?.addEventListener('click', async () => {
       const msg = view.querySelector('#s-msg');
       try {
@@ -2887,6 +2917,7 @@ async function viewSettings() {
           turnaroundDays: view.querySelector('#s-turn').value,
           jobsPerSlot: view.querySelector('#s-jobs').value,
           closedWeekdays: [...view.querySelectorAll('[data-closed]:checked')].map(c => +c.dataset.closed),
+          closedHolidays: [...view.querySelectorAll('[data-hol]:checked')].map(c => c.dataset.hol),
         })});
         msg.textContent = 'Saved.';
       } catch (err) { msg.textContent = err.message; }

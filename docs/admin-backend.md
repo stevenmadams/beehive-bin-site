@@ -195,6 +195,12 @@ window text beside them is what people read.
 days nothing starts, online or by phone, named in the refusal. The rental
 agreement's prose says Sundays; changing the setting does not rewrite it.
 
+**Holidays** (`workers/shared/holidays.js`) are computed from the statutory
+rules — fourth Thursday in November and so on — never fetched or typed.
+Federal ones, Utah's Pioneer Day, and the three everyone takes anyway. The
+`closed_holidays` setting says which close the business (seven by default);
+a closed holiday behaves exactly like a blackout, by name.
+
 **Blackouts** (`blackouts` table, Settings tab) stop a booking starting on a
 day; adding one reports jobs already booked for it. **Lead time**
 (`lead_days`) is what the website needs; the panel can book inside it.

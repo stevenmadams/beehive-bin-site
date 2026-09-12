@@ -5,6 +5,7 @@ import { serviceCity } from './tax.js';
 import { quoteCents } from './pricing.js';
 import { today, isoDate, addDays } from '../../shared/clock.js';
 import { closedWeekdays, weekdayOf, WEEKDAY } from '../../shared/coverage.js';
+import { closedHolidayOn } from '../../shared/holidays.js';
 
 /* Beehive Bin Co. — form handler.
    Receives reserve/contact form POSTs from beehivebin.co and emails them to
@@ -103,6 +104,8 @@ async function reserveProblem(env, data) {
   }
   const dayOff = await env.DB.prepare('SELECT reason FROM blackouts WHERE date = ?1').bind(start).first();
   if (dayOff) return `start: we are not delivering that day — ${dayOff.reason || 'closed'}. Pick another date`;
+  const holiday = await closedHolidayOn(env, start);
+  if (holiday) return `start: we are not delivering on ${holiday}. Pick another date`;
   if (!serviceCity(data.dcity)) return `dcity: we don't serve "${trim(data.dcity, 60) || ''}" yet`;
   if (trim(data.pcity) && !serviceCity(data.pcity)) return `pcity: we don't serve "${trim(data.pcity, 60)}" yet`;
   if (!isEmail(data.email)) return 'email: that address looks wrong';

@@ -12,6 +12,7 @@ import { rateFor, serviceCity, SERVICE_CITIES } from './tax.js';
 import { availability, canFit, getSettings, stoplights, blackoutOn } from './inventory.js';
 import { today, addDays, addWeeks, isoDate, dayDiff, startOfDay } from '../../shared/clock.js';
 import { coverage, claimSlot, isTime, closedDayName, closedWeekdays } from '../../shared/coverage.js';
+import { HOLIDAYS, holidaysIn } from '../../shared/holidays.js';
 import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
 const json = (body, status = 200) =>
@@ -1805,6 +1806,11 @@ async function api(request, env, url) {
         if (!Number.isFinite(n) || n < 0 || n > 100000) throw new HttpError(400, `${field} must be a whole number.`);
         await put(key, String(n));
       }
+      if ('closedHolidays' in body) {
+        const known = new Set(HOLIDAYS.map(h => h.key));
+        const keys = [...new Set((Array.isArray(body.closedHolidays) ? body.closedHolidays : []).map(String).filter(k => known.has(k)))];
+        await put('closed_holidays', keys.join(','));
+      }
       if ('closedWeekdays' in body) {
         const days = [...new Set((Array.isArray(body.closedWeekdays) ? body.closedWeekdays : []).map(Number)
           .filter(n => Number.isInteger(n) && n >= 0 && n <= 6))].sort();
@@ -1904,6 +1910,11 @@ async function api(request, env, url) {
     await env.DB.prepare('DELETE FROM blackouts WHERE date = ?1').bind(m[1]).run();
     await audit(env, user.email, 'blackout.remove', 'blackout', 0, m[1]);
     return json({ ok: true });
+  }
+
+  if (path === '/holidays' && method === 'GET') {
+    const year = parseInt(url.searchParams.get('year') || today().slice(0, 4), 10);
+    return json({ year, holidays: holidaysIn(year) });
   }
 
   if (path === '/reminders/run' && method === 'POST') {

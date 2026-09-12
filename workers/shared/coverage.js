@@ -10,6 +10,7 @@
    not stop the phone ringing. */
 
 import { addDays } from './clock.js';
+import { closedHolidayOn } from './holidays.js';
 
 export const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 export const weekdayOf = iso => new Date(`${iso}T12:00:00Z`).getUTCDay();
@@ -73,6 +74,13 @@ export async function coverage(env, from, days) {
   const { results: closed } = await env.DB.prepare('SELECT date, reason FROM blackouts WHERE date BETWEEN ?1 AND ?2').bind(from, to).all();
   const blackout = new Map(closed.map(b => [b.date, b.reason || 'closed']));
   const closedDays = await closedWeekdays(env);
+  for (let i = 0; i < days; i++) {
+    const date = addDays(from, i);
+    if (!blackout.has(date)) {
+      const hol = await closedHolidayOn(env, date);
+      if (hol) blackout.set(date, hol);
+    }
+  }
 
   // Jobs already booked into a slot.
   const { results: booked } = await env.DB.prepare(
