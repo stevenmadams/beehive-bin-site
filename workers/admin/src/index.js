@@ -9,7 +9,8 @@ import { WorkerEntrypoint } from 'cloudflare:workers';
 import { createInvoice, fetchInvoice, ping as squarePing, storeCard, ensureCustomer, SquareError } from './square.js';
 import { PRICES, EXTRA, quoteCents } from './pricing.js';
 import { rateFor, serviceCity, SERVICE_CITIES } from './tax.js';
-import { availability, canFit, getSettings, addDays } from './inventory.js';
+import { availability, canFit, getSettings } from './inventory.js';
+import { today, addDays, addWeeks, isoDate, isSunday, dayDiff, startOfDay } from '../../shared/clock.js';
 import { listCharges, proposals, outstanding, owedCents } from './charges.js';
 
 const json = (body, status = 200) =>
@@ -119,8 +120,12 @@ const audit = (env, actor, action, entity, entityId, detail = null) =>
 
 /* ---------- request handlers ---------- */
 
-const REQUEST_COLUMNS = `id, created_at, kind, source, status, contact_pref,
-  CASE WHEN status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('now')
+/* The lapsed/stalled flags compare against the business day, which is
+   worked out in JS (Mountain Time) and inlined. It is a YYYY-MM-DD produced by
+   Intl, never user input, so a literal is safe — and binding it would mean
+   threading a parameter through every query that names these columns. */
+const REQUEST_COLUMNS = () => `id, created_at, kind, source, status, contact_pref,
+  CASE WHEN status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')
        THEN 1 ELSE 0 END AS lapsed, first_name, last_name, email, phone,
   bins, weeks, start_date, return_date, quoted_total_cents, delivery_city, pickup_city,
   customer_notes, message, internal_notes, decided_at, decided_by, decline_reason`;
@@ -138,13 +143,13 @@ async function listRequests(env, url) {
      queue, but it must not read as live. Derived rather than stored: a date
      passing should not silently rewrite a record. */
   if (status === 'lapsed') {
-    where.push("status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('now')");
+    where.push(`status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`);
   } else if (status && status !== 'all') {
     if (!STATUSES.includes(status)) throw new HttpError(400, 'unknown status');
     binds.push(status);
     where.push(`status = ?${binds.length}`);
     if (status === 'new') {
-      where.push("(start_date IS NULL OR date(start_date) >= date('now'))");
+      where.push(`(start_date IS NULL OR date(start_date) >= date('${today()}'))`);
     }
   }
   if (q) {
@@ -156,7 +161,7 @@ async function listRequests(env, url) {
       OR lower(coalesce(delivery_city,'')) LIKE ${p})`);
   }
 
-  const sql = `SELECT ${REQUEST_COLUMNS} FROM requests
+  const sql = `SELECT ${REQUEST_COLUMNS()} FROM requests
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY created_at DESC LIMIT 200`;
   const { results } = await env.DB.prepare(sql).bind(...binds).all();
@@ -164,12 +169,6 @@ async function listRequests(env, url) {
 }
 
 
-const isoDate = v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '').trim()) ? String(v).trim() : null);
-const addWeeks = (iso, weeks) => {
-  const d = new Date(`${iso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 7 * weeks);
-  return d.toISOString().slice(0, 10);
-};
 const clean = (v, max) => {
   const t = String(v ?? '').trim();
   return t ? t.slice(0, max) : null;
@@ -202,6 +201,7 @@ async function createRequest(env, user, body) {
     if (!PRICES[bins]) throw new HttpError(400, 'Pick a package: 10, 20, 40 or 60 bins.');
     if (!Number.isFinite(weeks) || weeks < 1 || weeks > 26) throw new HttpError(400, 'Weeks must be between 1 and 26.');
     if (!start) throw new HttpError(400, 'A start date is required.');
+    if (isSunday(start)) throw new HttpError(400, 'We do not deliver on Sundays.');
     if (!dcity) throw new HttpError(400, 'A delivery city is required.');
     // The city decides the tax rate and whether we go there at all. A typo
     // here becomes an invoice that cannot be raised three weeks from now.
@@ -250,14 +250,14 @@ async function createRequest(env, user, body) {
   const internal = clean(body.internal_notes, 4000);
   if (internal) await addNote(env, user, 'request', id, { body: internal });
 
-  return env.DB.prepare(`SELECT ${REQUEST_COLUMNS} FROM requests WHERE id = ?1`).bind(id).first();
+  return env.DB.prepare(`SELECT ${REQUEST_COLUMNS()} FROM requests WHERE id = ?1`).bind(id).first();
 }
 
 async function decideRequest(env, user, id, body) {
   const action = body.action;
   if (!['approve', 'decline', 'reopen'].includes(action)) throw new HttpError(400, 'unknown action');
 
-  const existing = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS} FROM requests WHERE id = ?1`)
+  const existing = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS()} FROM requests WHERE id = ?1`)
     .bind(id).first();
   if (!existing) throw new HttpError(404, 'no such request');
 
@@ -280,7 +280,7 @@ async function decideRequest(env, user, id, body) {
   ).bind(status, decidedAt, decidedBy, reason, id).run();
   await audit(env, user.email, `request.${action}`, 'request', id, reason);
 
-  const request = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS} FROM requests WHERE id = ?1`)
+  const request = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS()} FROM requests WHERE id = ?1`)
     .bind(id).first();
   return { request, rental_id: rentalId };
 }
@@ -340,8 +340,8 @@ async function updateEmployee(env, user, id, body) {
 
 /* ---------- rentals ---------- */
 
-const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
-  CASE WHEN status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('now')
+const RENTAL_COLUMNS = () => `id, request_id, created_at, created_by, status,
+  CASE WHEN status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')
        THEN 1 ELSE 0 END AS stalled,
   photo_hold, delivered_by, returned_by, delivery_unlocked_at, delivery_unlocked_by,
   pickup_unlocked_at, pickup_unlocked_by,
@@ -438,7 +438,7 @@ async function listRentals(env, url) {
     where = "WHERE status IN ('pending','confirmed','out')";
   } else if (status === 'stalled') {
     // Never confirmed, and the day it was meant to go out has passed.
-    where = "WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('now')";
+    where = `WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`;
   } else if (status !== 'all') {
     if (!RENTAL_STATUSES.includes(status)) throw new HttpError(400, 'unknown status');
     binds.push(status);
@@ -446,7 +446,7 @@ async function listRentals(env, url) {
   }
 
   const { results } = await env.DB.prepare(
-    `SELECT ${RENTAL_COLUMNS} FROM rentals ${where}
+    `SELECT ${RENTAL_COLUMNS()} FROM rentals ${where}
      ORDER BY start_date, id LIMIT 300`,
   ).bind(...binds).all();
   return results;
@@ -486,15 +486,14 @@ const MILESTONES = {
 
 /* §8 of the agreement: cancel 48 hours or more before delivery for a full
    refund, less than that for half. Measured to the start of the delivery day
-   in Mountain Time, since "delivery on the 16th" means the 16th to the
-   customer, not 00:00 UTC.
+   in Mountain Time (clock.js), since "delivery on the 16th" means the 16th
+   to the customer, not 00:00 UTC.
 
    The money itself is refunded in Square; this works out how much, says so,
    and writes it down, so nobody has to remember the rule at 9pm. */
 function refundFor(rental, at = new Date()) {
   const paidCents = rental.paid_at ? (rental.total_cents || 0) : 0;
-  const deliveryDay = new Date(`${rental.start_date}T06:00:00Z`);   // ~midnight Mountain
-  const hoursBefore = (deliveryDay - at) / 3600000;
+  const hoursBefore = (startOfDay(rental.start_date) - at) / 3600000;
   const percent = hoursBefore >= 48 ? 100 : 50;
   return {
     percent,
@@ -507,7 +506,7 @@ function refundFor(rental, at = new Date()) {
 /* Milestones toggle rather than only set, because the commonest correction is
    marking the wrong rental delivered and needing to undo it immediately. */
 async function updateRental(env, user, id, body) {
-  const row = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+  const row = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`)
     .bind(id).first();
   if (!row) throw new HttpError(404, 'no such rental');
 
@@ -559,26 +558,24 @@ async function updateRental(env, user, id, body) {
        there would be overridden most weeks and stop being read. */
     if (body.done !== false && body.milestone === 'delivered' && row.start_date
         && !row.delivery_unlocked_at) {
-      const today = new Date().toISOString().slice(0, 10);
-      if (row.start_date > today && !body.force) {
-        const days = Math.round((new Date(row.start_date) - new Date(today)) / 86400000);
+      if (row.start_date > today() && !body.force) {
+        const days = dayDiff(row.start_date, today());
         throw new HttpError(423, `This is not due out for ${days} day${days === 1 ? '' : 's'} (${row.start_date}). Mark it delivered anyway?`);
       }
-      if (row.start_date > today) {
-        const days = Math.round((new Date(row.start_date) - new Date(today)) / 86400000);
+      if (row.start_date > today()) {
+        const days = dayDiff(row.start_date, today());
         await audit(env, user.email, 'rental.delivered_early', 'rental', id, `${days} day(s) before ${row.start_date}`);
       }
     }
 
     if (body.done !== false && body.milestone === 'returned' && row.due_date
         && !row.pickup_unlocked_at) {
-      const today = new Date().toISOString().slice(0, 10);
-      if (row.due_date > today && !body.force) {
-        const days = Math.round((new Date(row.due_date) - new Date(today)) / 86400000);
+      if (row.due_date > today() && !body.force) {
+        const days = dayDiff(row.due_date, today());
         throw new HttpError(423, `These are not due back for ${days} day${days === 1 ? '' : 's'} (${row.due_date}). Mark them back anyway?`);
       }
-      if (row.due_date > today) {
-        const days = Math.round((new Date(row.due_date) - new Date(today)) / 86400000);
+      if (row.due_date > today()) {
+        const days = dayDiff(row.due_date, today());
         await audit(env, user.email, 'rental.returned_early', 'rental', id, `${days} day(s) before ${row.due_date}`);
       }
     }
@@ -702,7 +699,7 @@ async function updateRental(env, user, id, body) {
     await audit(env, user.email, 'rental.reinstate', 'rental', id, null);
   }
 
-  const updated = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+  const updated = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(id).first();
   return refund ? { rental: updated, refund } : { rental: updated };
 }
 
@@ -715,7 +712,7 @@ async function updateRental(env, user, id, body) {
    re-checked for the new span with this rental's own hold ignored. Once the
    bins are out there is nothing to move: that is an extension. */
 async function rescheduleRental(env, user, id, body) {
-  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`)
     .bind(id).first();
   if (!rental) throw new HttpError(404, 'no such rental');
   if (rental.status === 'cancelled') throw new HttpError(400, 'This rental is cancelled. Reinstate it first.');
@@ -723,9 +720,8 @@ async function rescheduleRental(env, user, id, body) {
 
   const start = isoDate(body.start_date);
   if (!start) throw new HttpError(400, 'A new start date is required.');
-  const today = new Date().toISOString().slice(0, 10);
-  if (start < today) throw new HttpError(400, 'That date has already passed.');
-  if (new Date(`${start}T12:00:00Z`).getUTCDay() === 0) throw new HttpError(400, 'We do not deliver on Sundays.');
+    if (start < today()) throw new HttpError(400, 'That date has already passed.');
+  if (isSunday(start)) throw new HttpError(400, 'We do not deliver on Sundays.');
   if (start === rental.start_date) throw new HttpError(400, 'That is already the start date.');
 
   const due = addWeeks(start, rental.weeks);
@@ -752,7 +748,7 @@ async function rescheduleRental(env, user, id, body) {
     }).catch(err => console.log('reschedule mail failed', err.message));
   }
 
-  const updated = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+  const updated = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(id).first();
   return {
     rental: updated,
     note: signed ? 'The signed agreement names the old dates. The change is on record; the customer has been emailed the new ones.' : null,
@@ -765,7 +761,7 @@ async function rescheduleRental(env, user, id, body) {
    not attach one afterwards. Creating it here was the reason three attempts at
    automatic payment quietly did nothing. */
 async function invoiceRental(env, user, id) {
-  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`)
     .bind(id).first();
   if (!rental) throw new HttpError(404, 'no such rental');
   if (rental.status === 'cancelled') throw new HttpError(400, 'This rental is cancelled.');
@@ -777,14 +773,14 @@ async function invoiceRental(env, user, id) {
   }
 
   await sendConfirmLink(env, user, id);
-  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(id).first();
 }
 
 /* The customer always gets this by email — the agreement and payment are the
    record of the deal, and an email is what they can find again in six months.
    Their contact preference governs informal chasing, not the paperwork. */
 async function sendConfirmLink(env, user, id) {
-  const r = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+  const r = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`)
     .bind(id).first();
   if (!r) throw new HttpError(404, 'no such rental');
   if (!r.confirm_token) throw new HttpError(400, 'Create the invoice first — the link needs something to pay.');
@@ -813,7 +809,7 @@ async function sendConfirmLink(env, user, id) {
 /* Manual reconciliation for when a webhook was missed — Square is the source of
    truth for whether money arrived, never the panel. */
 async function syncRental(env, user, id) {
-  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`)
     .bind(id).first();
   if (!rental) throw new HttpError(404, 'no such rental');
   if (!rental.square_invoice_id) throw new HttpError(400, 'This rental has no Square invoice.');
@@ -833,7 +829,7 @@ async function syncRental(env, user, id) {
     .bind(statusFrom({ ...rental, paid_at: paidAt }), id).run();
 
   await audit(env, user.email, 'rental.sync', 'rental', id, invoice.status);
-  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(id).first();
+  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(id).first();
 }
 
 /* ---------- schedule ----------
@@ -965,14 +961,14 @@ async function waiveCharge(env, user, chargeId, body) {
 /* One invoice for everything outstanding. Separate invoices per charge would
    mean three emails and three card authorisations for one bad rental. */
 async function invoiceCharges(env, user, rentalId) {
-  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`)
     .bind(rentalId).first();
   if (!rental) throw new HttpError(404, 'no such rental');
 
   const due = outstanding(await listCharges(env, rentalId));
   if (!due.length) throw new HttpError(400, 'Nothing outstanding to invoice.');
 
-  const when = new Date().toISOString().slice(0, 10);
+  const when = today();
   let sq;
   try {
     sq = await createInvoice(env, rental, {
@@ -1025,7 +1021,7 @@ async function recordReturnedCount(env, user, rentalId, body) {
   await env.DB.prepare('UPDATE rentals SET bins_returned = ?1 WHERE id = ?2').bind(n, rentalId).run();
   await audit(env, user.email, 'rental.counted', 'rental', rentalId,
     n === null ? 'count cleared' : `${n} of ${rental.bins} bins back`);
-  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(rentalId).first();
+  return env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(rentalId).first();
 }
 
 /* ---------- internal notes ----------
@@ -1132,12 +1128,12 @@ async function uploadPhoto(request, env, user, rentalId, url) {
   }
 
   if (kind === 'pickup' && !state?.returned_at && !state?.pickup_unlocked_at
-      && state?.due_date && state.due_date > new Date().toISOString().slice(0, 10)) {
+      && state?.due_date && state.due_date > today()) {
     throw new HttpError(423, `These are not due back until ${state.due_date}. Unlock the pickup step first if you are collecting early.`);
   }
 
   if (kind === 'delivery' && !state?.delivered_at && !state?.delivery_unlocked_at
-      && state?.start_date && state.start_date > new Date().toISOString().slice(0, 10)) {
+      && state?.start_date && state.start_date > today()) {
     throw new HttpError(423, `These bins are not due out until ${state.start_date}. Unlock the delivery step first if you are dropping them early.`);
   }
 
@@ -1255,9 +1251,9 @@ async function sweepPhotos(env) {
      FROM rental_photos p JOIN rentals r ON r.id = p.rental_id
      WHERE p.deleted_at IS NULL
        AND r.photo_hold = 0
-       AND date(coalesce(r.returned_at, r.due_date)) < date('now', ?1)
+       AND date(coalesce(r.returned_at, r.due_date)) < date(?2, ?1)
      LIMIT 500`,
-  ).bind(cutoff).all();
+  ).bind(cutoff, today()).all();
 
   if (!results.length) return { deleted: 0 };
 
@@ -1298,7 +1294,7 @@ const listExtensions = (env, rentalId) => env.DB.prepare(
 ).bind(rentalId).all().then(r => r.results);
 
 async function extendRental(env, user, id, body) {
-  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+  const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`)
     .bind(id).first();
   if (!rental) throw new HttpError(404, 'no such rental');
 
@@ -1356,8 +1352,8 @@ async function extendRental(env, user, id, body) {
       title: `Bin rental extension — ${weeks === 1 ? '1 week' : `${weeks} weeks`}`,
       description: `Keeping the bins to ${newDue}.`,
       // Taxed and dated as of today: this is sold now, not when the rental began.
-      serviceDate: new Date().toISOString().slice(0, 10),
-      dueDate: new Date().toISOString().slice(0, 10),
+      serviceDate: today(),
+      dueDate: today(),
     });
   } catch (err) {
     // The extension row would otherwise linger with no way to pay for it.
@@ -1415,7 +1411,7 @@ async function api(request, env, url) {
     for (const r of results) counts[r.status] = r.count;
 
     const { count: lapsed } = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM requests WHERE status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('now')",
+      `SELECT COUNT(*) AS count FROM requests WHERE status = 'new' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`,
     ).first();
     counts.lapsed = lapsed;
     counts.new = Math.max(0, counts.new - lapsed);   // the badge should count live work
@@ -1424,10 +1420,10 @@ async function api(request, env, url) {
       "SELECT COUNT(*) AS count FROM rentals WHERE status IN ('pending','confirmed','out')",
     ).first();
     const { count: overdue } = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM rentals WHERE status = 'out' AND due_date < date('now')",
+      `SELECT COUNT(*) AS count FROM rentals WHERE status = 'out' AND due_date < date('${today()}')`,
     ).first();
     const { count: stalled } = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM rentals WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('now')",
+      `SELECT COUNT(*) AS count FROM rentals WHERE status = 'pending' AND start_date IS NOT NULL AND date(start_date) < date('${today()}')`,
     ).first();
 
     return json({ counts, rentals: { active: activeRentals, overdue, stalled } });
@@ -1441,7 +1437,7 @@ async function api(request, env, url) {
   if ((m = match(/^\/requests\/(\d+)$/))) {
     const id = Number(m[1]);
     if (method === 'GET') {
-      const row = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS}, raw_json FROM requests WHERE id = ?1`)
+      const row = await env.DB.prepare(`SELECT ${REQUEST_COLUMNS()}, raw_json FROM requests WHERE id = ?1`)
         .bind(id).first();
       if (!row) throw new HttpError(404, 'no such request');
       return json({ request: row });
@@ -1476,7 +1472,7 @@ async function api(request, env, url) {
   if ((m = match(/^\/rentals\/(\d+)$/))) {
     const rid = Number(m[1]);
     if (method === 'GET') {
-      const row = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+      const row = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`)
         .bind(rid).first();
       if (!row) throw new HttpError(404, 'no such rental');
       // The panel should quote the same number the customer was shown.
@@ -1491,7 +1487,7 @@ async function api(request, env, url) {
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/cancel-preview$/)) && method === 'GET') {
-    const r = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(Number(m[1])).first();
+    const r = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(Number(m[1])).first();
     if (!r) throw new HttpError(404, 'no such rental');
     return json(refundFor(r));
   }
@@ -1523,7 +1519,7 @@ async function api(request, env, url) {
     ).bind(user.email, rid).run();
     await audit(env, user.email, `rental.${which}_unlocked`, 'rental', rid,
       `before its date of ${which === 'pickup' ? row.due_date : row.start_date}`);
-    return json({ rental: await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(rid).first() });
+    return json({ rental: await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(rid).first() });
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/photo-hold$/)) && method === 'POST') {
@@ -1552,13 +1548,13 @@ async function api(request, env, url) {
   if ((m = match(/^\/rentals\/(\d+)\/send$/)) && method === 'POST') {
     const rid = Number(m[1]);
     await sendConfirmLink(env, user, rid);
-    return json({ rental: await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`).bind(rid).first() });
+    return json({ rental: await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`).bind(rid).first() });
   }
 
   if ((m = match(/^\/rentals\/(\d+)\/charges$/))) {
     const rid = Number(m[1]);
     if (method === 'GET') {
-      const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS} FROM rentals WHERE id = ?1`)
+      const rental = await env.DB.prepare(`SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE id = ?1`)
         .bind(rid).first();
       if (!rental) throw new HttpError(404, 'no such rental');
       const { proposals: suggested, charges, flagged } = await proposals(env, rental);
@@ -1660,13 +1656,13 @@ async function api(request, env, url) {
   }
 
   if (path === '/schedule' && method === 'GET') {
-    const from = url.searchParams.get('from') || new Date().toISOString().slice(0, 10);
+    const from = url.searchParams.get('from') || today();
     const days = Math.min(60, Math.max(1, parseInt(url.searchParams.get('days') || '1', 10)));
     return json({ from, days: await schedule(env, from, days) });
   }
 
   if (path === '/inventory' && method === 'GET') {
-    const from = url.searchParams.get('from') || new Date().toISOString().slice(0, 10);
+    const from = url.searchParams.get('from') || today();
     const days = Math.min(120, Math.max(1, parseInt(url.searchParams.get('days') || '30', 10)));
     return json(await availability(env, from, days));
   }
@@ -1867,7 +1863,7 @@ export class Billing extends WorkerEntrypoint {
   async chargeRental(token) {
     const env = this.env;
     const rental = await env.DB.prepare(
-      `SELECT ${RENTAL_COLUMNS} FROM rentals WHERE confirm_token = ?1`,
+      `SELECT ${RENTAL_COLUMNS()} FROM rentals WHERE confirm_token = ?1`,
     ).bind(token).first();
     if (!rental) return { ok: false, error: 'no such rental' };
     if (rental.square_invoice_id) return { ok: true, already: true, url: rental.square_invoice_url };
@@ -1879,10 +1875,9 @@ export class Billing extends WorkerEntrypoint {
          a driver is loading bins is the worst possible moment to find out. The
          customer has signed by this point, so terms.html's "nothing is charged
          until we confirm and you sign" is satisfied. */
-      const today = new Date().toISOString().slice(0, 10);
-      const sq = await createInvoice(env, rental, {
+            const sq = await createInvoice(env, rental, {
         cardId: rental.square_card_id,
-        dueDate: today,
+        dueDate: today(),
       });
       await env.DB.prepare(
         `UPDATE rentals SET square_customer_id=?1, square_order_id=?2, square_invoice_id=?3,

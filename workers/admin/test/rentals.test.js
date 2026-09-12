@@ -1,17 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { SELF } from 'cloudflare:test';
-import { api, ok, rental, fleet, today, weekday, sql, row, sent, OWNER, STAFF } from './helpers.js';
+import { api, ok, rental, fleet, today, weekday, sql, sent, photo, OWNER, STAFF } from './helpers.js';
 
 const patch = (id, body, opts) => api(`/rentals/${id}`, { method: 'PATCH', body, ...opts });
-
-// A 1x1 PNG is enough to be a photo.
-const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
-async function photo(id, kind, as = OWNER) {
-  const res = await SELF.fetch(`https://admin.beehivebin.co/api/rentals/${id}/photos?kind=${kind}`, {
-    method: 'POST', headers: { 'x-dev-email': as, 'content-type': 'image/png' }, body: PNG,
-  });
-  return { status: res.status, ...(await res.json().catch(() => ({}))) };
-}
 
 describe('starting a rental', () => {
   it('S10 emailing the link mints the token and records the send', async () => {

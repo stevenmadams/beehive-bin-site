@@ -13,6 +13,8 @@
    RE-CHECK QUARTERLY at tax.utah.gov/sales/ratechanges — a stale rate
    undercollects silently, which is the expensive direction to be wrong in. */
 
+import { today } from '../../shared/clock.js';
+
 export const TAX_TABLE_VERIFIED = "2026-09-10";
 export const TAX_TABLE_SOURCE = "UT TC combined rates, effective 2026-07-01";
 
@@ -88,7 +90,7 @@ export function rateFor(city, onDate) {
   }
 
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(onDate || ''))
-    ? onDate : new Date().toISOString().slice(0, 10);
+    ? onDate : today();
 
   let applicable = null;
   for (const e of entries) if (e.from <= date) applicable = e;

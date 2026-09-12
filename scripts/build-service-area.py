@@ -40,6 +40,8 @@ tax = BANNER + f'''/* Utah sales tax, by delivery city.
    RE-CHECK QUARTERLY at tax.utah.gov/sales/ratechanges — a stale rate
    undercollects silently, which is the expensive direction to be wrong in. */
 
+import {{ today }} from '../../shared/clock.js';
+
 export const TAX_TABLE_VERIFIED = {json.dumps(data['rates_verified'])};
 export const TAX_TABLE_SOURCE = {json.dumps(data['rates_source'])};
 
@@ -75,7 +77,7 @@ export function rateFor(city, onDate) {{
   }}
 
   const date = /^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(String(onDate || ''))
-    ? onDate : new Date().toISOString().slice(0, 10);
+    ? onDate : today();
 
   let applicable = null;
   for (const e of entries) if (e.from <= date) applicable = e;

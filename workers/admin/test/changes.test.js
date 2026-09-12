@@ -21,7 +21,8 @@ describe('C16/S22 cancelling a paid rental', () => {
 
   it('under 48 hours: half — and the panel says so before anyone confirms', async () => {
     await fleet(40);
-    const r = await rental({ bins: 40, weeks: 1, start_date: today(1) });
+    // Tomorrow, or the day after if tomorrow is a Sunday — either is under 48h.
+    const r = await rental({ bins: 40, weeks: 1, start_date: weekday(1) });
     await paid(r.id);
     const preview = await ok(`/rentals/${r.id}/cancel-preview`);
     expect(preview).toMatchObject({ percent: 50, cents: 6450, paid_cents: 12900 });

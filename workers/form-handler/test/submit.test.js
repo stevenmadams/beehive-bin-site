@@ -90,3 +90,17 @@ describe('the contact form', () => {
     expect((await submit({ form: 'unknown' })).status).toBe(400);
   });
 });
+
+describe('after 6pm Mountain', () => {
+  it('a booking for the next delivery day is still accepted — UTC has rolled over, Utah has not', async () => {
+    const { vi } = await import('vitest');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-13T01:30:00Z'));   // 7:30pm MDT, Saturday 12 Sep
+    try {
+      expect((await submit(reserveForm({ start: '2026-09-14' }))).ok).toBe(true);        // Monday
+      expect((await submit(reserveForm({ start: '2026-09-12' }))).ok).toBe(true);        // tonight, still today
+      expect((await submit(reserveForm({ start: '2026-09-11' }))).error).toMatch(/passed/);
+      expect((await submit(reserveForm({ start: '2026-09-13' }))).error).toMatch(/Sunday/);
+    } finally { vi.useRealTimers(); }
+  });
+});

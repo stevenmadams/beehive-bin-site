@@ -83,3 +83,12 @@ export const clearSent = () => env.MAILER.fetch('http://stub/reset');
 export const squareCalls = async () => (await env.SQUARE_STUB.fetch('http://stub/calls')).json();
 export const squareReset = () => env.SQUARE_STUB.fetch('http://stub/reset');
 export const squarePay = id => env.SQUARE_STUB.fetch(`http://stub/pay?id=${id}`);
+
+// A 1x1 PNG is enough to be a photo.
+export const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+export async function photo(id, kind, as = OWNER) {
+  const res = await SELF.fetch(`https://admin.beehivebin.co/api/rentals/${id}/photos?kind=${kind}`, {
+    method: 'POST', headers: { 'x-dev-email': as, 'content-type': 'image/png' }, body: PNG,
+  });
+  return { status: res.status, ...(await res.json().catch(() => ({}))) };
+}

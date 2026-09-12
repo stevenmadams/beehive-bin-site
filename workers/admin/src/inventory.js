@@ -9,13 +9,7 @@
    again Friday night. Bins already returned early release early, because the
    real return date is better information than the planned one. */
 
-export const dayKey = d => d.toISOString().slice(0, 10);
-
-export const addDays = (iso, n) => {
-  const d = new Date(`${iso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return dayKey(d);
-};
+import { addDays } from '../../shared/clock.js';
 
 /* The fleet is however many usable bins are on the list — not a number someone
    typed. A count kept separately from the list will drift from it, and the list

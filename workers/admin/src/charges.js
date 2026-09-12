@@ -14,10 +14,7 @@
    call, and a card on file makes the wrong one expensive to undo. */
 
 import { EXTRA, REPLACEMENT_PER_BIN } from './pricing.js';
-
-const DAY = 86400000;
-const today = () => new Date().toISOString().slice(0, 10);
-const dayDiff = (a, b) => Math.round((new Date(`${a}T12:00:00Z`) - new Date(`${b}T12:00:00Z`)) / DAY);
+import { today, dayDiff } from '../../shared/clock.js';
 
 /* "Each week or partial week the Bins are kept past the agreed return date."
    One day late is one week — that is what the agreement says, and softening it

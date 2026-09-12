@@ -3,6 +3,7 @@ import { handleConfirm } from './confirm.js';
 import { sendEmail, FROM, INBOX } from './mail.js';
 import { serviceCity } from './tax.js';
 import { quoteCents } from './pricing.js';
+import { today, isoDate, isSunday } from '../../shared/clock.js';
 
 /* Beehive Bin Co. — form handler.
    Receives reserve/contact form POSTs from beehivebin.co and emails them to
@@ -72,7 +73,6 @@ const contactPref = v => {
 };
 // <input type="date"> gives yyyy-mm-dd; reject anything else rather than
 // storing junk in a column the schedule will later sort on.
-const isoDate = v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '').trim()) ? String(v).trim() : null);
 
 /* What the website sends is checked here, not trusted. The form has a city
    dropdown and a package picker, but a form is a suggestion to a browser; a
@@ -86,9 +86,8 @@ function reserveProblem(data) {
   if (!weeks || weeks < 1 || weeks > 26) return 'weeks: between 1 and 26';
   const start = isoDate(data.start);
   if (!start) return 'start: pick a date';
-  const today = new Date().toISOString().slice(0, 10);
-  if (start < today) return 'start: that date has already passed';
-  if (new Date(`${start}T12:00:00Z`).getUTCDay() === 0) return 'start: we do not deliver on Sundays';
+  if (start < today()) return 'start: that date has already passed';
+  if (isSunday(start)) return 'start: we do not deliver on Sundays';
   if (!serviceCity(data.dcity)) return `dcity: we don't serve "${trim(data.dcity, 60) || ''}" yet`;
   if (trim(data.pcity) && !serviceCity(data.pcity)) return `pcity: we don't serve "${trim(data.pcity, 60)}" yet`;
   if (!isEmail(data.email)) return 'email: that address looks wrong';
