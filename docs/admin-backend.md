@@ -37,11 +37,15 @@ many bins go out, come back, and are in use that day. Sundays are shown and
 flagged rather than hidden, because a job landing on one is a mistake worth
 seeing. **Print run sheet** drops the navigation and prints the list.
 
-**Inventory** is the bin list: one row per bin, with condition, notes, what it
-cost and when it was bought. Bins are added in numbered batches. The bookable
-fleet is however many are `good`, so marking one damaged takes it out of
-availability immediately; a 14-day strip shows what is free to book, and which
-day is the tight one.
+**Inventory** is the list of things you own — bins, dollies, hand trucks,
+anything with a label on it — one row each, with condition, notes, what it cost
+and when it was bought, added in numbered batches. `kind` is a word typed in
+the panel, so a new sort of equipment needs no deploy. Bins are the one kind
+the rest of the system knows about: the bookable fleet is however many of them
+are `good`, so marking one damaged takes it out of availability immediately,
+and §4 prices only bins — a bent dolly flagged to a rental is surfaced for a
+human rather than charged at a rate the customer never agreed to. A 14-day
+strip shows what is free to book, and which day is the tight one.
 
 Approving a reservation creates a **rental** — a separate record, because the
 two have different lifecycles: a request is answered once, a rental is worked
@@ -298,9 +302,9 @@ be applied without a migration.
   refusal rather than a warning because approving is what emails the customer
   their confirmation link. The panel offers an override, and taking it writes a
   `rental.overbooked` line to the audit log.
-- **The fleet is the bin list.** `bins` holds one row per bin; the bookable
-  fleet is `COUNT(*) WHERE condition = 'good'`. There is no fleet-size setting
-  to keep in step with it.
+- **The fleet is the inventory list.** `items` holds one row per thing owned;
+  the bookable fleet is `COUNT(*) WHERE kind = 'bin' AND condition = 'good'`.
+  There is no fleet-size setting to keep in step with it.
 
 ## When a rental goes wrong
 

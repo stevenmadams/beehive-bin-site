@@ -19,14 +19,17 @@ export const addDays = (iso, n) => {
 
 /* The fleet is however many usable bins are on the list — not a number someone
    typed. A count kept separately from the list will drift from it, and the list
-   is the one people actually maintain. */
+   is the one people actually maintain.
+
+   Only bins count. Packages are sold in bins; a dolly on the same list is
+   equipment that goes along, not something a booking can run out of. */
 export async function getSettings(env) {
   const { results } = await env.DB.prepare('SELECT key, value FROM settings').all();
   const map = Object.fromEntries(results.map(r => [r.key, r.value]));
   const { usable } = await env.DB.prepare(
-    "SELECT COUNT(*) AS usable FROM bins WHERE condition = 'good'").first();
+    "SELECT COUNT(*) AS usable FROM items WHERE kind = 'bin' AND condition = 'good'").first();
   const { unusable } = await env.DB.prepare(
-    "SELECT COUNT(*) AS unusable FROM bins WHERE condition IN ('damaged','lost','retired')").first();
+    "SELECT COUNT(*) AS unusable FROM items WHERE kind = 'bin' AND condition IN ('damaged','lost','retired')").first();
   return {
     fleetTotal: usable,
     outOfService: unusable,

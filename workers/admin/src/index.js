@@ -339,6 +339,15 @@ const RENTAL_COLUMNS = `id, request_id, created_at, created_by, status,
   pickup_city, pickup_address, pickup_notes, pickup_street, pickup_unit, pickup_zip,
   agreement_signed_at, paid_at, delivered_at, returned_at, notes`;
 
+/* A kind is a word: lowercase, letters and underscores. "Hand truck" and
+   "hand_truck" and "HAND-TRUCK" are the same thing and must land in the same
+   bucket, or the list grows a tab per spelling. */
+const itemKind = v => {
+  const k = String(v ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z_]/g, '');
+  return k.slice(0, 24) || null;
+};
+const DEFAULT_PREFIX = { bin: 'B', dolly: 'D', hand_truck: 'HT', blanket: 'MB', strap: 'S' };
+
 const RENTAL_STATUSES = ['pending', 'confirmed', 'out', 'returned', 'cancelled'];
 const now = () => new Date().toISOString().replace(/\.\d+/, '');
 
@@ -1565,35 +1574,55 @@ async function api(request, env, url) {
     }
   }
 
-  /* The bin list. Added in batches because nobody types a hundred rows, but
-     each bin exists on its own so condition and cost attach to a specific one. */
-  if (path === '/bins') {
+  /* The inventory. Bins, dollies, hand trucks — anything with a label on it.
+     Added in batches because nobody types a hundred rows, but each item exists
+     on its own so condition and cost attach to a specific one.
+
+     `kind` is free text, normalised, so a new sort of equipment is a word
+     typed into the panel rather than a deploy. `bin` is the one kind the rest
+     of the system knows about: it is what packages are sold in, and what §4
+     prices. */
+  if (path === '/items') {
     if (method === 'GET') {
       const cond = url.searchParams.get('condition');
-      const where = cond && cond !== 'all' ? 'WHERE condition = ?1' : '';
+      const kind = itemKind(url.searchParams.get('kind'));
+      const where = [];
+      const binds = [];
+      if (cond && cond !== 'all') { binds.push(cond); where.push(`condition = ?${binds.length}`); }
+      if (kind && kind !== 'all') { binds.push(kind); where.push(`kind = ?${binds.length}`); }
       const { results } = await env.DB.prepare(
-        `SELECT id, label, condition, notes, acquired_on, cost_cents,
+        `SELECT id, kind, label, condition, notes, acquired_on, cost_cents,
                 flagged_rental_id, created_at, updated_at, updated_by
-         FROM bins ${where} ORDER BY label LIMIT 1000`,
-      ).bind(...(where ? [cond] : [])).all();
+         FROM items ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+         ORDER BY kind = 'bin' DESC, kind, label LIMIT 2000`,
+      ).bind(...binds).all();
+      // Counts are for the whole list, not the filtered view: the tiles and the
+      // kind tabs need to know what exists even while one slice is showing.
       const { results: counts } = await env.DB.prepare(
-        'SELECT condition, COUNT(*) AS n FROM bins GROUP BY condition').all();
-      return json({ bins: results, counts: Object.fromEntries(counts.map(c => [c.condition, c.n])) });
+        'SELECT kind, condition, COUNT(*) AS n FROM items GROUP BY kind, condition').all();
+      const byKind = {};
+      for (const c of counts) {
+        byKind[c.kind] ??= { total: 0 };
+        byKind[c.kind][c.condition] = c.n;
+        byKind[c.kind].total += c.n;
+      }
+      return json({ items: results, kinds: byKind });
     }
 
     if (method === 'POST') {
       requireOwner(user);
+      const kind = itemKind(body.kind) || 'bin';
       const count = parseInt(body.count, 10);
-      const prefix = (clean(body.prefix, 12) || 'B').toUpperCase();
+      const prefix = (clean(body.prefix, 12) || DEFAULT_PREFIX[kind] || kind.slice(0, 2)).toUpperCase();
       const pad = Math.max(1, Math.min(6, parseInt(body.pad, 10) || 3));
       if (!Number.isFinite(count) || count < 1 || count > 500) {
-        throw new HttpError(400, 'Add between 1 and 500 bins at a time.');
+        throw new HttpError(400, 'Add between 1 and 500 at a time.');
       }
 
       // Continue the numbering rather than restart it, so a second batch does
       // not collide with the first.
       const { last } = await env.DB.prepare(
-        `SELECT MAX(CAST(substr(label, ?1) AS INTEGER)) AS last FROM bins WHERE label LIKE ?2`,
+        `SELECT MAX(CAST(substr(label, ?1) AS INTEGER)) AS last FROM items WHERE label LIKE ?2`,
       ).bind(prefix.length + 2, `${prefix}-%`).first();
       let next = (last || 0) + 1;
 
@@ -1604,46 +1633,47 @@ async function api(request, env, url) {
         const label = `${prefix}-${String(next++).padStart(pad, '0')}`;
         try {
           await env.DB.prepare(
-            `INSERT INTO bins (label, acquired_on, cost_cents, created_by) VALUES (?1,?2,?3,?4)`,
-          ).bind(label, acquired, cost, user.email).run();
+            `INSERT INTO items (kind, label, acquired_on, cost_cents, created_by) VALUES (?1,?2,?3,?4,?5)`,
+          ).bind(kind, label, acquired, cost, user.email).run();
           made.push(label);
         } catch {
           // A label already in use just means the run continues past it.
           n--;
         }
       }
-      await audit(env, user.email, 'bins.add', 'bin', 0, `${made.length} bins (${made[0]}–${made.at(-1)})`);
+      await audit(env, user.email, 'items.add', 'item', 0,
+        `${made.length} ${kind}${made.length === 1 ? '' : 's'} (${made[0]}–${made.at(-1)})`);
       return json({ added: made.length, first: made[0], last: made.at(-1) }, 201);
     }
   }
 
-  if ((m = match(/^\/bins\/(\d+)$/))) {
-    const bid = Number(m[1]);
+  if ((m = match(/^\/items\/(\d+)$/))) {
+    const iid = Number(m[1]);
     if (method === 'PATCH') {
-      const row = await env.DB.prepare('SELECT id, label, condition FROM bins WHERE id = ?1')
-        .bind(bid).first();
-      if (!row) throw new HttpError(404, 'no such bin');
+      const row = await env.DB.prepare('SELECT id, kind, label, condition FROM items WHERE id = ?1')
+        .bind(iid).first();
+      if (!row) throw new HttpError(404, 'no such item');
       const condition = ['good', 'damaged', 'retired', 'lost'].includes(body.condition)
         ? body.condition : row.condition;
       await env.DB.prepare(
-        `UPDATE bins SET condition = ?1, notes = coalesce(?2, notes),
+        `UPDATE items SET condition = ?1, notes = coalesce(?2, notes),
            flagged_rental_id = ?3,
            updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'), updated_by = ?4
          WHERE id = ?5`,
       ).bind(condition, clean(body.notes, 500),
-             body.rental_id ? Number(body.rental_id) : null, user.email, bid).run();
+             body.rental_id ? Number(body.rental_id) : null, user.email, iid).run();
       if (condition !== row.condition) {
-        await audit(env, user.email, 'bin.condition', 'bin', bid,
+        await audit(env, user.email, 'item.condition', 'item', iid,
           `${row.label}: ${row.condition} → ${condition}${body.notes ? ` — ${clean(body.notes, 120)}` : ''}`);
       }
       return json({ ok: true });
     }
     if (method === 'DELETE') {
       requireOwner(user);
-      const row = await env.DB.prepare('SELECT label FROM bins WHERE id = ?1').bind(bid).first();
-      if (!row) throw new HttpError(404, 'no such bin');
-      await env.DB.prepare('DELETE FROM bins WHERE id = ?1').bind(bid).run();
-      await audit(env, user.email, 'bin.remove', 'bin', bid, row.label);
+      const row = await env.DB.prepare('SELECT label FROM items WHERE id = ?1').bind(iid).first();
+      if (!row) throw new HttpError(404, 'no such item');
+      await env.DB.prepare('DELETE FROM items WHERE id = ?1').bind(iid).run();
+      await audit(env, user.email, 'item.remove', 'item', iid, row.label);
       return json({ ok: true });
     }
   }

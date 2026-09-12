@@ -53,11 +53,16 @@ export async function listCharges(env, rentalId) {
    dispute, so the labels travel with it. */
 async function flaggedBins(env, rentalId) {
   const { results } = await env.DB.prepare(
-    `SELECT label, condition FROM bins WHERE flagged_rental_id = ?1 ORDER BY label`,
+    `SELECT label, kind, condition FROM items WHERE flagged_rental_id = ?1 ORDER BY kind, label`,
   ).bind(rentalId).all();
+  const bins = results.filter(b => b.kind === 'bin');
   return {
-    damaged: results.filter(b => b.condition === 'damaged'),
-    lost: results.filter(b => b.condition === 'lost'),
+    damaged: bins.filter(b => b.condition === 'damaged'),
+    lost: bins.filter(b => b.condition === 'lost'),
+    // §4 prices bins and nothing else. A dolly that came back bent is real
+    // money, but not at a rate the customer agreed to — so it is surfaced, not
+    // proposed.
+    other: results.filter(b => b.kind !== 'bin' && b.condition !== 'good'),
   };
 }
 
@@ -137,6 +142,12 @@ export async function proposals(env, rental) {
         'Try to reach them first — this one is close to writing the rental off.',
       confirm: 'Only after you have tried to reach them.',
     });
+  }
+
+  if (bins.other.length && !live.has('other')) {
+    out.push({ kind: 'note', blocked:
+      `Also flagged to this rental: ${bins.other.map(b => `${b.label} (${b.condition})`).join(', ')}. ` +
+      'The agreement only sets a rate for bins, so if that is being charged, add it by hand.' });
   }
 
   return { proposals: out, charges: existing, flagged: bins };

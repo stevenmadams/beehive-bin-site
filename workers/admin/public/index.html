@@ -300,6 +300,7 @@ tr.late td{background:rgba(163,44,44,.05)}
 .cal .d.over{background:rgba(163,44,44,.12);border-color:rgba(163,44,44,.4)}
 .cal .d.over .av{color:var(--bad)}
 .binrow td{font-variant-numeric:tabular-nums}
+.seg button .n{opacity:.55;margin-left:4px;font-weight:400}
 .cond{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
   padding:3px 9px;border-radius:999px}
 .cond.good{background:rgba(31,122,76,.14);color:var(--ok)}
@@ -2191,19 +2192,33 @@ async function viewSchedule() {
 
 /* ---------- inventory ----------
 
-   A list of bins. Condition lives on the bin, not in someone's head, and the
-   fleet number the booking guard uses is simply however many of them are good. */
+   A list of things you own: bins, dollies, hand trucks, whatever goes out on a
+   job. Condition lives on the item, not in someone's head. Bins are the one
+   kind the booking maths cares about — the fleet is however many of them are
+   good — and the one kind the agreement prices. */
 
-const invState = { condition: 'all' };
+const invState = { condition: 'all', kind: 'all' };
 const CONDITIONS = [['all', 'All'], ['good', 'In service'], ['damaged', 'Damaged'],
   ['retired', 'Retired'], ['lost', 'Lost']];
+// Suggested kinds. Anything typed becomes a kind; these just save the typing.
+const KIND_SUGGEST = ['bin', 'dolly', 'hand_truck', 'blanket', 'strap'];
+const KIND_PREFIX = { bin: 'B', dolly: 'D', hand_truck: 'HT', blanket: 'MB', strap: 'S' };
+const kindLabel = k => k === 'bin' ? 'Bin' : k.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+const kindPlural = (k, n) => {
+  const l = kindLabel(k);
+  if (n === 1) return l;
+  if (/[^aeiou]y$/i.test(l)) return l.slice(0, -1) + 'ies';   // dolly → dollies
+  if (/(s|x|ch|sh)$/i.test(l)) return l + 'es';
+  return l + 's';
+};
 
 async function viewInventory() {
   const view = $(`<div>
     <div class="head"><h1>Inventory</h1><span class="count" id="icount"></span>
-      ${me.role === 'owner' ? '<button class="btn primary newreq" id="i-add">+ Add bins</button>' : ''}</div>
-    <p class="sub">Every bin you own, one row each. What is in service is what can be booked.</p>
+      ${me.role === 'owner' ? '<button class="btn primary newreq" id="i-add">+ Add items</button>' : ''}</div>
+    <p class="sub">Everything you own, one row each. Bins in service are what can be booked.</p>
     <div id="itiles"></div>
+    <div class="toolbar" id="ikinds"></div>
     <div class="toolbar">
       <div class="seg">${CONDITIONS.map(([c, label]) =>
         `<button data-c="${c}" aria-pressed="${c === invState.condition}">${label}</button>`).join('')}</div>
@@ -2216,28 +2231,50 @@ async function viewInventory() {
     invState.condition = b.dataset.c;
     viewInventory();
   }));
-  view.querySelector('#i-add')?.addEventListener('click', openAddBins);
+  view.querySelector('#i-add')?.addEventListener('click', openAddItems);
 
   const list = view.querySelector('#ilist');
   try {
-    const [{ bins, counts: byCond }, inv] = await Promise.all([
-      api(`/bins?condition=${invState.condition}`),
+    const [{ items, kinds }, inv] = await Promise.all([
+      api(`/items?condition=${invState.condition}&kind=${invState.kind}`),
       api(`/inventory?from=${todayISO()}&days=14`).catch(() => null),
     ]);
-    view.querySelector('#icount').textContent = bins.length || '';
+    view.querySelector('#icount').textContent = items.length || '';
 
-    const owned = Object.values(byCond).reduce((a, b) => a + b, 0);
+    // One tab per kind that exists, bins first. A kind with nothing in it has
+    // no tab: the list is what you own, not what you might own.
+    const kindNames = Object.keys(kinds).sort((a, b) => (a === 'bin' ? -1 : b === 'bin' ? 1 : a.localeCompare(b)));
+    if (kindNames.length > 1) {
+      const seg = $(`<div class="seg">
+        <button data-k="all" aria-pressed="${invState.kind === 'all'}">Everything</button>
+        ${kindNames.map(k => `<button data-k="${esc(k)}" aria-pressed="${invState.kind === k}">${
+          esc(kindPlural(k, kinds[k].total))} <span class="n">${kinds[k].total}</span></button>`).join('')}
+      </div>`);
+      seg.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+        invState.kind = b.dataset.k;
+        viewInventory();
+      }));
+      view.querySelector('#ikinds').replaceChildren(seg);
+    } else {
+      view.querySelector('#ikinds').remove();
+    }
+
+    const bins = kinds.bin || { total: 0 };
+    const owned = Object.values(kinds).reduce((a, k) => a + k.total, 0);
     const today = inv?.days?.[0];
+    const otherBroken = kindNames.filter(k => k !== 'bin')
+      .reduce((n, k) => n + (kinds[k].damaged || 0) + (kinds[k].lost || 0), 0);
     view.querySelector('#itiles').replaceChildren($(`<div class="tiles">
-      <div class="tile"><div class="n">${owned}</div><div class="l">Bins owned</div></div>
-      <div class="tile"><div class="n">${byCond.good || 0}</div><div class="l">In service</div></div>
-      ${inv ? `<div class="tile"><div class="n">${today?.committed ?? 0}</div><div class="l">Out today</div></div>
+      <div class="tile"><div class="n">${bins.good || 0}</div><div class="l">Bins in service</div></div>
+      ${inv ? `<div class="tile"><div class="n">${today?.committed ?? 0}</div><div class="l">Bins out today</div></div>
       <div class="tile${today?.available < 0 ? ' bad' : ''}"><div class="n">${today?.available ?? 0}</div>
-        <div class="l">${today?.available < 0 ? 'Short today' : 'Free today'}</div></div>` : ''}
-      ${inv?.outOfService ? `<div class="tile bad"><div class="n">${inv.outOfService}</div><div class="l">Out of service</div></div>` : ''}
+        <div class="l">${today?.available < 0 ? 'Bins short today' : 'Bins free today'}</div></div>` : ''}
+      ${inv?.outOfService ? `<div class="tile bad"><div class="n">${inv.outOfService}</div><div class="l">Bins out of service</div></div>` : ''}
+      ${owned - bins.total > 0 ? `<div class="tile"><div class="n">${owned - bins.total}</div>
+        <div class="l">Other equipment${otherBroken ? ` · <span style="color:var(--bad)">${otherBroken} out</span>` : ''}</div></div>` : ''}
     </div>`));
 
-    if (inv?.days?.length) {
+    if (inv?.days?.length && bins.total) {
       // Which day is the tight one, without having to guess a date and check.
       const cal = inv.days.map(d => {
         const cls = d.available < 0 ? 'over' : d.available <= d.fleet * 0.15 ? 'tight' : '';
@@ -2247,23 +2284,24 @@ async function viewInventory() {
           <div class="av">${d.available}</div></div>`;
       }).join('');
       view.querySelector('#itiles').append($(`<div>
-        <label class="fl">Free to book &mdash; next 14 days</label>
+        <label class="fl">Bins free to book &mdash; next 14 days</label>
         <div class="cal">${cal}</div>
         <p class="sub" style="margin-bottom:22px">Counts allow ${inv.turnaroundDays === 1
           ? 'a day' : `${inv.turnaroundDays} days`} to clean and restack after a return.</p>
       </div>`));
     }
 
-    if (!bins.length) {
+    if (!items.length) {
       list.replaceChildren($(`<div class="empty"><strong>${
-        owned ? 'Nothing in this condition' : 'No bins on the list yet'}</strong>${
+        owned ? 'Nothing matches' : 'Nothing on the list yet'}</strong>${
         owned ? 'Try another filter.'
-              : 'Add your fleet and the booking guard starts working.'}</div>`));
+              : 'Add your bins and the booking guard starts working. Dollies and hand trucks can go on the same list.'}</div>`));
       return;
     }
 
-    const rows = bins.map(b => `<tr class="clickable binrow" data-id="${b.id}">
-      <td><strong>${esc(b.label)}</strong></td>
+    const showKind = invState.kind === 'all' && kindNames.length > 1;
+    const rows = items.map(b => `<tr class="clickable binrow" data-id="${b.id}">
+      <td><strong>${esc(b.label)}</strong>${showKind ? `<small style="display:block;color:var(--muted)">${esc(kindLabel(b.kind))}</small>` : ''}</td>
       <td><span class="cond ${esc(b.condition)}">${esc(b.condition)}</span></td>
       <td style="color:var(--muted)">${esc(b.notes || '')}${
         b.flagged_rental_id ? ` <a href="#/rentals/${b.flagged_rental_id}">rental #${b.flagged_rental_id}</a>` : ''}</td>
@@ -2273,12 +2311,12 @@ async function viewInventory() {
     </tr>`).join('');
 
     const table = $(`<table><thead><tr>
-      <th>Bin</th><th>Condition</th><th>Notes</th>
+      <th>Item</th><th>Condition</th><th>Notes</th>
       <th class="hide-sm">Acquired</th><th class="hide-sm">Cost</th><th class="hide-sm">Updated</th>
     </tr></thead><tbody>${rows}</tbody></table>`);
     table.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', e => {
       if (e.target.closest('a')) return;
-      openBin(bins.find(b => b.id === +tr.dataset.id));
+      openItem(items.find(b => b.id === +tr.dataset.id));
     }));
     list.replaceChildren(table);
   } catch (err) {
@@ -2286,7 +2324,7 @@ async function viewInventory() {
   }
 }
 
-function openBin(bin) {
+function openItem(item) {
   closeAnyDrawer();
   const scrim = $('<div class="scrim"></div>');
   const drawer = $('<div class="drawer" role="dialog" aria-modal="true"></div>');
@@ -2294,13 +2332,14 @@ function openBin(bin) {
   const onKey = e => { if (e.key === 'Escape') close(); };
   scrim.addEventListener('click', close);
   document.addEventListener('keydown', onKey);
+  const isBin = item.kind === 'bin';
 
   drawer.append($(`
     <div class="dhead">
-      <div style="flex:1"><h2>${esc(bin.label)}</h2>
-        <div class="meta">Bin #${bin.id}${bin.acquired_on ? ` · acquired ${esc(niceDate(bin.acquired_on))}` : ''}${
-          bin.cost_cents != null ? ` · ${esc(money(bin.cost_cents))}` : ''}</div></div>
-      <span class="cond ${esc(bin.condition)}" style="margin-top:5px">${esc(bin.condition)}</span>
+      <div style="flex:1"><h2>${esc(item.label)}</h2>
+        <div class="meta">${esc(kindLabel(item.kind))} #${item.id}${item.acquired_on ? ` · acquired ${esc(niceDate(item.acquired_on))}` : ''}${
+          item.cost_cents != null ? ` · ${esc(money(item.cost_cents))}` : ''}</div></div>
+      <span class="cond ${esc(item.condition)}" style="margin-top:5px">${esc(item.condition)}</span>
       <button class="x" aria-label="Close">×</button>
     </div>`), $(`
     <div class="dbody">
@@ -2313,14 +2352,16 @@ function openBin(bin) {
             <option value="lost">Lost or not returned</option>
           </select></div>
       </div>
-      <p class="sub">Anything other than in service comes out of the bookable fleet straight away.</p>
+      <p class="sub">${isBin
+        ? 'Anything other than in service comes out of the bookable fleet straight away.'
+        : 'Equipment is tracked but not booked — the agreement only prices bins, so damage here is charged by hand if at all.'}</p>
       <label class="fl" for="b-notes">Notes</label>
-      <textarea id="b-notes" placeholder="Cracked lid, missing dolly wheel…">${esc(bin.notes || '')}</textarea>
+      <textarea id="b-notes" placeholder="${isBin ? 'Cracked lid, tape residue…' : 'Bent frame, flat tyre…'}">${esc(item.notes || '')}</textarea>
       <div style="height:12px"></div>
       <div class="frow one">
         <div><label class="fl" for="b-rental">Blame a rental (optional)</label>
           <input id="b-rental" type="number" min="1" placeholder="Rental number it came back broken from"
-            value="${bin.flagged_rental_id || ''}"></div>
+            value="${item.flagged_rental_id || ''}"></div>
       </div>
       <div id="b-msg" style="margin-top:14px"></div>
       <div class="actions" style="margin-top:16px;border-top:1px solid var(--line);padding-top:18px">
@@ -2332,14 +2373,14 @@ function openBin(bin) {
 
   document.body.append(scrim, drawer);
   const q = id => drawer.querySelector('#' + id);
-  q('b-cond').value = bin.condition;
+  q('b-cond').value = item.condition;
   drawer.querySelector('.x').addEventListener('click', close);
   q('b-cancel').addEventListener('click', close);
 
   q('b-save').addEventListener('click', async () => {
     q('b-save').disabled = true;
     try {
-      await api(`/bins/${bin.id}`, { method: 'PATCH', body: JSON.stringify({
+      await api(`/items/${item.id}`, { method: 'PATCH', body: JSON.stringify({
         condition: q('b-cond').value,
         notes: q('b-notes').value,
         rental_id: q('b-rental').value || null,
@@ -2355,16 +2396,16 @@ function openBin(bin) {
   q('b-del')?.addEventListener('click', async () => {
     // Sold or scrapped is a removal; broken is a condition. Deleting loses the
     // history, so it asks.
-    if (!confirm(`Remove ${bin.label} from the list? Mark it retired instead if you still own it.`)) return;
+    if (!confirm(`Remove ${item.label} from the list? Mark it retired instead if you still own it.`)) return;
     try {
-      await api(`/bins/${bin.id}`, { method: 'DELETE' });
+      await api(`/items/${item.id}`, { method: 'DELETE' });
       close();
       viewInventory();
     } catch (err) { q('b-msg').replaceChildren(banner(err.message)); }
   });
 }
 
-function openAddBins() {
+function openAddItems() {
   closeAnyDrawer();
   const scrim = $('<div class="scrim"></div>');
   const drawer = $('<div class="drawer" role="dialog" aria-modal="true"></div>');
@@ -2375,24 +2416,30 @@ function openAddBins() {
 
   drawer.append($(`
     <div class="dhead">
-      <div style="flex:1"><h2>Add bins</h2>
+      <div style="flex:1"><h2>Add items</h2>
         <div class="meta">Numbered in a run, continuing where the last batch stopped</div></div>
       <button class="x" aria-label="Close">×</button>
     </div>`), $(`
     <div class="dbody">
       <div class="frow">
+        <div><label class="fl" for="a-kind">What</label>
+          <input id="a-kind" list="a-kinds" value="bin" placeholder="bin, dolly, hand truck…">
+          <datalist id="a-kinds">${KIND_SUGGEST.map(k => `<option value="${k}">${esc(kindLabel(k))}</option>`).join('')}</datalist></div>
         <div><label class="fl" for="a-count">How many</label>
           <input id="a-count" type="number" min="1" max="500" value="20"></div>
+      </div>
+      <div class="frow">
         <div><label class="fl" for="a-prefix">Label prefix</label>
           <input id="a-prefix" value="B" maxlength="12"></div>
-      </div>
-      <div class="quote"><span>Labels <small id="a-note"></small></span><strong id="a-preview">—</strong></div>
-      <div class="frow">
-        <div><label class="fl" for="a-acq">Acquired</label>
-          <input id="a-acq" type="date" value="${todayISO()}"></div>
         <div><label class="fl" for="a-cost">Cost each</label>
           <input id="a-cost" placeholder="Optional — e.g. 24.50"></div>
       </div>
+      <div class="quote"><span>Labels <small id="a-note"></small></span><strong id="a-preview">—</strong></div>
+      <div class="frow one">
+        <div><label class="fl" for="a-acq">Acquired</label>
+          <input id="a-acq" type="date" value="${todayISO()}"></div>
+      </div>
+      <p class="sub">Type any kind of thing. Only bins count towards what can be booked.</p>
       <div id="a-msg" style="margin-top:14px"></div>
       <div class="actions" style="margin-top:16px;border-top:1px solid var(--line);padding-top:18px">
         <button class="btn primary" id="a-save">Add them</button>
@@ -2402,23 +2449,30 @@ function openAddBins() {
 
   document.body.append(scrim, drawer);
   const q = id => drawer.querySelector('#' + id);
+  const norm = () => q('a-kind').value.trim().toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z_]/g, '');
+  let prefixTouched = false;
   const preview = () => {
     const n = Math.max(1, Math.min(500, +q('a-count').value || 1));
+    const k = norm() || 'bin';
+    // The prefix follows the kind until someone types their own.
+    if (!prefixTouched) q('a-prefix').value = KIND_PREFIX[k] || k.slice(0, 2).toUpperCase();
     const p = (q('a-prefix').value || 'B').toUpperCase();
     q('a-preview').textContent = n === 1 ? `${p}-001` : `${p}-001 … ${p}-${String(n).padStart(3, '0')}`;
     q('a-note').textContent = '· numbering continues past any that already exist';
   };
-  ['a-count', 'a-prefix'].forEach(id => q(id).addEventListener('input', preview));
+  q('a-prefix').addEventListener('input', () => { prefixTouched = true; preview(); });
+  ['a-count', 'a-kind'].forEach(id => q(id).addEventListener('input', preview));
   preview();
 
   drawer.querySelector('.x').addEventListener('click', close);
   q('a-cancel').addEventListener('click', close);
 
   q('a-save').addEventListener('click', async () => {
+    if (!norm()) { q('a-msg').replaceChildren(banner('Say what kind of thing these are.')); return; }
     q('a-save').disabled = true;
     try {
-      await api('/bins', { method: 'POST', body: JSON.stringify({
-        count: q('a-count').value, prefix: q('a-prefix').value,
+      await api('/items', { method: 'POST', body: JSON.stringify({
+        kind: norm(), count: q('a-count').value, prefix: q('a-prefix').value,
         acquired_on: q('a-acq').value, cost_each: q('a-cost').value,
       })});
       close();
