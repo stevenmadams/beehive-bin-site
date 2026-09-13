@@ -1015,9 +1015,19 @@ async function schedule(env, from, days) {
     });
   }
 
+  // Which bins: what to load for a drop-off, what to expect back at a pickup.
+  const ids = [...drops, ...collects].map(j => j.id);
+  const labels = new Map();
+  if (ids.length) {
+    const { results } = await env.DB.prepare(
+      `SELECT ri.rental_id, i.label FROM rental_items ri JOIN items i ON i.id = ri.item_id
+       WHERE ri.rental_id IN (${ids.map(() => '?').join(',')}) AND i.kind = 'bin' ORDER BY i.label`).bind(...ids).all();
+    for (const r of results) labels.set(r.rental_id, [...(labels.get(r.rental_id) || []), r.label]);
+  }
   for (const j of [...drops, ...collects]) {
     const day = byDay.get(j.on_date);
     if (!day) continue;
+    j.labels = labels.get(j.id) || [];
     day.jobs.push(j);
     if (j.job === 'deliver') day.binsOut += j.bins || 0;
     else day.binsBack += j.bins || 0;

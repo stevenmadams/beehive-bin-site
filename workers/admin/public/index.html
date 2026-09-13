@@ -289,22 +289,35 @@ tr.late td{background:rgba(163,44,44,.05)}
 .day .sun{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
   color:var(--bad);background:rgba(163,44,44,.1);padding:2px 8px;border-radius:999px}
 .day .none{color:var(--muted);font-size:13.5px;padding:8px 0 2px}
-.job{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:14px 16px;
-  margin-bottom:9px;display:flex;gap:14px;align-items:flex-start}
-.job.done{opacity:.5}
-.job .tag{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-  padding:4px 9px;border-radius:999px;white-space:nowrap;flex:none;margin-top:2px}
-.job .tag.deliver{background:var(--yellow);color:var(--ink)}
-.job .tag.collect{background:var(--ink);color:var(--yellow)}
-.job .tag b{display:block;font-weight:600;text-transform:none;letter-spacing:0;font-size:12px;margin-top:2px}
-.job .body{flex:1;min-width:0}
-.job .who{font-weight:700;font-size:15px}
-.job .addr{font-size:14px;margin-top:2px}
-.job .meta{font-size:12.5px;color:var(--muted);margin-top:5px}
-.job .cust{background:#FBFAF6;border:1px solid var(--line);border-radius:8px;padding:7px 10px;
-  margin-top:8px;font-size:13px;white-space:pre-wrap}
-.job .warn{color:var(--warn);font-weight:600;font-size:12.5px;margin-top:6px}
-.job .acts{display:flex;flex-direction:column;gap:6px;flex:none}
+.job{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:10px;
+  display:grid;grid-template-columns:108px minmax(0,1fr) auto;gap:16px;align-items:start}
+.job.done{opacity:.55}
+.job .when{display:flex;flex-direction:column;gap:4px}
+.job .when b{font-family:var(--font-display);font-size:21px;line-height:1.1;letter-spacing:-.01em}
+.job .when .kind{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.job .when .kind.deliver{color:#7A5B00}
+.job .when .kind.collect{color:var(--ink)}
+.job .when .bins{font-size:12.5px;color:var(--muted)}
+.job.deliver{border-left:5px solid var(--yellow)}
+.job.collect{border-left:5px solid var(--ink)}
+.job .line1{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.job .name{font-weight:700;font-size:17px}
+.job .donemark{font-size:12.5px;color:var(--ok);font-weight:600}
+.job .addr{font-size:16px;margin-top:3px}
+.job .door{background:#FFF8DC;border:1px solid rgba(255,196,0,.5);border-radius:10px;padding:9px 12px;margin-top:10px;
+  font-size:15px;white-space:pre-wrap}
+.job .door b,.job .load b{display:block;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.job .load{margin-top:10px;font-size:13.5px;font-variant-numeric:tabular-nums}
+.job .warn{color:var(--warn);font-weight:600;font-size:13px;margin-top:8px}
+.job .go{display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:190px}
+.job .go-btn{justify-content:center;font-size:13px;padding:9px 10px;text-align:center}
+.job .go-btn.primary{grid-column:1 / -1;margin-top:4px}
+@media (max-width:820px){
+  .job{grid-template-columns:1fr;gap:10px;padding:14px}
+  .job .when{flex-direction:row;align-items:baseline;gap:10px}
+  .job .go{grid-template-columns:1fr 1fr;min-width:0}
+  .job .go-btn{padding:12px 10px;font-size:15px}
+}
 
 /* ---- board ---- */
 .viewseg{margin-left:auto;align-self:center}
@@ -389,10 +402,14 @@ tr.dayhead td{background:#F4F2EC;font-size:11px;letter-spacing:.06em;text-transf
 
 .rentalpage{max-width:1180px}
 .rhead{display:flex;align-items:flex-start;gap:16px;margin-bottom:22px}
-.rhead .back{font-size:13px;color:var(--muted);text-decoration:none;padding-top:10px;white-space:nowrap}
-.rhead .back:hover{color:var(--ink)}
-.rhead .title{flex:1}
-.rhead h1{font-size:30px;margin:0}
+.rhead a.back{flex:none;width:54px;height:54px;border-radius:50%;background:var(--yellow);color:var(--ink);
+  display:grid;place-items:center;text-decoration:none;font-size:0}
+.rhead a.back::before{content:"";width:22px;height:22px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2315130F' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 12H5M12 19l-7-7 7-7'/%3E%3C/svg%3E") center/contain no-repeat}
+.rhead a.back:hover{background:var(--yellow-deep)}
+.rhead a.back:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.rhead .title{flex:1;min-width:0}
+.rhead h1{font-size:30px;margin:0;line-height:54px}
 .rhead .meta{color:var(--muted);font-size:13.5px;margin-top:4px}
 .rhead .pill{margin-top:8px}
 .sect{font-size:15px;margin:18px 0 8px}
@@ -1142,7 +1159,7 @@ async function openRental(id) {
     summary: () => [
       r.confirm_sent_at ? `link sent ${ago(r.confirm_sent_at)}` : 'link not sent',
       r.signed_at ? `signed by ${r.agreement_manual ? 'staff' : esc(r.agreement_name || 'customer')}` : 'not signed',
-      r.paid_at ? `paid ${money(r.total_cents)}` : 'not paid',
+      r.paid_at ? `paid ${money(r.total_cents)}${r.square_invoice_url ? ` · <a href="${esc(r.square_invoice_url)}" target="_blank" rel="noopener">receipt</a>` : ''}` : 'not paid',
     ].join(' · '),
     body: () => `
       ${!r.confirm_sent_at ? `<div class="todo">
@@ -1276,7 +1293,7 @@ async function openRental(id) {
 
   page.replaceChildren($(`
     <div class="rhead">
-      <a class="back" href="#/rentals">&larr; Rentals</a>
+      <a class="back" href="#/rentals" aria-label="Back to rentals" title="Rentals">Rentals</a>
       <div class="title"><h1>${esc(fullName(r))}</h1>
         <div class="meta">Rental #${r.id} · ${r.bins} bins · ${r.weeks === 1 ? '1 week' : r.weeks + ' weeks'} · ${esc(niceDate(r.start_date))} &rarr; ${esc(niceDate(r.due_date))}${
           r.customer_id ? ` · <a href="#/customers/${r.customer_id}">customer</a>` : ''}</div></div>
@@ -2518,7 +2535,7 @@ async function viewCustomer(id) {
 
   page.replaceChildren($(`
     <div class="rhead">
-      <a class="back" href="#/customers">&larr; Customers</a>
+      <a class="back" href="#/customers" aria-label="Back to customers" title="Customers">Customers</a>
       <div class="title"><h1>${esc(custName(c))}</h1>
         <div class="meta">${[c.city, c.email, fmtPhone(c.phone)].filter(Boolean).map(esc).join(' · ')}
           · customer since ${esc(niceDate(c.created_at.slice(0, 10)))}${spent ? ` · ${esc(money(spent))} paid` : ''}</div></div>
@@ -2745,9 +2762,23 @@ function contactActions(r) {
 const schedState = { days: 1, from: null };
 const SCHED_RANGES = [[1, 'Tonight'], [7, 'This week'], [30, 'Next 30 days']];
 
-function mapsHref(j) {
-  const line = [j.address, j.city && `${j.city}, UT`, j.zip].filter(Boolean).join(', ');
-  return `https://maps.google.com/?q=${encodeURIComponent(line)}`;
+/* The address line as stored already reads "street, unit, City UT zip". */
+const addrLine = j => j.address || [j.city && `${j.city}, UT`, j.zip].filter(Boolean).join(' ');
+const googleDir = j => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addrLine(j))}`;
+const appleDir = j => `https://maps.apple.com/?daddr=${encodeURIComponent(addrLine(j))}`;
+/* A run of labels reads as a range when it is one: B-001–B-020, not twenty chips. */
+function labelRuns(labels) {
+  const num = l => { const m = /(\d+)$/.exec(l); return m ? +m[1] : NaN; };
+  const pre = l => l.replace(/\d+$/, '');
+  const out = [];
+  let i = 0;
+  while (i < labels.length) {
+    let j = i;
+    while (j + 1 < labels.length && pre(labels[j + 1]) === pre(labels[i]) && num(labels[j + 1]) === num(labels[j]) + 1) j++;
+    out.push(j - i >= 2 ? `${labels[i]}–${labels[j]}` : labels.slice(i, j + 1).join(', '));
+    i = j + 1;
+  }
+  return out.join(', ');
 }
 
 async function viewSchedule() {
@@ -2832,33 +2863,34 @@ async function viewSchedule() {
         jobs.replaceChildren($('<div class="none">Nothing on.</div>'));
       }
       for (const j of day.jobs) {
-        const missing = j.job === 'deliver' ? [
-          j.agreement_signed_at ? '' : 'not signed',
-          j.paid_at ? '' : 'not paid',
-        ].filter(Boolean) : [];
-        const addr = [esc(j.address), j.unit ? esc(j.unit) : ''].filter(Boolean).join(', ');
+        const missing = j.job === 'deliver' ? [j.agreement_signed_at ? '' : 'not signed', j.paid_at ? '' : 'not paid'].filter(Boolean) : [];
+        const digits = String(j.phone || '').replace(/\D/g, '');
+        const tel = digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits[0] === '1' ? `+${digits}` : digits;
+        const hasAddr = !!j.address;
+        const done = !!j.done_at;
 
-        const card = $(`<article class="job${j.done_at ? ' done' : ''}" data-id="${j.id}">
-          <span class="tag ${j.job}">${j.job === 'deliver' ? 'Drop off' : 'Pick up'}${
-            j.window ? `<b>${esc(j.window)}</b>` : ''}</span>
-          <div class="body">
-            <div class="who">${esc(fullName(j))} <span style="font-weight:400;color:var(--muted)">&middot; ${j.bins} bins</span></div>
-            <div class="addr">${addr
-              ? `<a href="${esc(mapsHref(j))}" target="_blank" rel="noopener">${addr}${
-                  j.city ? `, ${esc(j.city)}` : ''}${j.zip ? ` ${esc(j.zip)}` : ''}</a>`
-              : `<span style="color:var(--warn)">No address yet${j.city ? ` &mdash; ${esc(j.city)}` : ''}</span>`}</div>
-            ${j.notes ? `<div class="cust">${esc(j.notes)}</div>` : ''}
-            ${missing.length ? `<div class="warn">Not ready to go out &mdash; ${missing.join(' and ')}.</div>` : ''}
-            <div class="meta">Rental #${j.id}${
-              j.done_at ? ` &middot; ${j.job === 'deliver' ? 'delivered' : 'collected'} ${esc(stamp(j.done_at))}${
-                j.done_by ? ` by ${esc(j.done_by)}` : ''}` : ''}</div>
+        const card = $(`<article class="job ${j.job}${done ? ' done' : ''}" data-id="${j.id}">
+          <div class="when">
+            <b>${esc(j.window || 'evening')}</b>
+            <span class="kind ${j.job}">${j.job === 'deliver' ? 'Drop off' : 'Pick up'}</span>
+            <span class="bins">${j.bins} bins</span>
           </div>
-          <div class="acts">${contactActions(j)}
-            <button class="btn sm open">Open</button></div>
+          <div class="body">
+            <div class="line1"><span class="name">${esc(fullName(j))}</span>${done ? `<span class="donemark">✓ ${j.job === 'deliver' ? 'Delivered' : 'Collected'} ${esc(stamp(j.done_at).replace(/^.*?, \d+, /, ''))}${j.done_by ? ` · ${esc(j.done_by.split('@')[0])}` : ''}</span>` : ''}</div>
+            <div class="addr">${hasAddr ? esc(j.address) : `<span class="warn">No address yet${j.city ? ` — ${esc(j.city)}` : ''}</span>`}</div>
+            ${j.notes ? `<div class="door"><b>At the door</b>${esc(j.notes)}</div>` : ''}
+            ${missing.length ? `<div class="warn">Not ready to go out — ${missing.join(' and ')}.</div>` : ''}
+            ${j.labels?.length ? `<div class="load"><b>${j.job === 'deliver' ? 'Load' : 'Expect back'}</b>${esc(labelRuns(j.labels))}</div>`
+              : j.job === 'deliver' && !done ? '<div class="load"><b>Load</b>picked when you mark it delivered</div>' : ''}
+          </div>
+          <div class="go">
+            ${hasAddr ? `<a class="btn go-btn" href="${esc(googleDir(j))}" target="_blank" rel="noopener">Google Maps</a>
+            <a class="btn go-btn" href="${esc(appleDir(j))}" target="_blank" rel="noopener">Apple Maps</a>` : ''}
+            ${digits ? `<a class="btn go-btn${j.contact_pref === 'call' ? ' pref' : ''}" href="tel:${tel}">Call</a>
+            <a class="btn go-btn${j.contact_pref === 'text' ? ' pref' : ''}" href="sms:${tel}">Text</a>` : ''}
+            <a class="btn go-btn primary" href="#/rentals/${j.id}">${done ? 'Rental' : j.job === 'deliver' ? 'Mark delivered' : 'Mark collected'}</a>
+          </div>
         </article>`);
-        card.querySelector('.open').addEventListener('click', () => {
-          location.hash = `#/rentals/${j.id}`;
-        });
         jobs.append(card);
       }
       frag.append(el);
