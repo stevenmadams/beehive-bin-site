@@ -28,9 +28,13 @@ export async function ok(path, opts) {
   return r;
 }
 
+/* A date some days from the (frozen, Wednesday) test clock. Never a Sunday:
+   a fixture that says "went out ten days ago" means a delivery day, and a
+   Sunday would be refused. Steps one day further in the direction asked. */
 export const today = (offsetDays = 0) => {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + offsetDays);
+  if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + (offsetDays < 0 ? -1 : 1));
   return d.toISOString().slice(0, 10);
 };
 

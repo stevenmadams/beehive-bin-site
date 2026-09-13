@@ -25,11 +25,12 @@ describe('the stoplight on a request', () => {
 
   it('red when it does not fit, saying by how much and which day', async () => {
     await fleet(40);
-    await rental({ bins: 40, weeks: 1, start_date: weekday(3) });
-    const r = await request({ bins: 10, start_date: addDays(weekday(3), 8), email: 'r@example.com' });   // turnaround day
+    // Starts on a Monday so its turnaround day (start + 8) is a Tuesday, not a Sunday.
+    await rental({ bins: 40, weeks: 1, start_date: weekday(4) });
+    const r = await request({ bins: 10, start_date: addDays(weekday(4), 8), email: 'r@example.com' });   // turnaround day
     const f = await light(r.id);
     expect(f).toMatchObject({ light: 'red', fits: false, short_by: 10, available: 0 });
-    expect(f.tightest_day).toBe(addDays(weekday(3), 8));
+    expect(f.tightest_day).toBe(addDays(weekday(4), 8));
   });
 
   it('grey when there is nothing to judge: no fleet, no dates, or a contact enquiry', async () => {

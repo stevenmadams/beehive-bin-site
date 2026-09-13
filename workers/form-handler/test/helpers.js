@@ -1,6 +1,6 @@
 import { SELF, env } from 'cloudflare:test';
 
-export const today = (n = 0) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+export const today = (n = 0) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + n); if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + (n < 0 ? -1 : 1)); return d.toISOString().slice(0, 10); };
 export const weekday = (n = 3) => { let d = today(n); while (new Date(`${d}T12:00:00Z`).getUTCDay() === 0) d = today(++n); return d; };
 export const addDays = (iso, n) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 

@@ -103,7 +103,7 @@ describe('availability', () => {
 
   it('S7 approving what will not fit is refused with the tight day, and the override is audited', async () => {
     await fleet(40);
-    const start = weekday(3);
+    const start = weekday(4);   // a Monday: its turnaround day is a Tuesday
     await rental({ bins: 40, weeks: 1, start_date: start });
     // Overlaps the turnaround day of the first rental.
     const req = await request({ bins: 10, weeks: 1, start_date: addDays(start, 8), email: 'x@example.com' });

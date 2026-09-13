@@ -122,13 +122,12 @@ describe('signing', () => {
 
   it('C12 signing records the version, IP and browser, and emails a copy; it cannot be signed twice', async () => {
     const r = await upTo('agreement');
-    const before = new Date().toISOString();
     expect((await post(r.token, { step: 'agreement', agreement_name: 'Dana Whitfield' })).html).toMatch(/tick the box/);
     await post(r.token, { step: 'agreement', agreement_name: 'Dana Whitfield', accept: 'on' });
     const row = await rental(r.id);
     expect(row).toMatchObject({ agreement_name: 'Dana Whitfield', agreement_ip: '203.0.113.9', agreement_ua: 'TestBrowser/1.0' });
     expect(row.agreement_version).toMatch(/^[0-9a-f]{12}$/);
-    expect(row.agreement_signed_at >= before.slice(0, 19)).toBe(true);
+    expect(row.agreement_signed_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);   // written by the database's clock, in UTC
     const copy = (await mail()).find(m => /agreement/i.test(m.subject));
     expect(copy.to).toEqual(['dana@example.com']);
     expect(copy.text).toContain('Dana Whitfield');
